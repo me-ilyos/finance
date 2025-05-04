@@ -8,255 +8,468 @@
 
 {% block page_header %}
 <div class="row mb-4">
-    <div class="col-md-6">
-        <h1 class="h3 mb-0 text-gray-800">Chipta Xaridlari</h1>
-        <p class="mb-0 text-muted">Xarid qilingan chiptalar inventarizatsiyasini boshqarish</p>
-    </div>
-    <div class="col-md-6 text-md-end">
-        <a href="#" class="btn btn-primary">
-            <i class="fas fa-plus-circle me-1"></i> Yangi Xarid Qo'shish
-        </a>
-    </div>
+   <div class="col-md-6">
+       <h1 class="h3 mb-0 text-gray-800">Chipta Xaridlari</h1>
+       <p class="mb-0 text-muted">Xarid qilingan chiptalar inventarizatsiyasini boshqarish</p>
+   </div>
+   <div class="col-md-6 text-md-end">
+       <button type="button" class="btn btn-primary" id="addPurchaseBtn">
+           <i class="fas fa-plus-circle me-1"></i> Yangi Xarid Qo'shish
+       </button>
+   </div>
 </div>
 {% endblock %}
 
 {% block content %}
 <!-- Filters and Search -->
 <div class="card shadow mb-4">
-    <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-        <h6 class="m-0 font-weight-bold text-primary">Filtrlar</h6>
-        {% if active_filters %}
-        <a href="{% url 'stock:purchase_list' %}" class="btn btn-sm btn-outline-secondary">
-            <i class="fas fa-times me-1"></i> Filtrlarni Tozalash
-        </a>
-        {% endif %}
-    </div>
-    <div class="card-body">
-        <form method="get" class="mb-0">
-            <div class="row g-3">
-                <!-- Search -->
-                <div class="col-md-4">
-                    <div class="input-group">
-                        <input type="text" class="form-control" placeholder="Qidirish..." name="search" value="{{ search_query }}">
-                        <button class="btn btn-outline-secondary" type="submit">
-                            <i class="fas fa-search"></i>
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Date Filter - Will be handled by JavaScript date picker in base.html -->
-                <div class="col-md-2">
-                    <input type="hidden" name="date_filter" value="{{ date_filter }}" id="date_filter_input">
-                    <input type="hidden" name="start_date" id="start_date_input">
-                    <input type="hidden" name="end_date" id="end_date_input">
-                </div>
-                
-                <!-- Supplier Filter -->
-                <div class="col-md-2">
-                    <select class="form-select" name="supplier">
-                        <option value="">Barcha Ta'minotchilar</option>
-                        {% for supplier in suppliers %}
-                        <option value="{{ supplier.id }}" {% if supplier_id|stringformat:"s" == supplier.id|stringformat:"s" %}selected{% endif %}>
-                            {{ supplier.name }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                
-                <!-- Currency Filter -->
-                <div class="col-md-2">
-                    <select class="form-select" name="currency">
-                        <option value="">Barcha Valyutalar</option>
-                        <option value="UZS" {% if currency == "UZS" %}selected{% endif %}>UZS</option>
-                        <option value="USD" {% if currency == "USD" %}selected{% endif %}>USD</option>
-                    </select>
-                </div>
-                
-                <!-- Sort By -->
-                <div class="col-md-2">
-                    <select class="form-select" name="sort_by">
-                        <option value="-purchase_date" {% if sort_by == "-purchase_date" %}selected{% endif %}>Eng Yangi</option>
-                        <option value="purchase_date" {% if sort_by == "purchase_date" %}selected{% endif %}>Eng Eski</option>
-                        <option value="supplier__name" {% if sort_by == "supplier__name" %}selected{% endif %}>Ta'minotchi Nomi</option>
-                        <option value="-quantity" {% if sort_by == "-quantity" %}selected{% endif %}>Miqdor (Yuqoridan Pastga)</option>
-                        <option value="unit_price" {% if sort_by == "unit_price" %}selected{% endif %}>Narx (Pastdan Yuqoriga)</option>
-                        <option value="-unit_price" {% if sort_by == "-unit_price" %}selected{% endif %}>Narx (Yuqoridan Pastga)</option>
-                    </select>
-                </div>
-            </div>
-        </form>
-    </div>
+   <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+       <h6 class="m-0 font-weight-bold text-primary">Filtrlar</h6>
+       {% if active_filters %}
+       <a href="{% url 'stock:purchase_list' %}" class="btn btn-sm btn-outline-secondary">
+           <i class="fas fa-times me-1"></i> Filtrlarni Tozalash
+       </a>
+       {% endif %}
+   </div>
+   <div class="card-body">
+       <form method="get" class="mb-0">
+           <div class="row g-3">
+               <!-- Search -->
+               <div class="col-md-4">
+                   <div class="input-group">
+                       <input type="text" class="form-control" placeholder="Qidirish..." name="search" value="{{ search_query }}">
+                       <button class="btn btn-outline-secondary" type="submit">
+                           <i class="fas fa-search"></i>
+                       </button>
+                   </div>
+               </div>
+               
+               <!-- Date Filter - Will be handled by JavaScript date picker in base.html -->
+               <div class="col-md-2">
+                   <input type="hidden" name="date_filter" value="{{ date_filter }}" id="date_filter_input">
+                   <input type="hidden" name="start_date" id="start_date_input">
+                   <input type="hidden" name="end_date" id="end_date_input">
+               </div>
+               
+               <!-- Supplier Filter -->
+               <div class="col-md-2">
+                   <select class="form-select" name="supplier">
+                       <option value="">Barcha Ta'minotchilar</option>
+                       {% for supplier in suppliers %}
+                       <option value="{{ supplier.id }}" {% if supplier_id|stringformat:"s" == supplier.id|stringformat:"s" %}selected{% endif %}>
+                           {{ supplier.name }}
+                       </option>
+                       {% endfor %}
+                   </select>
+               </div>
+               
+               <!-- Currency Filter -->
+               <div class="col-md-2">
+                   <select class="form-select" name="currency">
+                       <option value="">Barcha Valyutalar</option>
+                       <option value="UZS" {% if currency == "UZS" %}selected{% endif %}>UZS</option>
+                       <option value="USD" {% if currency == "USD" %}selected{% endif %}>USD</option>
+                   </select>
+               </div>
+               
+               <!-- Sort By -->
+               <div class="col-md-2">
+                   <select class="form-select" name="sort_by">
+                       <option value="-purchase_date" {% if sort_by == "-purchase_date" %}selected{% endif %}>Eng Yangi</option>
+                       <option value="purchase_date" {% if sort_by == "purchase_date" %}selected{% endif %}>Eng Eski</option>
+                       <option value="supplier__name" {% if sort_by == "supplier__name" %}selected{% endif %}>Ta'minotchi Nomi</option>
+                       <option value="-quantity" {% if sort_by == "-quantity" %}selected{% endif %}>Miqdor (Yuqoridan Pastga)</option>
+                       <option value="unit_price" {% if sort_by == "unit_price" %}selected{% endif %}>Narx (Pastdan Yuqoriga)</option>
+                       <option value="-unit_price" {% if sort_by == "-unit_price" %}selected{% endif %}>Narx (Yuqoridan Pastga)</option>
+                   </select>
+               </div>
+           </div>
+       </form>
+   </div>
 </div>
 
 <!-- Purchase List Table -->
 <div class="card shadow mb-4">
-    <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-        <h6 class="m-0 font-weight-bold text-primary">Chipta Xaridlari</h6>
-        <div class="dropdown no-arrow">
-            <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink" data-bs-toggle="dropdown" aria-expanded="false">
-                <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
-            </a>
-            <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="dropdownMenuLink">
-                <li><a class="dropdown-item" href="#" id="printTable">Chop etish</a></li>
-            </ul>
-        </div>
-    </div>
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-bordered table-hover" id="purchasesTable" width="100%" cellspacing="0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Xarid ID</th>
-                        <th>Sana</th>
-                        <th>Ta'minotchi</th>
-                        <th>Miqdor</th>
-                        <th>Birlik Narxi</th>
-                        <th>Jami</th>
-                        <th>Valyuta</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for purchase in purchases %}
-                    <tr>
-                        <td>{{ purchase.purchase_id }}</td>
-                        <td>{{ purchase.purchase_date|date:"M d, Y" }}</td>
-                        <td>{{ purchase.supplier.name }}</td>
-                        <td class="text-end">{{ purchase.quantity }}</td>
-                        <td class="text-end">
-                            {% if purchase.currency == 'USD' %}
-                                ${{ purchase.unit_price|floatformat:2 }}
-                            {% else %}
-                                {{ purchase.unit_price|floatformat:2 }} UZS
-                            {% endif %}
-                        </td>
-                        <td class="text-end">
-                            {% if purchase.currency == 'USD' %}
-                                ${{ purchase.total_price|floatformat:2 }}
-                            {% else %}
-                                {{ purchase.total_price|floatformat:2 }} UZS
-                            {% endif %}
-                        </td>
-                        <td class="text-center">
-                            <span class="badge {% if purchase.currency == 'USD' %}bg-info{% else %}bg-secondary{% endif %}">
-                                {{ purchase.currency }}
-                            </span>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="8" class="text-center py-4">
-                            <div class="empty-state">
-                                <i class="fas fa-shopping-cart fa-3x text-muted mb-3"></i>
-                                <h5>Hech qanday xarid topilmadi</h5>
-                                <p class="text-muted">
-                                    {% if active_filters %}
-                                        Filtr mezonlaringizga mos xaridlar topilmadi. <a href="{% url 'stock:purchase_list' %}">Filtrlarni tozalash</a> orqali barcha xaridlarni ko'ring.
-                                    {% else %}
-                                        Siz hali hech qanday chipta xarid qilmagansiz. <a href="{% url 'stock:purchase_create' %}">Birinchi xaridingizni qo'shing</a>.
-                                    {% endif %}
-                                </p>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        
-        <!-- Pagination -->
-        {% if is_paginated %}
-        <div class="mt-4 d-flex justify-content-center">
-            <nav aria-label="Page navigation">
-                <ul class="pagination">
-                    {% if page_obj.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page=1" aria-label="First">
-                            <span aria-hidden="true">&laquo;&laquo;</span>
-                        </a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}" aria-label="Previous">
-                            <span aria-hidden="true">&laquo;</span>
-                        </a>
-                    </li>
-                    {% endif %}
-                    
-                    {% for num in page_obj.paginator.page_range %}
-                        {% if page_obj.number == num %}
-                            <li class="page-item active">
-                                <span class="page-link">{{ num }}</span>
-                            </li>
-                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                            <li class="page-item">
-                                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ num }}">{{ num }}</a>
-                            </li>
-                        {% endif %}
-                    {% endfor %}
-                    
-                    {% if page_obj.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}" aria-label="Next">
-                            <span aria-hidden="true">&raquo;</span>
-                        </a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.paginator.num_pages }}" aria-label="Last">
-                            <span aria-hidden="true">&raquo;&raquo;</span>
-                        </a>
-                    </li>
-                    {% endif %}
-                </ul>
-            </nav>
-        </div>
-        {% endif %}
-    </div>
+   <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+       <h6 class="m-0 font-weight-bold text-primary">Chipta Xaridlari</h6>
+       <div class="dropdown no-arrow">
+           <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink" data-bs-toggle="dropdown" aria-expanded="false">
+               <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
+           </a>
+           <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="dropdownMenuLink">
+               <li><a class="dropdown-item" href="#" id="printTable">Chop etish</a></li>
+           </ul>
+       </div>
+   </div>
+   <div class="card-body">
+       <div class="table-responsive">
+           <table class="table table-bordered table-hover" id="purchasesTable" width="100%" cellspacing="0">
+               <thead class="table-light">
+                   <tr>
+                       <th>Xarid ID</th>
+                       <th>Sana</th>
+                       <th>Ta'minotchi</th>
+                       <th>Miqdor</th>
+                       <th>Birlik Narxi</th>
+                       <th>Jami</th>
+                       <th>Valyuta</th>
+                   </tr>
+               </thead>
+               <tbody>
+                   {% for purchase in purchases %}
+                   <tr>
+                       <td>{{ purchase.purchase_id }}</td>
+                       <td>{{ purchase.purchase_date|date:"M d, Y" }}</td>
+                       <td>{{ purchase.supplier.name }}</td>
+                       <td class="text-end">{{ purchase.quantity }}</td>
+                       <td class="text-end">
+                           {% if purchase.currency == 'USD' %}
+                               ${{ purchase.unit_price|floatformat:2 }}
+                           {% else %}
+                               {{ purchase.unit_price|floatformat:2 }} UZS
+                           {% endif %}
+                       </td>
+                       <td class="text-end">
+                           {% if purchase.currency == 'USD' %}
+                               ${{ purchase.total_price|floatformat:2 }}
+                           {% else %}
+                               {{ purchase.total_price|floatformat:2 }} UZS
+                           {% endif %}
+                       </td>
+                       <td class="text-center">
+                           <span class="badge {% if purchase.currency == 'USD' %}bg-info{% else %}bg-secondary{% endif %}">
+                               {{ purchase.currency }}
+                           </span>
+                       </td>
+                   </tr>
+                   {% empty %}
+                   <tr>
+                       <td colspan="8" class="text-center py-4">
+                           <div class="empty-state">
+                               <i class="fas fa-shopping-cart fa-3x text-muted mb-3"></i>
+                               <h5>Hech qanday xarid topilmadi</h5>
+                               <p class="text-muted">
+                                   {% if active_filters %}
+                                       Filtr mezonlaringizga mos xaridlar topilmadi. <a href="{% url 'stock:purchase_list' %}">Filtrlarni tozalash</a> orqali barcha xaridlarni ko'ring.
+                                   {% else %}
+                                       Siz hali hech qanday chipta xarid qilmagansiz. "Yangi Xarid Qo'shish" tugmasini bosib, birinchi xaridingizni qo'shing.
+                                   {% endif %}
+                               </p>
+                           </div>
+                       </td>
+                   </tr>
+                   {% endfor %}
+               </tbody>
+           </table>
+       </div>
+       
+       <!-- Pagination -->
+       {% if is_paginated %}
+       <div class="mt-4 d-flex justify-content-center">
+           <nav aria-label="Page navigation">
+               <ul class="pagination">
+                   {% if page_obj.has_previous %}
+                   <li class="page-item">
+                       <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page=1" aria-label="First">
+                           <span aria-hidden="true">&laquo;&laquo;</span>
+                       </a>
+                   </li>
+                   <li class="page-item">
+                       <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}" aria-label="Previous">
+                           <span aria-hidden="true">&laquo;</span>
+                       </a>
+                   </li>
+                   {% endif %}
+                   
+                   {% for num in page_obj.paginator.page_range %}
+                       {% if page_obj.number == num %}
+                           <li class="page-item active">
+                               <span class="page-link">{{ num }}</span>
+                           </li>
+                       {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                           <li class="page-item">
+                               <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ num }}">{{ num }}</a>
+                           </li>
+                       {% endif %}
+                   {% endfor %}
+                   
+                   {% if page_obj.has_next %}
+                   <li class="page-item">
+                       <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}" aria-label="Next">
+                           <span aria-hidden="true">&raquo;</span>
+                       </a>
+                   </li>
+                   <li class="page-item">
+                       <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.paginator.num_pages }}" aria-label="Last">
+                           <span aria-hidden="true">&raquo;&raquo;</span>
+                       </a>
+                   </li>
+                   {% endif %}
+               </ul>
+           </nav>
+       </div>
+       {% endif %}
+   </div>
 </div>
+
+<!-- CSRF Token for AJAX -->
+<input type="hidden" id="csrf_token" value="{{ csrf_token }}">
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Handle form submission when a filter changes
-        const filterElements = document.querySelectorAll('select[name="supplier"], select[name="currency"], select[name="sort_by"]');
-        filterElements.forEach(element => {
-            element.addEventListener('change', function() {
-                this.form.submit();
-            });
-        });
-        
-        // Connect the date filter dropdown from base.html with our form
-        const dateFilterInput = document.getElementById('date_filter_input');
-        const startDateInput = document.getElementById('start_date_input');
-        const endDateInput = document.getElementById('end_date_input');
-        const dateFilters = document.querySelectorAll('.date-filter');
-        
-        dateFilters.forEach(filter => {
-            filter.addEventListener('click', function(e) {
-                e.preventDefault();
-                const period = this.getAttribute('data-period');
-                dateFilterInput.value = period;
-                
-                // If it's not a custom date range, submit the form
-                if (period !== 'custom') {
-                    dateFilterInput.form.submit();
-                }
-                // Custom date range will be handled by the date picker in base.html
-            });
-        });
-        
-        // Function to handle date range selection
-        window.updateDateRange = function(start, end) {
-            startDateInput.value = start.format('YYYY-MM-DD');
-            endDateInput.value = end.format('YYYY-MM-DD');
-            dateFilterInput.value = 'custom';
-            dateFilterInput.form.submit();
-        };
-        
-        // Print functionality
-        document.getElementById('printTable').addEventListener('click', function(e) {
-            e.preventDefault();
-            window.print();
-        });
-    });
+   document.addEventListener('DOMContentLoaded', function() {
+       // Handle form submission when a filter changes
+       const filterElements = document.querySelectorAll('select[name="supplier"], select[name="currency"], select[name="sort_by"]');
+       filterElements.forEach(element => {
+           element.addEventListener('change', function() {
+               this.form.submit();
+           });
+       });
+       
+       // Connect the date filter dropdown from base.html with our form
+       const dateFilterInput = document.getElementById('date_filter_input');
+       const startDateInput = document.getElementById('start_date_input');
+       const endDateInput = document.getElementById('end_date_input');
+       const dateFilters = document.querySelectorAll('.date-filter');
+       
+       dateFilters.forEach(filter => {
+           filter.addEventListener('click', function(e) {
+               e.preventDefault();
+               const period = this.getAttribute('data-period');
+               dateFilterInput.value = period;
+               
+               // If it's not a custom date range, submit the form
+               if (period !== 'custom') {
+                   dateFilterInput.form.submit();
+               }
+               // Custom date range will be handled by the date picker in base.html
+           });
+       });
+       
+       // Function to handle date range selection
+       window.updateDateRange = function(start, end) {
+           startDateInput.value = start.format('YYYY-MM-DD');
+           endDateInput.value = end.format('YYYY-MM-DD');
+           dateFilterInput.value = 'custom';
+           dateFilterInput.form.submit();
+       };
+       
+       // Print functionality
+       document.getElementById('printTable').addEventListener('click', function(e) {
+           e.preventDefault();
+           window.print();
+       });
+
+       // Add new purchase row
+       document.getElementById('addPurchaseBtn').addEventListener('click', function() {
+           const tableBody = document.querySelector('#purchasesTable tbody');
+           
+           // Remove empty state row if it exists
+           const emptyStateRow = tableBody.querySelector('.empty-state');
+           if (emptyStateRow) {
+               tableBody.innerHTML = '';
+           }
+           
+           // Create new editable row
+           const newRow = document.createElement('tr');
+           newRow.classList.add('new-purchase-row');
+           
+           // Get current date-time in ISO format for the datetime-local input
+           const now = new Date();
+           const localDatetime = new Date(now.getTime() - (now.getTimezoneOffset() * 60000))
+               .toISOString()
+               .slice(0, 16);
+           
+           newRow.innerHTML = `
+               <td><span class="badge bg-warning">New</span></td>
+               <td><input type="datetime-local" class="form-control form-control-sm" name="purchase_date" value="${localDatetime}"></td>
+               <td>
+                   <select class="form-select form-select-sm" name="supplier">
+                       <option value="">Select Supplier</option>
+                       {% for supplier in suppliers %}
+                       <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+                       {% endfor %}
+                   </select>
+               </td>
+               <td><input type="number" class="form-control form-control-sm text-end" name="quantity" min="1" value="1"></td>
+               <td><input type="number" class="form-control form-control-sm text-end" name="unit_price" min="0.01" step="0.01" value=""></td>
+               <td class="text-end total-price">0.00</td>
+               <td>
+                   <select class="form-select form-select-sm" name="currency">
+                       <option value="UZS">UZS</option>
+                       <option value="USD">USD</option>
+                   </select>
+               </td>
+               <td class="text-center">
+                   <button type="button" class="btn btn-sm btn-success save-row">
+                       <i class="fas fa-save"></i>
+                   </button>
+                   <button type="button" class="btn btn-sm btn-danger cancel-row">
+                       <i class="fas fa-times"></i>
+                   </button>
+               </td>
+           `;
+           
+           // Insert the new row at the beginning of the table
+           if (tableBody.firstChild) {
+               tableBody.insertBefore(newRow, tableBody.firstChild);
+           } else {
+               tableBody.appendChild(newRow);
+           }
+           
+           // Calculate total when quantity or price changes
+           const quantityInput = newRow.querySelector('input[name="quantity"]');
+           const priceInput = newRow.querySelector('input[name="unit_price"]');
+           const currencySelect = newRow.querySelector('select[name="currency"]');
+           const totalCell = newRow.querySelector('.total-price');
+           
+           function updateTotal() {
+               const quantity = parseFloat(quantityInput.value) || 0;
+               const price = parseFloat(priceInput.value) || 0;
+               const total = quantity * price;
+               const currency = currencySelect.value;
+               
+               if (currency === 'USD') {
+                   totalCell.textContent = '$' + total.toFixed(2);
+               } else {
+                   totalCell.textContent = total.toFixed(2) + ' UZS';
+               }
+           }
+           
+           quantityInput.addEventListener('input', updateTotal);
+           priceInput.addEventListener('input', updateTotal);
+           currencySelect.addEventListener('change', updateTotal);
+           
+           // Save button click handler
+           const saveBtn = newRow.querySelector('.save-row');
+           saveBtn.addEventListener('click', function() {
+               // Validate inputs
+               const supplier = newRow.querySelector('select[name="supplier"]').value;
+               const quantity = quantityInput.value;
+               const price = priceInput.value;
+               
+               if (!supplier) {
+                   alert('Please select a supplier');
+                   return;
+               }
+               
+               if (!quantity || parseInt(quantity) < 1) {
+                   alert('Please enter a valid quantity');
+                   return;
+               }
+               
+               if (!price || parseFloat(price) <= 0) {
+                   alert('Please enter a valid price');
+                   return;
+               }
+               
+               // Create form data
+               const formData = new FormData();
+               formData.append('supplier', supplier);
+               formData.append('purchase_date', newRow.querySelector('input[name="purchase_date"]').value);
+               formData.append('quantity', quantity);
+               formData.append('unit_price', price);
+               formData.append('currency', currencySelect.value);
+               formData.append('csrfmiddlewaretoken', document.getElementById('csrf_token').value);
+               
+               // Show loading state
+               saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+               saveBtn.disabled = true;
+               
+               // Send AJAX request
+               fetch('{% url "stock:purchase_create" %}', {
+                   method: 'POST',
+                   body: formData,
+                   headers: {
+                       'X-Requested-With': 'XMLHttpRequest'
+                   }
+               })
+               .then(response => response.json())
+               .then(data => {
+                   if (data.success) {
+                       // Replace editable row with regular row
+                       const purchaseRow = document.createElement('tr');
+                       purchaseRow.innerHTML = `
+                           <td>${data.purchase.purchase_id}</td>
+                           <td>${data.purchase.purchase_date}</td>
+                           <td>${data.purchase.supplier}</td>
+                           <td class="text-end">${data.purchase.quantity}</td>
+                           <td class="text-end">
+                               ${data.purchase.currency === 'USD' ? 
+                                   '$' + data.purchase.unit_price.toFixed(2) : 
+                                   data.purchase.unit_price.toFixed(2) + ' UZS'}
+                           </td>
+                           <td class="text-end">
+                               ${data.purchase.currency === 'USD' ? 
+                                   '$' + data.purchase.total_price.toFixed(2) : 
+                                   data.purchase.total_price.toFixed(2) + ' UZS'}
+                           </td>
+                           <td class="text-center">
+                               <span class="badge ${data.purchase.currency === 'USD' ? 'bg-info' : 'bg-secondary'}">
+                                   ${data.purchase.currency}
+                               </span>
+                           </td>
+                           <td class="text-center">
+                               <!-- Action buttons could go here -->
+                           </td>
+                       `;
+                       
+                       tableBody.replaceChild(purchaseRow, newRow);
+                       
+                       // Show success alert
+                       const alertDiv = document.createElement('div');
+                       alertDiv.className = 'alert alert-success alert-dismissible fade show';
+                       alertDiv.innerHTML = `
+                           Xarid muvaffaqiyatli saqlandi!
+                           <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                       `;
+                       
+                       const contentWrapper = document.querySelector('.content-wrapper');
+                       contentWrapper.insertBefore(alertDiv, contentWrapper.firstChild);
+                       
+                       // Auto dismiss after 3 seconds
+                       setTimeout(() => {
+                           alertDiv.remove();
+                       }, 3000);
+                   } else {
+                       // Show error
+                       alert('Error: ' + (data.errors || 'Failed to save purchase'));
+                       saveBtn.innerHTML = '<i class="fas fa-save"></i>';
+                       saveBtn.disabled = false;
+                   }
+               })
+               .catch(error => {
+                   console.error('Error:', error);
+                   alert('An error occurred while saving the purchase');
+                   saveBtn.innerHTML = '<i class="fas fa-save"></i>';
+                   saveBtn.disabled = false;
+               });
+           });
+           
+           // Cancel button click handler
+           const cancelBtn = newRow.querySelector('.cancel-row');
+           cancelBtn.addEventListener('click', function() {
+               tableBody.removeChild(newRow);
+               
+               // If table is now empty, show empty state again
+               if (tableBody.children.length === 0) {
+                   tableBody.innerHTML = `
+                       <tr>
+                           <td colspan="8" class="text-center py-4">
+                               <div class="empty-state">
+                                   <i class="fas fa-shopping-cart fa-3x text-muted mb-3"></i>
+                                   <h5>Hech qanday xarid topilmadi</h5>
+                                   <p class="text-muted">
+                                       Siz hali hech qanday chipta xarid qilmagansiz. "Yangi Xarid Qo'shish" tugmasini bosib, birinchi xaridingizni qo'shing.
+                                   </p>
+                               </div>
+                           </td>
+                       </tr>
+                   `;
+               }
+           });
+       });
+   });
 </script>
 {% endblock %}

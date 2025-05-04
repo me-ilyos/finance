@@ -1,8 +1,11 @@
 from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
 from django.views.generic import ListView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils import timezone
-from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Q
+from django.http import JsonResponse
+from django.db.models import Q
 from datetime import timedelta
 from .models import Supplier, TicketPurchase
 
@@ -87,3 +90,62 @@ class TicketPurchaseListView(LoginRequiredMixin, ListView):
     @property
     def total_price(self):
         return self.quantity * self.unit_price
+
+
+@login_required
+@require_POST
+def purchase_create(request):
+    """Handle the AJAX form submission for creating a new purchase"""
+    # Check for AJAX request
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        # Extract form data
+        supplier_id = request.POST.get("supplier")
+        purchase_date_str = request.POST.get("purchase_date")
+        quantity = request.POST.get("quantity")
+        unit_price = request.POST.get("unit_price")
+        currency = request.POST.get("currency")
+
+        try:
+            # Convert purchase_date string to a datetime object
+            from django.utils.dateparse import parse_datetime
+
+            purchase_date = parse_datetime(purchase_date_str)
+
+            # Create the purchase
+            supplier = Supplier.objects.get(id=supplier_id)
+            purchase = TicketPurchase.objects.create(
+                supplier=supplier,
+                purchase_date=purchase_date,
+                quantity=int(quantity),
+                unit_price=float(unit_price),
+                currency=currency,
+            )
+
+            # Return success response with formatted date
+            return JsonResponse(
+                {
+                    "success": True,
+                    "purchase": {
+                        "purchase_id": purchase.purchase_id,
+                        "purchase_date": purchase.purchase_date.strftime("%b %d, %Y"),
+                        "supplier": purchase.supplier.name,
+                        "quantity": purchase.quantity,
+                        "unit_price": float(purchase.unit_price),
+                        "total_price": float(purchase.total_price),
+                        "currency": purchase.currency,
+                    },
+                }
+            )
+        except Exception as e:
+            import traceback
+
+            return JsonResponse(
+                {
+                    "success": False,
+                    "errors": str(e),
+                    "traceback": traceback.format_exc(),
+                },
+                status=400,
+            )
+
+    return JsonResponse({"success": False, "errors": "Invalid request"}, status=400)
