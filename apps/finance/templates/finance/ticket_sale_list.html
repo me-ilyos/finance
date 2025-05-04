@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block page_header %}
-<div class="row mb-4">
+<div class="row align-items-center mb-4">
    <div class="col-md-6">
        <h1 class="h3 mb-0 text-gray-800">Chipta Sotuvlari</h1>
        <p class="mb-0 text-muted">Sotilgan chiptalar va foyda hisoboti</p>
@@ -21,19 +21,25 @@
 {% endblock %}
 
 {% block content %}
-<!-- Filters and Search -->
+<!-- Combined Filters and Search Row -->
 <div class="card shadow mb-4">
-   <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-       <h6 class="m-0 font-weight-bold text-primary">Filtrlar</h6>
-       {% if active_filters %}
-       <a href="{% url 'finance:sale_list' %}" class="btn btn-sm btn-outline-secondary">
-           <i class="fas fa-times me-1"></i> Filtrlarni Tozalash
-       </a>
-       {% endif %}
-   </div>
-   <div class="card-body">
+   <div class="card-body py-3">
        <form method="get" class="mb-0">
-           <div class="row g-3">
+           <div class="row g-3 align-items-center">
+               <!-- Title and Reset Filters -->
+               <div class="col-auto me-auto">
+                   <h6 class="m-0 font-weight-bold text-primary">Filtrlar</h6>
+               </div>
+               {% if active_filters %}
+               <div class="col-auto">
+                   <a href="{% url 'finance:sale_list' %}" class="btn btn-sm btn-outline-secondary">
+                       <i class="fas fa-times me-1"></i> Filtrlarni Tozalash
+                   </a>
+               </div>
+               {% endif %}
+           </div>
+           
+           <div class="row g-3 mt-2">
                <!-- Search -->
                <div class="col-md-3">
                    <div class="input-group">
@@ -44,11 +50,26 @@
                    </div>
                </div>
                
-               <!-- Date Filter - Will be handled by JavaScript date picker in base.html -->
-               <div class="col-md-1">
+               <!-- Date Filter - Hidden inputs for JavaScript -->
+               <div class="col-md-2">
                    <input type="hidden" name="date_filter" value="{{ date_filter }}" id="date_filter_input">
                    <input type="hidden" name="start_date" id="start_date_input">
                    <input type="hidden" name="end_date" id="end_date_input">
+                   
+                   <!-- Visual indication of current filter -->
+                   <div class="form-control bg-light text-truncate" id="dateFilterDisplay">
+                       {% if date_filter == "today" %}
+                           <i class="far fa-calendar-alt me-1"></i> Bugun
+                       {% elif date_filter == "week" %}
+                           <i class="far fa-calendar-alt me-1"></i> Bu hafta
+                       {% elif date_filter == "month" %}
+                           <i class="far fa-calendar-alt me-1"></i> Bu oy
+                       {% elif date_filter == "custom" %}
+                           <i class="far fa-calendar-alt me-1"></i> {{ start_date }} - {{ end_date }}
+                       {% else %}
+                           <i class="far fa-calendar-alt me-1"></i> Bugun
+                       {% endif %}
+                   </div>
                </div>
                
                <!-- Customer Type Filter -->
@@ -84,22 +105,11 @@
                    </select>
                </div>
                
-               <!-- Currency Filter -->
-               <div class="col-md-1">
-                   <select class="form-select" name="currency">
-                       <option value="">Barcha</option>
-                       <option value="UZS" {% if currency == "UZS" %}selected{% endif %}>UZS</option>
-                       <option value="USD" {% if currency == "USD" %}selected{% endif %}>USD</option>
-                   </select>
-               </div>
-               
                <!-- Sort By -->
                <div class="col-md-1">
                    <select class="form-select" name="sort_by">
                        <option value="-sale_date" {% if sort_by == "-sale_date" %}selected{% endif %}>Eng Yangi</option>
                        <option value="sale_date" {% if sort_by == "sale_date" %}selected{% endif %}>Eng Eski</option>
-                       <option value="-quantity" {% if sort_by == "-quantity" %}selected{% endif %}>Miqdor ↓</option>
-                       <option value="-unit_price" {% if sort_by == "-unit_price" %}selected{% endif %}>Narx ↓</option>
                        <option value="-profit" {% if sort_by == "-profit" %}selected{% endif %}>Foyda ↓</option>
                    </select>
                </div>
@@ -112,29 +122,25 @@
 <div class="card shadow mb-4">
    <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
        <h6 class="m-0 font-weight-bold text-primary">Chipta Sotuvlari</h6>
-       <div class="dropdown no-arrow">
-           <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink" data-bs-toggle="dropdown" aria-expanded="false">
-               <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
-           </a>
-           <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="dropdownMenuLink">
-               <li><a class="dropdown-item" href="#" id="printTable">Chop etish</a></li>
-           </ul>
-       </div>
+       <!-- Excel export instead of print -->
+       <a href="#" id="exportExcel" class="text-secondary">
+           <i class="fas fa-file-excel fa-lg"></i>
+       </a>
    </div>
    <div class="card-body">
        <div class="table-responsive">
            <table class="table table-bordered table-hover" id="salesTable" width="100%" cellspacing="0">
                <thead class="table-light">
                    <tr>
-                       <th>Sotuv ID</th>
-                       <th>Sana</th>
-                       <th>Mijoz</th>
-                       <th>Sotuvchi</th>
-                       <th>Xarid</th>
-                       <th>Miqdor</th>
-                       <th>Narxi</th>
-                       <th>Jami</th>
-                       <th>Foyda</th>
+                       <th style="width: 10%;">Sotuv ID</th>
+                       <th style="width: 10%;">Sana</th>
+                       <th style="width: 15%;">Mijoz</th>
+                       <th style="width: 12%;">Sotuvchi</th>
+                       <th style="width: 10%;">Xarid</th>
+                       <th style="width: 7%;">Miqdor</th>
+                       <th style="width: 12%;">Narxi</th>
+                       <th style="width: 12%;">Jami</th>
+                       <th style="width: 12%;">Foyda</th>
                    </tr>
                </thead>
                <tbody>
@@ -237,8 +243,8 @@
                    {% endfor %}
                    
                    {% if sales %}
-                   <!-- Totals Row -->
-                   <tr class="table-active fw-bold">
+                   <!-- Improved Totals Row with sidebar color -->
+                   <tr style="background-color: var(--primary-color); color: var(--text-light);" class="fw-bold">
                        <td colspan="5" class="text-end">Jami:</td>
                        <td class="text-end">
                            {{ total_quantity }}
@@ -345,12 +351,31 @@ document.addEventListener('DOMContentLoaded', function() {
     const startDateInput = document.getElementById('start_date_input');
     const endDateInput = document.getElementById('end_date_input');
     const dateFilters = document.querySelectorAll('.date-filter');
+    const dateFilterDisplay = document.getElementById('dateFilterDisplay');
     
     dateFilters.forEach(filter => {
         filter.addEventListener('click', function(e) {
             e.preventDefault();
             const period = this.getAttribute('data-period');
             dateFilterInput.value = period;
+            
+            // Update visual indicator
+            let displayText = '';
+            switch(period) {
+                case 'today':
+                    displayText = '<i class="far fa-calendar-alt me-1"></i> Bugun';
+                    break;
+                case 'week':
+                    displayText = '<i class="far fa-calendar-alt me-1"></i> Bu hafta';
+                    break;
+                case 'month':
+                    displayText = '<i class="far fa-calendar-alt me-1"></i> Bu oy';
+                    break;
+                case 'custom':
+                    displayText = '<i class="far fa-calendar-alt me-1"></i> Tanlangan davr';
+                    break;
+            }
+            dateFilterDisplay.innerHTML = displayText;
             
             // If it's not a custom date range, submit the form
             if (period !== 'custom') {
@@ -365,18 +390,33 @@ document.addEventListener('DOMContentLoaded', function() {
         startDateInput.value = start.format('YYYY-MM-DD');
         endDateInput.value = end.format('YYYY-MM-DD');
         dateFilterInput.value = 'custom';
+        dateFilterDisplay.innerHTML = '<i class="far fa-calendar-alt me-1"></i> ' + start.format('MMM D') + ' - ' + end.format('MMM D');
         dateFilterInput.form.submit();
     };
     
-    // Print functionality
-    document.getElementById('printTable').addEventListener('click', function(e) {
+    // Export to Excel
+    document.getElementById('exportExcel').addEventListener('click', function(e) {
         e.preventDefault();
-        window.print();
+        exportTableToExcel('salesTable', 'chipta_sotuvlari');
     });
-
-    // Format numbers with thousand separators
-    function formatNumber(num) {
-        return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    
+    function exportTableToExcel(tableID, filename = '') {
+        // Create a workbook with a worksheet
+        let tableHTML = document.getElementById(tableID).outerHTML;
+        
+        // Convert table to Excel friendly format
+        tableHTML = tableHTML.replace(/<img[^>]*>/gi, '');  // Remove images
+        
+        // Create download link
+        let link = document.createElement("a");
+        link.download = filename + '.xls';
+        
+        // Create blob and URL
+        let blob = new Blob([tableHTML], {type: 'application/vnd.ms-excel'});
+        link.href = URL.createObjectURL(blob);
+        
+        // Trigger download
+        link.click();
     }
 
     // Add new sale row
@@ -524,7 +564,11 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Format total price with spaces
             if (currency === 'USD') {
-                totalCell.textContent = '$' + formatNumberWithSpaces(total);
+                totalCell.textContent = '
+            
+            // Validate customer info
+            if (customerType === 'individual') {
+                const customerName = + formatNumberWithSpaces(total);
             } else {
                 totalCell.textContent = formatNumberWithSpaces(total) + ' UZS';
             }
@@ -539,7 +583,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Format profit with spaces
                     if (currency === 'USD') {
-                        profitCell.textContent = '$' + formatNumberWithSpaces(profit);
+                        profitCell.textContent = '
+            
+            // Validate customer info
+            if (customerType === 'individual') {
+                const customerName = + formatNumberWithSpaces(profit);
                     } else {
                         profitCell.textContent = formatNumberWithSpaces(profit) + ' UZS';
                     }
@@ -699,7 +747,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 `;
             }
         });
-    });
-});
-</script>
-{% endblock %}
+            
+            // Validate customer info
+            if (customerType === 'individual') {
+                const customerName =
