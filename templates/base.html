@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Ticket Management System{% endblock %}</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <style>
+        :root {
+            --sidebar-width: 250px;
+            --navbar-height: 60px;
+            --primary-color: #3f51b5;
+            --secondary-color: #f5f5f5;
+            --accent-color: #ff4081;
+            --text-color: #333;
+            --text-light: #f8f9fa;
+            --border-color: #dee2e6;
+            --success-color: #4caf50;
+            --warning-color: #ff9800;
+            --danger-color: #f44336;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            color: var(--text-color);
+        }
+        
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: var(--sidebar-width);
+            height: 100vh;
+            background-color: var(--primary-color);
+            color: var(--text-light);
+            padding-top: var(--navbar-height);
+            z-index: 100;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s;
+        }
+        
+        .sidebar-collapsed {
+            left: calc(-1 * var(--sidebar-width) + 60px);
+        }
+        
+        .sidebar .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            padding: 0.75rem 1.5rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            transition: all 0.2s;
+        }
+        
+        .sidebar .nav-link:hover {
+            color: #fff;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .sidebar .nav-link.active {
+            color: #fff;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-left: 4px solid var(--accent-color);
+        }
+        
+        .sidebar .nav-link i {
+            margin-right: 10px;
+            width: 20px;
+            text-align: center;
+        }
+        
+        .main-content {
+            margin-left: var(--sidebar-width);
+            padding: calc(var(--navbar-height) + 20px) 20px 20px;
+            min-height: 100vh;
+            transition: margin-left 0.3s;
+        }
+        
+        .main-content-expanded {
+            margin-left: 60px;
+        }
+        
+        .navbar {
+            position: fixed;
+            top: 0;
+            right: 0;
+            left: var(--sidebar-width);
+            height: var(--navbar-height);
+            background-color: #fff;
+            z-index: 99;
+            padding: 0 1.5rem;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            transition: left 0.3s;
+        }
+        
+        .navbar-expanded {
+            left: 60px;
+        }
+        
+        .card {
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: none;
+            margin-bottom: 20px;
+        }
+        
+        .card-header {
+            background-color: #fff;
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 1.5rem;
+            font-weight: 600;
+        }
+        
+        .table {
+            margin-bottom: 0;
+        }
+        
+        .table th {
+            border-top: none;
+            background-color: var(--secondary-color);
+            font-weight: 600;
+        }
+        
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        
+        .btn-primary:hover {
+            background-color: #303f9f;
+            border-color: #303f9f;
+        }
+        
+        .btn-accent {
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+            color: #fff;
+        }
+        
+        .btn-accent:hover {
+            background-color: #e91e63;
+            border-color: #e91e63;
+            color: #fff;
+        }
+        
+        .badge-success {
+            background-color: var(--success-color);
+        }
+        
+        .badge-warning {
+            background-color: var(--warning-color);
+        }
+        
+        .badge-danger {
+            background-color: var(--danger-color);
+        }
+        
+        .toggle-sidebar {
+            cursor: pointer;
+            font-size: 1.5rem;
+            margin-right: 1rem;
+        }
+        
+        /* Dashboard Stats */
+        .stat-card {
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-card .stat-icon {
+            font-size: 3rem;
+            opacity: 0.8;
+        }
+        
+        .stat-card .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        
+        .stat-card .stat-label {
+            font-size: 1rem;
+            opacity: 0.8;
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+        
+        /* Date picker styles */
+        .daterangepicker {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        /* Custom styles for responsive tables */
+        .table-responsive {
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        /* Animation for loading states */
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+        
+        .loading {
+            animation: pulse 1.5s infinite;
+        }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="d-flex flex-column h-100">
+            <div class="sidebar-logo text-center my-4">
+                <h4 class="mb-0">Air Tickets</h4>
+                <p class="small mb-0">Money Management</p>
+            </div>
+            
+            <ul class="nav flex-column mt-2">
+                <li class="nav-item">
+                    <a href="#" class="nav-link {% if request.path == '/dashboard/' %}active{% endif %}">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link {% if 'supplier' in request.path %}active{% endif %}">
+                        <i class="fas fa-building"></i> Suppliers
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link {% if 'purchase' in request.path %}active{% endif %}">
+                        <i class="fas fa-shopping-cart"></i> Ticket Purchases
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link {% if 'sales' in request.path %}active{% endif %}">
+                        <i class="fas fa-receipt"></i> Ticket Sales
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link {% if 'agents' in request.path %}active{% endif %}">
+                        <i class="fas fa-users"></i> Agents
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link {% if 'expenses' in request.path %}active{% endif %}">
+                        <i class="fas fa-file-invoice-dollar"></i> Expenses
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link {% if 'reports' in request.path %}active{% endif %}">
+                        <i class="fas fa-chart-line"></i> Reports
+                    </a>
+                </li>
+            </ul>
+            
+            <div class="mt-auto mb-4 px-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small">System Version</span>
+                    <span class="badge bg-light text-dark">v1.0</span>
+                </div>
+                <a href="#" class="btn btn-outline-light btn-sm w-100">
+                    <i class="fas fa-sign-out-alt me-1"></i> Logout
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navbar -->
+    <nav class="navbar" id="navbar">
+        <div class="d-flex align-items-center">
+            <div class="toggle-sidebar" id="toggleSidebar">
+                <i class="fas fa-bars"></i>
+            </div>
+            <ol class="breadcrumb mb-0">
+                <li class="breadcrumb-item"><a href="#">Home</a></li>
+                {% block breadcrumb %}{% endblock %}
+            </ol>
+        </div>
+        
+        <div class="d-flex align-items-center">
+            <div class="dropdown me-3">
+                <button class="btn dropdown-toggle" type="button" id="dateFilterDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="far fa-calendar-alt me-1"></i> <span id="currentDateFilter">Today</span>
+                </button>
+                <ul class="dropdown-menu" aria-labelledby="dateFilterDropdown">
+                    <li><a class="dropdown-item date-filter" href="#" data-period="day">Today</a></li>
+                    <li><a class="dropdown-item date-filter" href="#" data-period="week">This Week</a></li>
+                    <li><a class="dropdown-item date-filter" href="#" data-period="month">This Month</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item date-filter" href="#" data-period="custom">Custom Range</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content" id="mainContent">
+        {% if messages %}
+            <div class="message-container">
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+        
+        {% block page_header %}{% endblock %}
+        
+        <div class="content-wrapper">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- jQuery (required for some plugins) -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    
+    <!-- Date Range Picker -->
+    <script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css">
+    
+    <!-- Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Base JavaScript -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Toggle sidebar
+            const toggleSidebar = document.getElementById('toggleSidebar');
+            const sidebar = document.getElementById('sidebar');
+            const navbar = document.getElementById('navbar');
+            const mainContent = document.getElementById('mainContent');
+            
+            toggleSidebar.addEventListener('click', function() {
+                sidebar.classList.toggle('sidebar-collapsed');
+                navbar.classList.toggle('navbar-expanded');
+                mainContent.classList.toggle('main-content-expanded');
+            });
+            
+            // Date filter functionality
+            const dateFilters = document.querySelectorAll('.date-filter');
+            const currentDateFilter = document.getElementById('currentDateFilter');
+            
+            dateFilters.forEach(filter => {
+                filter.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const period = this.getAttribute('data-period');
+                    currentDateFilter.textContent = this.textContent;
+                    
+                    if (period === 'custom') {
+                        // Initialize date range picker
+                        $('body').append('<div id="dateRangeModal" class="modal fade"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Select Date Range</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body"><div id="dateRangePicker"></div></div></div></div></div>');
+                        
+                        $('#dateRangePicker').daterangepicker({
+                            opens: 'center',
+                            autoApply: true,
+                            maxDate: new Date()
+                        }, function(start, end) {
+                            currentDateFilter.textContent = start.format('MMM D, YYYY') + ' - ' + end.format('MMM D, YYYY');
+                            $('#dateRangeModal').modal('hide');
+                            
+                            // Update content based on selected date range
+                            updateContentByDateRange(start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD'));
+                        });
+                        
+                        $('#dateRangeModal').modal('show');
+                        $('#dateRangeModal').on('hidden.bs.modal', function () {
+                            $(this).remove();
+                        });
+                    } else {
+                        // Handle predefined periods (day, week, month)
+                        updateContentByPeriod(period);
+                    }
+                });
+            });
+            
+            function updateContentByPeriod(period) {
+                // This function would make an AJAX call to fetch data for the selected period
+                // For example:
+                fetch(`/api/data/?period=${period}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        // Update your dashboard or other content with the new data
+                        console.log('Data updated for period:', period);
+                        // You would then update charts, tables, etc.
+                    })
+                    .catch(error => console.error('Error fetching data:', error));
+            }
+            
+            function updateContentByDateRange(startDate, endDate) {
+                // This function would make an AJAX call to fetch data for a custom date range
+                // For example:
+                fetch(`/api/data/?start_date=${startDate}&end_date=${endDate}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        // Update your dashboard or other content with the new data
+                        console.log('Data updated for date range:', startDate, 'to', endDate);
+                        // You would then update charts, tables, etc.
+                    })
+                    .catch(error => console.error('Error fetching data:', error));
+            }
+        });
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
