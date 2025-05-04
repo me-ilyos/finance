@@ -253,17 +253,17 @@
             
             <ul class="nav flex-column mt-2">
                 <li class="nav-item">
-                    <a href="#" class="nav-link {% if 'purchase' in request.path %}active{% endif %}">
-                        <i class="fas fa-shopping-cart"></i> Chiptalar Ombori
+                    <a href="{% url 'stock:purchase_list' %}" class="nav-link {% if 'stock' in request.path %}active{% endif %}">
+                        <i class="fas fa-shopping-cart"></i> Chipta Xaridlari
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link {% if 'sales' in request.path %}active{% endif %}">
-                        <i class="fas fa-receipt"></i> Sotish
+                    <a href="{% url 'finance:sale_list' %}" class="nav-link {% if 'finance/sales' in request.path %}active{% endif %}">
+                        <i class="fas fa-receipt"></i> Chipta Sotuvlari
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link {% if 'agents' in request.path %}active{% endif %}">
+                    <a href="#" class="nav-link {% if 'finance/agents' in request.path %}active{% endif %}">
                         <i class="fas fa-users"></i> Agentlar
                     </a>
                 </li>
