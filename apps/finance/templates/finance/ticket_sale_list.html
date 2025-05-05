@@ -1,4 +1,7 @@
 {% extends "base.html" %}
+{% load humanize %}
+{% load finance_extras %}
+{% load static %}{# Load static tag #}
 
 {% block title %}Chipta Sotuvlari | Chipta Boshqaruv Tizimi{% endblock %}
 
@@ -7,31 +10,22 @@
 {% endblock %}
 
 {% block page_header %}
-<div class="row align-items-center mb-4">
-   <div class="col-md-6">
-       <h1 class="h3 mb-0 text-gray-800">Chipta Sotuvlari</h1>
-       <p class="mb-0 text-muted">Sotilgan chiptalar va foyda hisoboti</p>
-   </div>
-   <div class="col-md-6 text-md-end">
-       <button type="button" class="btn btn-primary" id="addSaleBtn">
-           <i class="fas fa-plus-circle me-1"></i> Yangi Sotuv Qo'shish
-       </button>
+<div class="row align-items-center mb-3">
+   <div class="col">
+       <h5 class="mb-0 text-gray-800">Chipta Sotuvlari</h5>
+       <small class="text-muted">Sotilgan chiptalar va foyda hisoboti</small>
    </div>
 </div>
 {% endblock %}
 
 {% block content %}
-<!-- Combined Filters and Search Row -->
+<!-- Filters Card -->
 <div class="card shadow mb-4">
    <div class="card-body py-3">
-       <form method="get" class="mb-0">
-           <div class="row g-3 align-items-center">
-               <!-- Title and Reset Filters -->
-               <div class="col-auto me-auto">
-                   <h6 class="m-0 font-weight-bold text-primary">Filtrlar</h6>
-               </div>
+       <form method="get" class="mb-0" id="filter-form">
+           <div class="row g-2 mb-3">
                {% if active_filters %}
-               <div class="col-auto">
+               <div class="col-12 d-flex justify-content-end">
                    <a href="{% url 'finance:sale_list' %}" class="btn btn-sm btn-outline-secondary">
                        <i class="fas fa-times me-1"></i> Filtrlarni Tozalash
                    </a>
@@ -39,81 +33,61 @@
                {% endif %}
            </div>
            
-           <div class="row g-3 mt-2">
+           <div class="row g-2 align-items-end">
                <!-- Search -->
-               <div class="col-md-3">
-                   <div class="input-group">
-                       <input type="text" class="form-control" placeholder="Qidirish..." name="search" value="{{ search_query }}">
+               <div class="col-lg-3 col-md-6 mb-2">
+                   {{ filterset.form.search.label_tag }}
+                   <div class="input-group input-group-sm">
+                       {{ filterset.form.search }}
                        <button class="btn btn-outline-secondary" type="submit">
                            <i class="fas fa-search"></i>
                        </button>
                    </div>
                </div>
                
-               <!-- Date Filter - Hidden inputs for JavaScript -->
-               <div class="col-md-2">
-                   <input type="hidden" name="date_filter" value="{{ date_filter }}" id="date_filter_input">
-                   <input type="hidden" name="start_date" id="start_date_input">
-                   <input type="hidden" name="end_date" id="end_date_input">
-                   
-                   <!-- Visual indication of current filter -->
-                   <div class="form-control bg-light text-truncate" id="dateFilterDisplay">
-                       {% if date_filter == "today" %}
-                           <i class="far fa-calendar-alt me-1"></i> Bugun
-                       {% elif date_filter == "week" %}
-                           <i class="far fa-calendar-alt me-1"></i> Bu hafta
-                       {% elif date_filter == "month" %}
-                           <i class="far fa-calendar-alt me-1"></i> Bu oy
-                       {% elif date_filter == "custom" %}
-                           <i class="far fa-calendar-alt me-1"></i> {{ start_date }} - {{ end_date }}
-                       {% else %}
-                           <i class="far fa-calendar-alt me-1"></i> Bugun
-                       {% endif %}
+               <!-- Date Filter -->
+               <div class="col-lg-2 col-md-6 mb-2">
+                   {{ filterset.form.date_filter.label_tag }}
+                   {{ filterset.form.date_filter }}
+                   <div id="custom-date-range" class="row gx-1 {% if filterset.form.date_filter.value != 'custom' %}d-none{% endif %} mt-1">
+                       <div class="col-6">
+                           {{ filterset.form.start_date.label_tag }}
+                           {{ filterset.form.start_date }}
+                       </div>
+                       <div class="col-6">
+                           {{ filterset.form.end_date.label_tag }}
+                           {{ filterset.form.end_date }}
+                       </div>
                    </div>
                </div>
                
                <!-- Customer Type Filter -->
-               <div class="col-md-2">
-                   <select class="form-select" name="customer_type">
-                       <option value="">Barcha Mijozlar</option>
-                       <option value="individual" {% if customer_type == "individual" %}selected{% endif %}>Individual</option>
-                       <option value="agent" {% if customer_type == "agent" %}selected{% endif %}>Agent</option>
-                   </select>
+               <div class="col-lg-2 col-md-4 mb-2">
+                   {{ filterset.form.customer_type.label_tag }}
+                   {{ filterset.form.customer_type }}
                </div>
                
                <!-- Agent Filter -->
-               <div class="col-md-2">
-                   <select class="form-select" name="agent">
-                       <option value="">Barcha Agentlar</option>
-                       {% for agent in agents %}
-                       <option value="{{ agent.id }}" {% if agent_id|stringformat:"s" == agent.id|stringformat:"s" %}selected{% endif %}>
-                           {{ agent.name }}
-                       </option>
-                       {% endfor %}
-                   </select>
+               <div class="col-lg-2 col-md-4 mb-2">
+                   {{ filterset.form.agent.label_tag }}
+                   {{ filterset.form.agent }}
                </div>
                
                <!-- Seller Filter -->
-               <div class="col-md-2">
-                   <select class="form-select" name="seller">
-                       <option value="">Barcha Sotuvchilar</option>
-                       {% for seller in sellers %}
-                       <option value="{{ seller.id }}" {% if seller_id|stringformat:"s" == seller.id|stringformat:"s" %}selected{% endif %}>
-                           {{ seller.name }}
-                       </option>
-                       {% endfor %}
-                   </select>
+               <div class="col-lg-2 col-md-4 mb-2">
+                   {{ filterset.form.seller.label_tag }}
+                   {{ filterset.form.seller }}
                </div>
                
                <!-- Sort By -->
-               <div class="col-md-1">
-                   <select class="form-select" name="sort_by">
-                       <option value="-sale_date" {% if sort_by == "-sale_date" %}selected{% endif %}>Eng Yangi</option>
-                       <option value="sale_date" {% if sort_by == "sale_date" %}selected{% endif %}>Eng Eski</option>
-                       <option value="-profit" {% if sort_by == "-profit" %}selected{% endif %}>Foyda ↓</option>
-                   </select>
+               <div class="col-lg-1 col-md-12 mb-2">
+                   {{ filterset.form.sort_by.label_tag }}
+                   {{ filterset.form.sort_by }}
                </div>
            </div>
+           
+           {# Hidden button to trigger form submission from JS if needed #}
+           <button type="submit" class="d-none">Filter</button>
        </form>
    </div>
 </div>
@@ -122,17 +96,21 @@
 <div class="card shadow mb-4">
    <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
        <h6 class="m-0 font-weight-bold text-primary">Chipta Sotuvlari</h6>
-       <!-- Excel export instead of print -->
-       <a href="#" id="exportExcel" class="text-secondary">
-           <i class="fas fa-file-excel fa-lg"></i>
-       </a>
+       <div>
+           <button type="button" class="btn btn-primary btn-sm me-2" id="addSaleBtn">
+               <i class="fas fa-plus-circle me-1"></i> Yangi Sotuv Qo'shish
+           </button>
+           <a href="#" id="exportExcel" class="text-success">
+               <i class="fas fa-file-excel fa-lg"></i>
+           </a>
+       </div>
    </div>
    <div class="card-body">
        <div class="table-responsive">
            <table class="table table-bordered table-hover" id="salesTable" width="100%" cellspacing="0">
                <thead class="table-light">
                    <tr>
-                       <th style="width: 10%;">Sotuv ID</th>
+                       <th style="width: 5%;">Sotuv ID</th>
                        <th style="width: 10%;">Sana</th>
                        <th style="width: 15%;">Mijoz</th>
                        <th style="width: 12%;">Sotuvchi</th>
@@ -158,70 +136,10 @@
                        <td>{{ sale.seller.name }}</td>
                        <td>{{ sale.ticket_purchase.purchase_id }}</td>
                        <td class="text-end">{{ sale.quantity }}</td>
-                       <td class="text-end">
-                           {% if sale.currency == 'USD' %}
-                               ${{ sale.unit_price|floatformat:2|stringformat:'s'|slice:':-3' }} {{ sale.unit_price|floatformat:2|stringformat:'s'|slice:'-3:' }}
-                           {% else %}
-                               {% with unit_price_str=sale.unit_price|floatformat:2|stringformat:'s' %}
-                                   {% if unit_price_str|length > 6 %}
-                                       {{ unit_price_str|slice:':-6' }} {{ unit_price_str|slice:'-6:-3' }} {{ unit_price_str|slice:'-3:' }} UZS
-                                   {% elif unit_price_str|length > 3 %}
-                                       {{ unit_price_str|slice:':-3' }} {{ unit_price_str|slice:'-3:' }} UZS
-                                   {% else %}
-                                       {{ unit_price_str }} UZS
-                                   {% endif %}
-                               {% endwith %}
-                           {% endif %}
-                       </td>
-                       <td class="text-end">
-                           {% if sale.currency == 'USD' %}
-                               {% with total_price=sale.total_price|floatformat:2|stringformat:'s' %}
-                                   {% if total_price|length > 6 %}
-                                       ${{ total_price|slice:':-6' }} {{ total_price|slice:'-6:-3' }} {{ total_price|slice:'-3:' }}
-                                   {% elif total_price|length > 3 %}
-                                       ${{ total_price|slice:':-3' }} {{ total_price|slice:'-3:' }}
-                                   {% else %}
-                                       ${{ total_price }}
-                                   {% endif %}
-                               {% endwith %}
-                           {% else %}
-                               {% with total_price=sale.total_price|floatformat:2|stringformat:'s' %}
-                                   {% if total_price|length > 6 %}
-                                       {{ total_price|slice:':-6' }} {{ total_price|slice:'-6:-3' }} {{ total_price|slice:'-3:' }} UZS
-                                   {% elif total_price|length > 3 %}
-                                       {{ total_price|slice:':-3' }} {{ total_price|slice:'-3:' }} UZS
-                                   {% else %}
-                                       {{ total_price }} UZS
-                                   {% endif %}
-                               {% endwith %}
-                           {% endif %}
-                       </td>
+                       <td class="text-end">{{ sale.unit_price|money:sale.currency }}</td>
+                       <td class="text-end">{{ sale.total_price|money:sale.currency }}</td>
                        <td class="text-end {% if sale.profit > 0 %}text-success{% elif sale.profit < 0 %}text-danger{% endif %}">
-                           {% if sale.profit != None %}
-                               {% if sale.currency == 'USD' %}
-                                   {% with profit=sale.profit|floatformat:2|stringformat:'s' %}
-                                       {% if profit|length > 6 %}
-                                           ${{ profit|slice:':-6' }} {{ profit|slice:'-6:-3' }} {{ profit|slice:'-3:' }}
-                                       {% elif profit|length > 3 %}
-                                           ${{ profit|slice:':-3' }} {{ profit|slice:'-3:' }}
-                                       {% else %}
-                                           ${{ profit }}
-                                       {% endif %}
-                                   {% endwith %}
-                               {% else %}
-                                   {% with profit=sale.profit|floatformat:2|stringformat:'s' %}
-                                       {% if profit|length > 6 %}
-                                           {{ profit|slice:':-6' }} {{ profit|slice:'-6:-3' }} {{ profit|slice:'-3:' }} UZS
-                                       {% elif profit|length > 3 %}
-                                           {{ profit|slice:':-3' }} {{ profit|slice:'-3:' }} UZS
-                                       {% else %}
-                                           {{ profit }} UZS
-                                       {% endif %}
-                                   {% endwith %}
-                               {% endif %}
-                           {% else %}
-                               —
-                           {% endif %}
+                           {{ sale.profit|money:sale.currency }}
                        </td>
                    </tr>
                    {% empty %}
@@ -243,40 +161,44 @@
                    {% endfor %}
                    
                    {% if sales %}
-                   <!-- Improved Totals Row with sidebar color -->
-                   <tr style="background-color: var(--primary-color); color: var(--text-light);" class="fw-bold">
-                       <td colspan="5" class="text-end">Jami:</td>
+                   <!-- Total quantity row -->
+                   <tr class="fw-bold" style="background-color: #4e73df; color: white !important;">
+                       <td colspan="5" class="text-end">Jami chiptalar soni:</td>
                        <td class="text-end">
-                           {{ total_quantity }}
+                           {{ total_quantity|intcomma }}
                        </td>
-                       <td></td>
-                       <td></td>
+                       <td colspan="3"></td>
+                   </tr>
+                   
+                   <!-- USD Totals row -->
+                   {% if usd_total_sum %}
+                   <tr class="fw-bold" style="background-color: #eaecf4;">
+                       <td colspan="6" class="text-end">Jami USD sotuvlar:</td>
+                       <td class="text-end" colspan="2">
+                           {{ usd_total_sum|money:'USD' }}
+                       </td>
                        <td class="text-end">
-                           {% if uzs_profit != 0 %}
-                               {% with profit=uzs_profit|floatformat:2|stringformat:'s' %}
-                                   {% if profit|length > 6 %}
-                                       {{ profit|slice:':-6' }} {{ profit|slice:'-6:-3' }} {{ profit|slice:'-3:' }} UZS
-                                   {% elif profit|length > 3 %}
-                                       {{ profit|slice:':-3' }} {{ profit|slice:'-3:' }} UZS
-                                   {% else %}
-                                       {{ profit }} UZS
-                                   {% endif %}
-                               {% endwith %}
-                               <br>
-                           {% endif %}
-                           {% if usd_profit != 0 %}
-                               {% with profit=usd_profit|floatformat:2|stringformat:'s' %}
-                                   {% if profit|length > 6 %}
-                                       ${{ profit|slice:':-6' }} {{ profit|slice:'-6:-3' }} {{ profit|slice:'-3:' }}
-                                   {% elif profit|length > 3 %}
-                                       ${{ profit|slice:':-3' }} {{ profit|slice:'-3:' }}
-                                   {% else %}
-                                       ${{ profit }}
-                                   {% endif %}
-                               {% endwith %}
-                           {% endif %}
+                           <span class="{% if usd_profit > 0 %}text-success{% elif usd_profit < 0 %}text-danger{% endif %}">
+                               {{ usd_profit|money:'USD' }}
+                           </span>
                        </td>
                    </tr>
+                   {% endif %}
+                   
+                   <!-- UZS Totals row -->
+                   {% if uzs_total_sum %}
+                   <tr class="fw-bold" style="background-color: #eaecf4;">
+                       <td colspan="6" class="text-end">Jami UZS sotuvlar:</td>
+                       <td class="text-end" colspan="2">
+                           {{ uzs_total_sum|money:'UZS' }}
+                       </td>
+                       <td class="text-end">
+                           <span class="{% if uzs_profit > 0 %}text-success{% elif uzs_profit < 0 %}text-danger{% endif %}">
+                               {{ uzs_profit|money:'UZS' }}
+                           </span>
+                       </td>
+                   </tr>
+                   {% endif %}
                    {% endif %}
                </tbody>
            </table>
@@ -289,12 +211,12 @@
                <ul class="pagination">
                    {% if page_obj.has_previous %}
                    <li class="page-item">
-                       <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page=1" aria-label="First">
+                       <a class="page-link" href="?{% query_transform page=1 %}" aria-label="First">
                            <span aria-hidden="true">&laquo;&laquo;</span>
                        </a>
                    </li>
                    <li class="page-item">
-                       <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}" aria-label="Previous">
+                       <a class="page-link" href="?{% query_transform page=page_obj.previous_page_number %}" aria-label="Previous">
                            <span aria-hidden="true">&laquo;</span>
                        </a>
                    </li>
@@ -307,19 +229,19 @@
                            </li>
                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
                            <li class="page-item">
-                               <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ num }}">{{ num }}</a>
+                               <a class="page-link" href="?{% query_transform page=num %}">{{ num }}</a>
                            </li>
                        {% endif %}
                    {% endfor %}
                    
                    {% if page_obj.has_next %}
                    <li class="page-item">
-                       <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}" aria-label="Next">
+                       <a class="page-link" href="?{% query_transform page=page_obj.next_page_number %}" aria-label="Next">
                            <span aria-hidden="true">&raquo;</span>
                        </a>
                    </li>
                    <li class="page-item">
-                       <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.paginator.num_pages }}" aria-label="Last">
+                       <a class="page-link" href="?{% query_transform page=page_obj.paginator.num_pages %}" aria-label="Last">
                            <span aria-hidden="true">&raquo;&raquo;</span>
                        </a>
                    </li>
@@ -333,421 +255,14 @@
 
 <!-- CSRF Token for AJAX -->
 <input type="hidden" id="csrf_token" value="{{ csrf_token }}">
+
+<!-- Data for JavaScript -->
+<script id="js-data" type="application/json">
+{{ js_data|json_encode }}
+</script>
 {% endblock %}
 
 {% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Handle form submission when a filter changes
-    const filterElements = document.querySelectorAll('select[name="customer_type"], select[name="agent"], select[name="seller"], select[name="currency"], select[name="sort_by"]');
-    filterElements.forEach(element => {
-        element.addEventListener('change', function() {
-            this.form.submit();
-        });
-    });
-    
-    // Connect the date filter dropdown from base.html with our form
-    const dateFilterInput = document.getElementById('date_filter_input');
-    const startDateInput = document.getElementById('start_date_input');
-    const endDateInput = document.getElementById('end_date_input');
-    const dateFilters = document.querySelectorAll('.date-filter');
-    const dateFilterDisplay = document.getElementById('dateFilterDisplay');
-    
-    dateFilters.forEach(filter => {
-        filter.addEventListener('click', function(e) {
-            e.preventDefault();
-            const period = this.getAttribute('data-period');
-            dateFilterInput.value = period;
-            
-            // Update visual indicator
-            let displayText = '';
-            switch(period) {
-                case 'today':
-                    displayText = '<i class="far fa-calendar-alt me-1"></i> Bugun';
-                    break;
-                case 'week':
-                    displayText = '<i class="far fa-calendar-alt me-1"></i> Bu hafta';
-                    break;
-                case 'month':
-                    displayText = '<i class="far fa-calendar-alt me-1"></i> Bu oy';
-                    break;
-                case 'custom':
-                    displayText = '<i class="far fa-calendar-alt me-1"></i> Tanlangan davr';
-                    break;
-            }
-            dateFilterDisplay.innerHTML = displayText;
-            
-            // If it's not a custom date range, submit the form
-            if (period !== 'custom') {
-                dateFilterInput.form.submit();
-            }
-            // Custom date range will be handled by the date picker in base.html
-        });
-    });
-    
-    // Function to handle date range selection
-    window.updateDateRange = function(start, end) {
-        startDateInput.value = start.format('YYYY-MM-DD');
-        endDateInput.value = end.format('YYYY-MM-DD');
-        dateFilterInput.value = 'custom';
-        dateFilterDisplay.innerHTML = '<i class="far fa-calendar-alt me-1"></i> ' + start.format('MMM D') + ' - ' + end.format('MMM D');
-        dateFilterInput.form.submit();
-    };
-    
-    // Export to Excel
-    document.getElementById('exportExcel').addEventListener('click', function(e) {
-        e.preventDefault();
-        exportTableToExcel('salesTable', 'chipta_sotuvlari');
-    });
-    
-    function exportTableToExcel(tableID, filename = '') {
-        // Create a workbook with a worksheet
-        let tableHTML = document.getElementById(tableID).outerHTML;
-        
-        // Convert table to Excel friendly format
-        tableHTML = tableHTML.replace(/<img[^>]*>/gi, '');  // Remove images
-        
-        // Create download link
-        let link = document.createElement("a");
-        link.download = filename + '.xls';
-        
-        // Create blob and URL
-        let blob = new Blob([tableHTML], {type: 'application/vnd.ms-excel'});
-        link.href = URL.createObjectURL(blob);
-        
-        // Trigger download
-        link.click();
-    }
-
-    // Add new sale row
-    document.getElementById('addSaleBtn').addEventListener('click', function() {
-        const tableBody = document.querySelector('#salesTable tbody');
-        
-        // Remove empty state row if it exists
-        const emptyStateRow = tableBody.querySelector('.empty-state');
-        if (emptyStateRow) {
-            tableBody.innerHTML = '';
-        }
-        
-        // Create new editable row
-        const newRow = document.createElement('tr');
-        newRow.classList.add('new-sale-row');
-        
-        // Get current date-time in ISO format for the datetime-local input
-        const now = new Date();
-        const localDatetime = new Date(now.getTime() - (now.getTimezoneOffset() * 60000))
-            .toISOString()
-            .slice(0, 16);
-        
-        // Create HTML for the new row
-        let rowHtml = `
-            <td><span class="badge bg-warning">New</span></td>
-            <td><input type="datetime-local" class="form-control form-control-sm" name="sale_date" value="${localDatetime}"></td>
-            <td>
-                <select class="form-select form-select-sm" name="customer_type" id="customerTypeSelect">
-                    <option value="individual">Individual</option>
-                    <option value="agent">Agent</option>
-                </select>
-                <div id="customerNameInput" class="mt-1">
-                    <input type="text" class="form-control form-control-sm" name="customer_name" placeholder="Mijoz nomi">
-                </div>
-                <div id="agentSelectDiv" class="mt-1 d-none">
-                    <select class="form-select form-select-sm" name="agent">
-                        <option value="">Agent tanlang</option>`;
-        
-        // Add agents dynamically
-        {% for agent in agents %}
-        rowHtml += `<option value="{{ agent.id }}">{{ agent.name }}</option>`;
-        {% endfor %}
-        
-        rowHtml += `
-                    </select>
-                </div>
-            </td>
-            <td>
-                <select class="form-select form-select-sm" name="seller">
-                    <option value="">Sotuvchi tanlang</option>`;
-        
-        // Add sellers dynamically
-        {% for seller in sellers %}
-        rowHtml += `<option value="{{ seller.id }}">{{ seller.name }}</option>`;
-        {% endfor %}
-        
-        rowHtml += `
-                </select>
-            </td>
-            <td>
-                <select class="form-select form-select-sm" name="ticket_purchase">
-                    <option value="">Xarid tanlang</option>`;
-        
-        // Add ticket purchases dynamically
-        {% for purchase in ticket_purchases %}
-        rowHtml += `<option value="{{ purchase.id }}">{{ purchase.purchase_id }} - {{ purchase.supplier.name }}</option>`;
-        {% endfor %}
-        
-        rowHtml += `
-                </select>
-            </td>
-            <td><input type="number" class="form-control form-control-sm text-end" name="quantity" min="1" value="1"></td>
-            <td><input type="number" class="form-control form-control-sm text-end" name="unit_price" min="0.01" step="0.01" value=""></td>
-            <td class="text-end total-price">0.00</td>
-            <td class="text-end profit">—</td>
-            <td style="display:none;">
-                <select class="form-select form-select-sm" name="currency">
-                    <option value="UZS">UZS</option>
-                    <option value="USD">USD</option>
-                </select>
-            </td>
-            <td class="text-center">
-                <button type="button" class="btn btn-sm btn-success save-row">
-                    <i class="fas fa-save"></i>
-                </button>
-                <button type="button" class="btn btn-sm btn-danger cancel-row">
-                    <i class="fas fa-times"></i>
-                </button>
-            </td>
-        `;
-        
-        // Set the row HTML
-        newRow.innerHTML = rowHtml;
-        
-        // Insert the new row at the beginning of the table
-        if (tableBody.firstChild) {
-            tableBody.insertBefore(newRow, tableBody.firstChild);
-        } else {
-            tableBody.appendChild(newRow);
-        }
-        
-        // Toggle between agent select and customer name input based on customer type
-        const customerTypeSelect = newRow.querySelector('#customerTypeSelect');
-        const customerNameInput = newRow.querySelector('#customerNameInput');
-        const agentSelectDiv = newRow.querySelector('#agentSelectDiv');
-        
-        customerTypeSelect.addEventListener('change', function() {
-            if (this.value === 'agent') {
-                customerNameInput.classList.add('d-none');
-                agentSelectDiv.classList.remove('d-none');
-            } else {
-                customerNameInput.classList.remove('d-none');
-                agentSelectDiv.classList.add('d-none');
-            }
-        });
-        
-        // Create purchase prices object for profit calculation
-        const purchasePrices = {};
-        {% for purchase in ticket_purchases %}
-        purchasePrices["{{ purchase.id }}"] = {
-            "unit_price": {{ purchase.unit_price }},
-            "currency": "{{ purchase.currency }}"
-        };
-        {% endfor %}
-        
-        // Calculate total and profit when quantity, price or purchase changes
-        const quantityInput = newRow.querySelector('input[name="quantity"]');
-        const priceInput = newRow.querySelector('input[name="unit_price"]');
-        const currencySelect = newRow.querySelector('select[name="currency"]');
-        const purchaseSelect = newRow.querySelector('select[name="ticket_purchase"]');
-        const totalCell = newRow.querySelector('.total-price');
-        const profitCell = newRow.querySelector('.profit');
-        
-        function formatNumberWithSpaces(num) {
-            let parts = num.toFixed(2).split('.');
-            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-            return parts.join('.');
-        }
-        
-        function updateTotal() {
-            const quantity = parseFloat(quantityInput.value) || 0;
-            const price = parseFloat(priceInput.value) || 0;
-            const total = quantity * price;
-            const currency = currencySelect.value;
-            
-            // Format total price with spaces
-            if (currency === 'USD') {
-                totalCell.textContent = '
-            
-            // Validate customer info
-            if (customerType === 'individual') {
-                const customerName = + formatNumberWithSpaces(total);
-            } else {
-                totalCell.textContent = formatNumberWithSpaces(total) + ' UZS';
-            }
-            
-            // Calculate profit if possible
-            const purchaseId = purchaseSelect.value;
-            if (purchaseId && purchasePrices[purchaseId]) {
-                const purchasePrice = purchasePrices[purchaseId];
-                
-                if (purchasePrice.currency === currency) {
-                    const profit = (price - purchasePrice.unit_price) * quantity;
-                    
-                    // Format profit with spaces
-                    if (currency === 'USD') {
-                        profitCell.textContent = '
-            
-            // Validate customer info
-            if (customerType === 'individual') {
-                const customerName = + formatNumberWithSpaces(profit);
-                    } else {
-                        profitCell.textContent = formatNumberWithSpaces(profit) + ' UZS';
-                    }
-                    
-                    // Add color based on profit value
-                    if (profit > 0) {
-                        profitCell.classList.add('text-success');
-                        profitCell.classList.remove('text-danger');
-                    } else if (profit < 0) {
-                        profitCell.classList.add('text-danger');
-                        profitCell.classList.remove('text-success');
-                    } else {
-                        profitCell.classList.remove('text-success', 'text-danger');
-                    }
-                } else {
-                    profitCell.textContent = '—';
-                    profitCell.classList.remove('text-success', 'text-danger');
-                }
-            } else {
-                profitCell.textContent = '—';
-                profitCell.classList.remove('text-success', 'text-danger');
-            }
-        }
-        
-        quantityInput.addEventListener('input', updateTotal);
-        priceInput.addEventListener('input', updateTotal);
-        currencySelect.addEventListener('change', updateTotal);
-        purchaseSelect.addEventListener('change', updateTotal);
-        
-        // Save button click handler
-        const saveBtn = newRow.querySelector('.save-row');
-        saveBtn.addEventListener('click', function() {
-            // Validate inputs
-            const customerType = customerTypeSelect.value;
-            const seller = newRow.querySelector('select[name="seller"]').value;
-            const ticketPurchase = purchaseSelect.value;
-            const quantity = quantityInput.value;
-            const price = priceInput.value;
-            
-            // Validate customer info
-            if (customerType === 'individual') {
-                const customerName = newRow.querySelector('input[name="customer_name"]').value;
-                if (!customerName) {
-                    alert('Please enter customer name');
-                    return;
-                }
-            } else { // agent
-                const agent = newRow.querySelector('select[name="agent"]').value;
-                if (!agent) {
-                    alert('Please select an agent');
-                    return;
-                }
-            }
-            
-            if (!seller) {
-                alert('Please select a seller');
-                return;
-            }
-            
-            if (!ticketPurchase) {
-                alert('Please select a ticket purchase');
-                return;
-            }
-            
-            if (!quantity || parseInt(quantity) < 1) {
-                alert('Please enter a valid quantity');
-                return;
-            }
-            
-            if (!price || parseFloat(price) <= 0) {
-                alert('Please enter a valid price');
-                return;
-            }
-            
-            // Create form data
-            const formData = new FormData();
-            formData.append('customer_type', customerType);
-            
-            if (customerType === 'individual') {
-                formData.append('customer_name', newRow.querySelector('input[name="customer_name"]').value);
-            } else {
-                formData.append('agent', newRow.querySelector('select[name="agent"]').value);
-            }
-            
-            formData.append('seller', seller);
-            formData.append('ticket_purchase', ticketPurchase);
-            formData.append('sale_date', newRow.querySelector('input[name="sale_date"]').value);
-            formData.append('quantity', quantity);
-            formData.append('unit_price', price);
-            formData.append('currency', currencySelect.value);
-            formData.append('csrfmiddlewaretoken', document.getElementById('csrf_token').value);
-            
-            // Show loading state
-            saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-            saveBtn.disabled = true;
-            
-            // Send AJAX request
-            fetch('{% url "finance:sale_create" %}', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Refresh the page to update the totals
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1000);
-                    
-                    // Show success alert
-                    const alertDiv = document.createElement('div');
-                    alertDiv.className = 'alert alert-success alert-dismissible fade show';
-                    alertDiv.innerHTML = `
-                        Sotish muvaffaqiyatli saqlandi!
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    `;
-                    
-                    const contentWrapper = document.querySelector('.content-wrapper');
-                    contentWrapper.insertBefore(alertDiv, contentWrapper.firstChild);
-                } else {
-                    // Show error
-                    alert('Error: ' + (data.errors || 'Failed to save sale'));
-                    saveBtn.innerHTML = '<i class="fas fa-save"></i>';
-                    saveBtn.disabled = false;
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while saving the sale');
-                saveBtn.innerHTML = '<i class="fas fa-save"></i>';
-                saveBtn.disabled = false;
-            });
-        });
-        
-        // Cancel button click handler
-        const cancelBtn = newRow.querySelector('.cancel-row');
-        cancelBtn.addEventListener('click', function() {
-            tableBody.removeChild(newRow);
-            
-            // If table is now empty, show empty state again
-            if (tableBody.children.length === 0) {
-                tableBody.innerHTML = `
-                    <tr>
-                        <td colspan="9" class="text-center py-4">
-                            <div class="empty-state">
-                                <i class="fas fa-receipt fa-3x text-muted mb-3"></i>
-                                <h5>Hech qanday sotuv topilmadi</h5>
-                                <p class="text-muted">
-                                    Siz hali hech qanday chipta sotmagansiz. "Yangi Sotuv Qo'shish" tugmasini bosib, birinchi sotuvingizni qo'shing.
-                                </p>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            }
-        });
-            
-            // Validate customer info
-            if (customerType === 'individual') {
-                const customerName =
+{# Load the external JavaScript file #}
+<script src="{% static 'finance/sales.js' %}"></script>
+{% endblock %}

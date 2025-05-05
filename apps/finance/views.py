@@ -5,11 +5,95 @@ from django.views.generic import ListView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils import timezone
 from django.http import JsonResponse
-from django.db.models import Q, Sum, F
+from django.db.models import Q, Sum, F, Case, When, Value, DecimalField, ExpressionWrapper
 from datetime import timedelta
 from decimal import Decimal
 from .models import Agent, Seller, TicketSale
 from apps.stock.models import TicketPurchase
+import django_filters
+from django.urls import reverse
+
+
+class TicketSaleFilter(django_filters.FilterSet):
+    """FilterSet for ticket sales"""
+    search = django_filters.CharFilter(method='filter_search', label="Qidirish")
+    date_filter = django_filters.ChoiceFilter(
+        choices=(
+            ('today', 'Bugun'),
+            ('week', 'Shu hafta'),
+            ('month', 'Shu oy'),
+            ('custom', 'Maxsus oraliq'),
+        ),
+        method='filter_date',
+        empty_label='Barcha Sanalar',
+        label='Sana Oralig\'i',
+    )
+    start_date = django_filters.DateFilter(field_name='sale_date', lookup_expr='gte', label="Boshlanish sanasi")
+    end_date = django_filters.DateFilter(field_name='sale_date', lookup_expr='lte', label="Tugash sanasi")
+    customer_type = django_filters.ChoiceFilter(
+        choices=TicketSale.CUSTOMER_TYPES,
+        empty_label='Barcha Mijoz Turlari',
+        label="Mijoz Turi"
+    )
+    agent = django_filters.ModelChoiceFilter(
+        queryset=Agent.objects.all(),
+        empty_label='Barcha Agentlar',
+        label="Agent"
+    )
+    seller = django_filters.ModelChoiceFilter(
+        queryset=Seller.objects.all(),
+        empty_label='Barcha Sotuvchilar',
+        label="Sotuvchi"
+    )
+    currency = django_filters.ChoiceFilter(
+        choices=TicketSale.CURRENCY_CHOICES,
+        empty_label='Barcha Valyutalar',
+        label="Valyuta"
+    )
+    sort_by = django_filters.ChoiceFilter(
+        choices=(
+            ('-sale_date', 'Eng Yangi'),
+            ('sale_date', 'Eng Eski'),
+            ('-profit', 'Foyda (Yuqoridan Pastga)'),
+        ),
+        method='filter_sort_by',
+        empty_label=None,
+        label='Saralash',
+        initial='-sale_date',
+    )
+    
+    def filter_search(self, queryset, name, value):
+        if value:
+            return queryset.filter(
+                Q(sale_id__icontains=value) |
+                Q(customer_name__icontains=value) |
+                Q(agent__name__icontains=value) |
+                Q(notes__icontains=value)
+            )
+        return queryset
+    
+    def filter_date(self, queryset, name, value):
+        today = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        if value == 'today':
+            return queryset.filter(sale_date__gte=today)
+        elif value == 'week':
+            start_of_week = today - timedelta(days=today.weekday())
+            return queryset.filter(sale_date__gte=start_of_week)
+        elif value == 'month':
+            start_of_month = today.replace(day=1)
+            return queryset.filter(sale_date__gte=start_of_month)
+        return queryset
+    
+    def filter_sort_by(self, queryset, name, value):
+        return queryset.order_by(value)
+    
+    class Meta:
+        model = TicketSale
+        fields = [
+            'search', 'date_filter', 'start_date', 'end_date',
+            'customer_type', 'agent', 'seller', 'currency'
+        ]
 
 
 class TicketSaleListView(LoginRequiredMixin, ListView):
@@ -19,110 +103,93 @@ class TicketSaleListView(LoginRequiredMixin, ListView):
     template_name = "finance/ticket_sale_list.html"
     context_object_name = "sales"
     paginate_by = 10
+    filterset_class = TicketSaleFilter
 
     def get_queryset(self):
         queryset = TicketSale.objects.all().select_related(
             "agent", "seller", "ticket_purchase"
         )
-
-        # Search functionality
-        search_query = self.request.GET.get("search", "")
-        if search_query:
-            queryset = queryset.filter(
-                Q(sale_id__icontains=search_query)
-                | Q(customer_name__icontains=search_query)
-                | Q(agent__name__icontains=search_query)
-                | Q(notes__icontains=search_query)
-            )
-
-        # Date filtering
-        date_filter = self.request.GET.get("date_filter", "today")
-        today = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
-
-        if date_filter == "today":
-            queryset = queryset.filter(sale_date__gte=today)
-        elif date_filter == "week":
-            start_of_week = today - timedelta(days=today.weekday())
-            queryset = queryset.filter(sale_date__gte=start_of_week)
-        elif date_filter == "month":
-            start_of_month = today.replace(day=1)
-            queryset = queryset.filter(sale_date__gte=start_of_month)
-        elif date_filter == "custom":
-            start_date = self.request.GET.get("start_date")
-            end_date = self.request.GET.get("end_date")
-            if start_date and end_date:
-                queryset = queryset.filter(
-                    sale_date__gte=start_date,
-                    sale_date__lte=end_date + " 23:59:59",
-                )
-
-        # Customer type filtering
-        customer_type = self.request.GET.get("customer_type")
-        if customer_type:
-            queryset = queryset.filter(customer_type=customer_type)
-
-        # Agent filtering
-        agent_id = self.request.GET.get("agent")
-        if agent_id:
-            queryset = queryset.filter(agent_id=agent_id)
-
-        # Seller filtering
-        seller_id = self.request.GET.get("seller")
-        if seller_id:
-            queryset = queryset.filter(seller_id=seller_id)
-
-        # Currency filtering
-        currency = self.request.GET.get("currency")
-        if currency:
-            queryset = queryset.filter(currency=currency)
-
-        # Sorting
-        sort_by = self.request.GET.get("sort_by", "-sale_date")
-        queryset = queryset.order_by(sort_by)
-
-        return queryset
+        
+        # Apply filtering
+        self.filterset = self.filterset_class(self.request.GET, queryset=queryset)
+        return self.filterset.qs
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-
-        # Add filters to context
-        context["search_query"] = self.request.GET.get("search", "")
-        context["date_filter"] = self.request.GET.get("date_filter", "today")
-        context["customer_type"] = self.request.GET.get("customer_type", "")
-        context["agent_id"] = self.request.GET.get("agent", "")
-        context["seller_id"] = self.request.GET.get("seller", "")
-        context["currency"] = self.request.GET.get("currency", "")
-        context["sort_by"] = self.request.GET.get("sort_by", "-sale_date")
-
-        # Add agents and sellers for filter dropdowns
-        context["agents"] = Agent.objects.all()
-        context["sellers"] = Seller.objects.all()
-        context["ticket_purchases"] = TicketPurchase.objects.all()
-
-        # Calculate totals for current filter
-        sales = self.get_queryset()
-
-        # Total tickets sold (sum of quantities, not count of sales)
-        context["total_quantity"] = sales.aggregate(total=Sum("quantity"))["total"] or 0
-
-        # Total USD profit
-        usd_profit = (
-            sales.filter(currency="USD", profit__isnull=False).aggregate(
-                total=Sum("profit")
-            )["total"]
-            or 0
+        
+        # Add filter form
+        context["filterset"] = self.filterset
+        
+        # Get filtered queryset for aggregations
+        sales = self.filterset.qs
+        
+        # Expression for total price (unit_price * quantity) with explicit Decimal output
+        total_price_expr = ExpressionWrapper(
+            F("unit_price") * F("quantity"), output_field=DecimalField(max_digits=20, decimal_places=2)
         )
-        context["usd_profit"] = usd_profit
 
-        # Total UZS profit
-        uzs_profit = (
-            sales.filter(currency="UZS", profit__isnull=False).aggregate(
-                total=Sum("profit")
-            )["total"]
-            or 0
+        # Do one single aggregation query with conditional expressions
+        totals = sales.aggregate(
+            total_quantity=Sum("quantity"),
+            usd_total_sum=Sum(
+                Case(
+                    When(currency="USD", then=total_price_expr),
+                    default=Value(0),
+                    output_field=DecimalField(max_digits=20, decimal_places=2),
+                )
+            ),
+            uzs_total_sum=Sum(
+                Case(
+                    When(currency="UZS", then=total_price_expr),
+                    default=Value(0),
+                    output_field=DecimalField(max_digits=20, decimal_places=2),
+                )
+            ),
+            usd_profit=Sum(
+                Case(
+                    When(currency="USD", profit__isnull=False, then=F("profit")),
+                    default=Value(0),
+                    output_field=DecimalField(max_digits=20, decimal_places=2),
+                )
+            ),
+            uzs_profit=Sum(
+                Case(
+                    When(currency="UZS", profit__isnull=False, then=F("profit")),
+                    default=Value(0),
+                    output_field=DecimalField(max_digits=20, decimal_places=2),
+                )
+            ),
         )
-        context["uzs_profit"] = uzs_profit
-
+        
+        # Add totals to context
+        context.update(totals)
+        
+        # Add agents and sellers for filter dropdowns and add to context as JSON-ready values
+        agents = Agent.objects.all()
+        sellers = Seller.objects.all()
+        ticket_purchases = TicketPurchase.objects.all()
+        
+        context["agents"] = agents
+        context["sellers"] = sellers
+        context["ticket_purchases"] = ticket_purchases
+        
+        # Prepare JSON data for JavaScript
+        context["js_data"] = {
+            "agents": [{"id": str(agent.id), "name": agent.name} for agent in agents],
+            "sellers": [{"id": str(seller.id), "name": seller.name} for seller in sellers],
+            "ticket_purchases": [
+                {
+                    "id": str(purchase.id),
+                    "purchase_id": purchase.purchase_id,
+                    "supplier_name": purchase.supplier.name,
+                    "unit_price": float(purchase.unit_price),
+                    "currency": purchase.currency
+                }
+                for purchase in ticket_purchases
+            ],
+            "sale_create_url": reverse('finance:sale_create')
+        }
+        
         # Keep track of applied filters for clearing
         active_filters = {}
         for key, value in self.request.GET.items():
@@ -166,7 +233,7 @@ def sale_create(request):
                 "seller_id": seller_id,
                 "ticket_purchase_id": ticket_purchase_id,
                 "quantity": int(quantity),
-                "unit_price": Decimal(unit_price),  # Use Decimal instead of float
+                "unit_price": Decimal(unit_price),
                 "currency": currency,
                 "notes": notes,
             }
@@ -184,95 +251,23 @@ def sale_create(request):
 
             # Get ticket purchase details for the response
             ticket_purchase = sale.ticket_purchase
-            purchase_info = (
-                f"{ticket_purchase.purchase_id} - {ticket_purchase.supplier.name}"
-            )
-
-            # Format profit for display with space as thousand separator
-            formatted_profit = "—"
-            if sale.profit is not None:
-                # Convert to string and format with spaces
-                profit_str = f"{float(sale.profit):.2f}"
-                # Split at decimal point
-                profit_parts = profit_str.split(".")
-                # Format the integer part with space as thousand separator
-                if len(profit_parts[0]) > 3:
-                    formatted_int = ""
-                    for i, char in enumerate(reversed(profit_parts[0])):
-                        if i > 0 and i % 3 == 0:
-                            formatted_int = " " + formatted_int
-                        formatted_int = char + formatted_int
-                    profit_parts[0] = formatted_int
-
-                # Combine with currency
-                if sale.currency == "USD":
-                    formatted_profit = f"${profit_parts[0]}.{profit_parts[1]}"
-                else:
-                    formatted_profit = f"{profit_parts[0]}.{profit_parts[1]} UZS"
-
-            # Format unit price and total price
-            unit_price_float = float(sale.unit_price)
-            total_price_float = float(sale.total_price)
-
-            # Convert to string and format with spaces
-            unit_price_str = f"{unit_price_float:.2f}"
-            total_price_str = f"{total_price_float:.2f}"
-
-            # Split at decimal point
-            unit_price_parts = unit_price_str.split(".")
-            total_price_parts = total_price_str.split(".")
-
-            # Format the integer part with space as thousand separator
-            if len(unit_price_parts[0]) > 3:
-                formatted_unit_int = ""
-                for i, char in enumerate(reversed(unit_price_parts[0])):
-                    if i > 0 and i % 3 == 0:
-                        formatted_unit_int = " " + formatted_unit_int
-                    formatted_unit_int = char + formatted_unit_int
-                unit_price_parts[0] = formatted_unit_int
-
-            if len(total_price_parts[0]) > 3:
-                formatted_total_int = ""
-                for i, char in enumerate(reversed(total_price_parts[0])):
-                    if i > 0 and i % 3 == 0:
-                        formatted_total_int = " " + formatted_total_int
-                    formatted_total_int = char + formatted_total_int
-                total_price_parts[0] = formatted_total_int
-
-            # Combine with currency
-            if sale.currency == "USD":
-                formatted_unit_price = f"${unit_price_parts[0]}.{unit_price_parts[1]}"
-                formatted_total_price = (
-                    f"${total_price_parts[0]}.{total_price_parts[1]}"
-                )
-            else:
-                formatted_unit_price = (
-                    f"{unit_price_parts[0]}.{unit_price_parts[1]} UZS"
-                )
-                formatted_total_price = (
-                    f"{total_price_parts[0]}.{total_price_parts[1]} UZS"
-                )
-
-            # Return success response with formatted data
-            return JsonResponse(
-                {
-                    "success": True,
-                    "sale": {
-                        "sale_id": sale.sale_id,
-                        "sale_date": sale.sale_date.strftime("%b %d, %Y"),
-                        "customer": (
-                            sale.agent.name if sale.agent else sale.customer_name
-                        ),
-                        "seller": sale.seller.name,
-                        "ticket_purchase": purchase_info,
-                        "quantity": sale.quantity,
-                        "unit_price": formatted_unit_price,
-                        "total_price": formatted_total_price,
-                        "profit": formatted_profit,
-                        "currency": sale.currency,
-                    },
+            
+            # Return success response with data in a simpler format
+            return JsonResponse({
+                "success": True,
+                "sale": {
+                    "sale_id": sale.sale_id,
+                    "sale_date": sale.sale_date.strftime("%b %d, %Y"),
+                    "customer": sale.agent.name if sale.agent else sale.customer_name,
+                    "seller": sale.seller.name,
+                    "ticket_purchase": f"{ticket_purchase.purchase_id} - {ticket_purchase.supplier.name}",
+                    "quantity": sale.quantity,
+                    "unit_price": float(sale.unit_price),  # Convert Decimal to float for JSON
+                    "total_price": float(sale.total_price),
+                    "profit": float(sale.profit) if sale.profit is not None else None,
+                    "currency": sale.currency,
                 }
-            )
+            })
 
         except Exception as e:
             import traceback

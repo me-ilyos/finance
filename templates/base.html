@@ -44,11 +44,11 @@
             padding-top: var(--navbar-height);
             z-index: 100;
             box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
-            transition: all 0.3s;
+            transition: left 0.3s ease-in-out;
         }
         
         .sidebar-collapsed {
-            left: calc(-1 * var(--sidebar-width) + 60px);
+            left: calc(-1 * var(--sidebar-width));
         }
         
         .sidebar .nav-link {
@@ -81,11 +81,11 @@
             margin-left: var(--sidebar-width);
             padding: calc(var(--navbar-height) + 20px) 20px 20px;
             min-height: 100vh;
-            transition: margin-left 0.3s;
+            transition: margin-left 0.3s ease-in-out;
         }
         
         .main-content-expanded {
-            margin-left: 60px;
+            margin-left: 0;
         }
         
         .navbar {
@@ -98,11 +98,11 @@
             z-index: 99;
             padding: 0 1.5rem;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-            transition: left 0.3s;
+            transition: left 0.3s ease-in-out;
         }
         
         .navbar-expanded {
-            left: 60px;
+            left: 0;
         }
         
         .card {
