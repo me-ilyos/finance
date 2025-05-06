@@ -8,6 +8,8 @@ from django.http import JsonResponse
 from django.db.models import Q
 from datetime import timedelta
 from .models import Supplier, TicketPurchase
+import json
+from django.urls import reverse
 
 
 class TicketPurchaseListView(LoginRequiredMixin, ListView):
@@ -84,6 +86,15 @@ class TicketPurchaseListView(LoginRequiredMixin, ListView):
             if key != "page" and value:  # Exclude pagination parameter
                 active_filters[key] = value
         context["active_filters"] = active_filters
+
+        # --- Add data for JavaScript ---
+        js_suppliers = list(Supplier.objects.values('id', 'name')) # Prepare suppliers for JSON
+        js_data = {
+            'suppliers': js_suppliers,
+            'purchase_create_url': reverse('stock:purchase_create') # Add the URL for the create view
+        }
+        context['js_data'] = json.dumps(js_data) # Convert to JSON string
+        # --- End Add data for JavaScript ---
 
         return context
 

@@ -29,6 +29,7 @@ class TicketPurchase(models.Model):
     quantity = models.PositiveIntegerField()
     unit_price = models.DecimalField(max_digits=12, decimal_places=2)
     currency = models.CharField(max_length=3, choices=CURRENCY_CHOICES, default="UZS")
+    quantity_sold = models.PositiveIntegerField(default=0, editable=False)  # Track sold tickets
 
     def __str__(self):
         return f"Purchase {self.purchase_id} - {self.supplier.name}"
@@ -36,6 +37,10 @@ class TicketPurchase(models.Model):
     @property
     def total_price(self):
         return self.quantity * self.unit_price
+
+    @property
+    def quantity_remaining(self):
+        return self.quantity - self.quantity_sold
 
     def save(self, *args, **kwargs):
         if not self.purchase_id:

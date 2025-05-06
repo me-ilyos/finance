@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.views.generic import ListView
@@ -213,15 +213,35 @@ def sale_create(request):
             agent_id = request.POST.get("agent")
             seller_id = request.POST.get("seller")
             ticket_purchase_id = request.POST.get("ticket_purchase")
-            quantity = request.POST.get("quantity")
-            unit_price = request.POST.get("unit_price")
+            quantity = int(request.POST.get("quantity")) # Convert to int early
+            unit_price = Decimal(request.POST.get("unit_price")) # Convert to Decimal early
             currency = request.POST.get("currency")
             notes = request.POST.get("notes", "")
+            sale_date_str = request.POST.get("sale_date")
+
+            # --- Validation --- 
+            if not all([customer_type, seller_id, ticket_purchase_id, quantity, unit_price, currency]):
+                return JsonResponse({"success": False, "errors": "Missing required fields."}, status=400)
+            
+            if quantity <= 0:
+                 return JsonResponse({"success": False, "errors": "Quantity must be positive."}, status=400)
+
+            # Get the related TicketPurchase object
+            try:
+                ticket_purchase = TicketPurchase.objects.get(id=ticket_purchase_id)
+            except TicketPurchase.DoesNotExist:
+                 return JsonResponse({"success": False, "errors": "Invalid Ticket Purchase ID."}, status=400)
+
+            # Check if enough quantity remaining
+            if quantity > ticket_purchase.quantity_remaining:
+                 return JsonResponse({
+                    "success": False, 
+                    "errors": f"Not enough stock for purchase {ticket_purchase.purchase_id}. Available: {ticket_purchase.quantity_remaining}"
+                 }, status=400)
+            # --- End Validation ---
 
             # Convert date string to a datetime object if provided
             from django.utils.dateparse import parse_datetime
-
-            sale_date_str = request.POST.get("sale_date")
             sale_date = (
                 parse_datetime(sale_date_str) if sale_date_str else timezone.now()
             )
@@ -231,9 +251,9 @@ def sale_create(request):
                 "sale_date": sale_date,
                 "customer_type": customer_type,
                 "seller_id": seller_id,
-                "ticket_purchase_id": ticket_purchase_id,
-                "quantity": int(quantity),
-                "unit_price": Decimal(unit_price),
+                "ticket_purchase": ticket_purchase, # Use the object directly
+                "quantity": quantity, 
+                "unit_price": unit_price,
                 "currency": currency,
                 "notes": notes,
             }
@@ -246,13 +266,23 @@ def sale_create(request):
                 sale_data["agent"] = None
                 sale_data["customer_name"] = customer_name
 
+            # --- Transactional Update (Recommended) --- 
+            # Consider wrapping this in a transaction if atomicity is critical
+            # from django.db import transaction
+            # with transaction.atomic():
             # Create the sale
             sale = TicketSale.objects.create(**sale_data)
+            
+            # Update the quantity_sold on the TicketPurchase
+            ticket_purchase.quantity_sold = F("quantity_sold") + quantity
+            ticket_purchase.save(update_fields=["quantity_sold"])
+            # --- End Transactional Update ---
+            
+            # Refresh ticket_purchase from DB to get updated quantity_sold if needed
+            # ticket_purchase.refresh_from_db()
 
             # Get ticket purchase details for the response
-            ticket_purchase = sale.ticket_purchase
-            
-            # Return success response with data in a simpler format
+            # ticket_purchase is already fetched and updated
             return JsonResponse({
                 "success": True,
                 "sale": {
