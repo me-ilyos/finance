@@ -1,8 +1,8 @@
 from django.shortcuts import render, get_object_or_404
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.views.decorators.http import require_POST
 from django.views.generic import ListView
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.utils import timezone
 from django.http import JsonResponse
 from django.db.models import Q, Sum, F, Case, When, Value, DecimalField, ExpressionWrapper
@@ -11,8 +11,9 @@ from decimal import Decimal
 from .models import Agent, Seller, TicketSale, Payment
 from apps.stock.models import TicketPurchase
 import django_filters
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
 from django.db import transaction
+from apps.stock.utils import AdminRequiredMixin, is_admin
 
 
 class TicketSaleFilter(django_filters.FilterSet):
@@ -97,7 +98,7 @@ class TicketSaleFilter(django_filters.FilterSet):
         ]
 
 
-class TicketSaleListView(LoginRequiredMixin, ListView):
+class TicketSaleListView(AdminRequiredMixin, LoginRequiredMixin, ListView):
     """View for listing ticket sales with filtering and sorting"""
 
     model = TicketSale
@@ -202,6 +203,7 @@ class TicketSaleListView(LoginRequiredMixin, ListView):
 
 
 @login_required
+@user_passes_test(is_admin, login_url=reverse_lazy('login'))
 @require_POST
 def sale_create(request):
     """Handle the AJAX form submission for creating a new ticket sale"""
@@ -393,7 +395,7 @@ class PaymentFilter(django_filters.FilterSet):
         ]
 
 
-class PaymentListView(LoginRequiredMixin, ListView):
+class PaymentListView(AdminRequiredMixin, LoginRequiredMixin, ListView):
     """View for listing payments with filtering and sorting"""
     model = Payment
     template_name = "finance/payment_list.html"
