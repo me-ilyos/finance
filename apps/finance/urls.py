@@ -6,4 +6,5 @@ app_name = "finance"
 urlpatterns = [
     path("sales/", views.TicketSaleListView.as_view(), name="sale_list"),
     path("sales/create/", views.sale_create, name="sale_create"),
+    path("payments/", views.PaymentListView.as_view(), name="payment_list"),
 ]

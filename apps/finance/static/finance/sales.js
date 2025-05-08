@@ -192,15 +192,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     </select>
                 </td>
                 <td><input type="number" class="form-control form-control-sm text-end" name="quantity" min="1" value="1"></td>
-                <td><input type="number" class="form-control form-control-sm text-end" name="unit_price" min="0.01" step="0.01" value=""></td>
-                <td class="text-end total-price">0.00</td>
-                <td class="text-end profit">—</td>
-                <td style="display:none;">
-                    <select class="form-select form-select-sm" name="currency">
+                <td>
+                    <input type="number" class="form-control form-control-sm text-end" name="unit_price" min="0.01" step="0.01" value="">
+                    <select class="form-select form-select-sm mt-1" name="currency">
                         <option value="UZS">UZS</option>
                         <option value="USD">USD</option>
                     </select>
                 </td>
+                <td class="text-end total-price">0.00</td>
+                <td class="text-end profit">—</td>
                 <td class="text-center">
                     <button type="button" class="btn btn-sm btn-success save-row">
                         <i class="fas fa-save"></i>
@@ -431,6 +431,41 @@ function setupNewRowListeners(newRow, purchases, saleCreateUrl, csrfToken) {
                     `;
                     newRow.innerHTML = newRowHTML;
                     newRow.classList.remove('new-sale-row'); // Mark as saved
+                    
+                    // Show notification if payment was created automatically
+                    if (newSale.payment_created) {
+                        // Create a notification element
+                        const notification = document.createElement('div');
+                        notification.className = 'alert alert-success alert-dismissible fade show';
+                        notification.style.position = 'fixed';
+                        notification.style.top = '20px';
+                        notification.style.right = '20px';
+                        notification.style.zIndex = '1050';
+                        notification.style.maxWidth = '350px';
+                        notification.innerHTML = `
+                            <strong>To'lov yaratildi!</strong> 
+                            <p class="mb-0">Sotuv uchun to'lov avtomatik tarzda yaratildi.</p>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        `;
+                        document.body.appendChild(notification);
+                        
+                        // Auto-dismiss after 5 seconds
+                        setTimeout(() => {
+                            notification.classList.remove('show');
+                            setTimeout(() => {
+                                document.body.removeChild(notification);
+                            }, 150);
+                        }, 5000);
+                        
+                        // Add click handler for dismiss button
+                        notification.querySelector('.btn-close').addEventListener('click', () => {
+                            notification.classList.remove('show');
+                            setTimeout(() => {
+                                document.body.removeChild(notification);
+                            }, 150);
+                        });
+                    }
+                    
                     // TODO: Update totals if necessary, or reload just totals via AJAX
                 } else {
                     // Show error

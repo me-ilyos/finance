@@ -1,19 +1,19 @@
 {% extends "base.html" %}
 {% load humanize %}
 {% load finance_extras %}
-{% load static %}{# Load static tag #}
+{% load static %}
 
-{% block title %}Chipta Sotuvlari | Chipta Boshqaruv Tizimi{% endblock %}
+{% block title %}To'lovlar | Chipta Boshqaruv Tizimi{% endblock %}
 
 {% block breadcrumb %}
-<li class="breadcrumb-item active">Chipta Sotuvlari</li>
+<li class="breadcrumb-item active">To'lovlar</li>
 {% endblock %}
 
 {% block page_header %}
 <div class="row align-items-center mb-3">
    <div class="col">
-       <h5 class="mb-0 text-gray-800">Chipta Sotuvlari</h5>
-       <small class="text-muted">Sotilgan chiptalar va foyda hisoboti</small>
+       <h5 class="mb-0 text-gray-800">To'lovlar</h5>
+       <small class="text-muted">To'lovlar va jami hisobot</small>
    </div>
 </div>
 {% endblock %}
@@ -26,7 +26,7 @@
            <div class="row g-2 mb-3">
                {% if active_filters %}
                <div class="col-12 d-flex justify-content-end">
-                   <a href="{% url 'finance:sale_list' %}" class="btn btn-sm btn-outline-secondary">
+                   <a href="{% url 'finance:payment_list' %}" class="btn btn-sm btn-outline-secondary">
                        <i class="fas fa-times me-1"></i> Filtrlarni Tozalash
                    </a>
                </div>
@@ -61,28 +61,16 @@
                    </div>
                </div>
                
-               <!-- Customer Type Filter -->
+               <!-- Payment Type Filter -->
                <div class="col-lg-2 col-md-4 mb-2">
-                   {{ filterset.form.customer_type.label_tag }}
-                   {{ filterset.form.customer_type }}
+                   {{ filterset.form.payment_type.label_tag }}
+                   {{ filterset.form.payment_type }}
                </div>
                
                <!-- Currency Filter -->
                <div class="col-lg-2 col-md-4 mb-2">
                    {{ filterset.form.currency.label_tag }}
                    {{ filterset.form.currency }}
-               </div>
-               
-               <!-- Agent Filter -->
-               <div class="col-lg-2 col-md-4 mb-2">
-                   {{ filterset.form.agent.label_tag }}
-                   {{ filterset.form.agent }}
-               </div>
-               
-               <!-- Seller Filter -->
-               <div class="col-lg-2 col-md-4 mb-2">
-                   {{ filterset.form.seller.label_tag }}
-                   {{ filterset.form.seller }}
                </div>
                
                <!-- Sort By -->
@@ -98,14 +86,11 @@
    </div>
 </div>
 
-<!-- Sale List Table -->
+<!-- Payment List Table -->
 <div class="card shadow mb-4">
    <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-       <h6 class="m-0 font-weight-bold text-primary">Chipta Sotuvlari</h6>
+       <h6 class="m-0 font-weight-bold text-primary">To'lovlar</h6>
        <div>
-           <button type="button" class="btn btn-primary btn-sm me-2" id="addSaleBtn">
-               <i class="fas fa-plus-circle me-1"></i> Yangi Sotuv Qo'shish
-           </button>
            <a href="#" id="exportExcel" class="text-success">
                <i class="fas fa-file-excel fa-lg"></i>
            </a>
@@ -113,52 +98,52 @@
    </div>
    <div class="card-body">
        <div class="table-responsive">
-           <table class="table table-bordered table-hover" id="salesTable" width="100%" cellspacing="0">
+           <table class="table table-bordered table-hover" id="paymentsTable" width="100%" cellspacing="0">
                <thead class="table-light">
                    <tr>
-                       <th style="width: 5%;">Sotuv ID</th>
+                       <th style="width: 10%;">To'lov ID</th>
                        <th style="width: 10%;">Sana</th>
-                       <th style="width: 15%;">Mijoz</th>
-                       <th style="width: 12%;">Sotuvchi</th>
-                       <th style="width: 10%;">Xarid</th>
-                       <th style="width: 7%;">Miqdor</th>
-                       <th style="width: 12%;">Narxi</th>
-                       <th style="width: 12%;">Jami</th>
-                       <th style="width: 12%;">Foyda</th>
+                       <th style="width: 12%;">Sotuv ID</th>
+                       <th style="width: 20%;">Mijoz</th>
+                       <th style="width: 10%;">To'lov Turi</th>
+                       <th style="width: 16%;">Miqdor</th>
+                       <th style="width: 16%;">Izoh</th>
                    </tr>
                </thead>
                <tbody>
-                   {% for sale in sales %}
+                   {% for payment in payments %}
                    <tr>
-                       <td>{{ sale.sale_id }}</td>
-                       <td>{{ sale.sale_date|date:"M d, Y" }}</td>
+                       <td>{{ payment.payment_id }}</td>
+                       <td>{{ payment.payment_date|date:"M d, Y" }}</td>
+                       <td>{{ payment.ticket_sale.sale_id }}</td>
                        <td>
-                           {% if sale.customer_type == 'agent' %}
-                               {{ sale.agent.name }} <span class="badge bg-info">Agent</span>
+                           {% if payment.ticket_sale.customer_type == 'agent' %}
+                               {{ payment.ticket_sale.agent.name }} <span class="badge bg-info">Agent</span>
                            {% else %}
-                               {{ sale.customer_name }}
+                               {{ payment.ticket_sale.customer_name }}
                            {% endif %}
                        </td>
-                       <td>{{ sale.seller.name }}</td>
-                       <td>{{ sale.ticket_purchase.purchase_id }}</td>
-                       <td class="text-end">{{ sale.quantity }}</td>
-                       <td class="text-end">{{ sale.unit_price|money:sale.currency }}</td>
-                       <td class="text-end">{{ sale.total_price|money:sale.currency }}</td>
-                       <td class="text-end {% if sale.profit > 0 %}text-success{% elif sale.profit < 0 %}text-danger{% endif %}">
-                           {{ sale.profit|money:sale.currency }}
+                       <td>
+                           {% if payment.payment_type == 'full' %}
+                               <span class="badge bg-success">To'liq</span>
+                           {% else %}
+                               <span class="badge bg-warning">Qisman</span>
+                           {% endif %}
                        </td>
+                       <td class="text-end">{{ payment.amount|money:payment.currency }}</td>
+                       <td>{{ payment.notes|default:"-" }}</td>
                    </tr>
                    {% empty %}
                    <tr>
-                       <td colspan="9" class="text-center py-4">
+                       <td colspan="7" class="text-center py-4">
                            <div class="empty-state">
-                               <i class="fas fa-receipt fa-3x text-muted mb-3"></i>
-                               <h5>Hech qanday sotuv topilmadi</h5>
+                               <i class="fas fa-money-bill-wave fa-3x text-muted mb-3"></i>
+                               <h5>Hech qanday to'lov topilmadi</h5>
                                <p class="text-muted">
                                    {% if active_filters %}
-                                       Filtr mezonlaringizga mos sotuvlar topilmadi. <a href="{% url 'finance:sale_list' %}">Filtrlarni tozalash</a> orqali barcha sotuvlarni ko'ring.
+                                       Filtr mezonlaringizga mos to'lovlar topilmadi. <a href="{% url 'finance:payment_list' %}">Filtrlarni tozalash</a> orqali barcha to'lovlarni ko'ring.
                                    {% else %}
-                                       Siz hali hech qanday chipta sotmagansiz. "Yangi Sotuv Qo'shish" tugmasini bosib, birinchi sotuvingizni qo'shing.
+                                       Hali hech qanday to'lov qilinmagan.
                                    {% endif %}
                                </p>
                            </div>
@@ -166,43 +151,26 @@
                    </tr>
                    {% endfor %}
                    
-                   {% if sales %}
-                   <!-- Total quantity row -->
-                   <tr class="fw-bold" style="background-color: #4e73df; color: white !important;">
-                       <td colspan="5" class="text-end">Jami chiptalar soni:</td>
-                       <td class="text-end">
-                           {{ total_quantity|intcomma }}
-                       </td>
-                       <td colspan="3"></td>
-                   </tr>
-                   
+                   {% if payments %}
                    <!-- USD Totals row -->
-                   {% if usd_total_sum %}
+                   {% if usd_total %}
                    <tr class="fw-bold" style="background-color: #eaecf4;">
-                       <td colspan="6" class="text-end">Jami USD sotuvlar:</td>
-                       <td class="text-end" colspan="2">
-                           {{ usd_total_sum|money:'USD' }}
-                       </td>
+                       <td colspan="5" class="text-end">Jami USD to'lovlar:</td>
                        <td class="text-end">
-                           <span class="{% if usd_profit > 0 %}text-success{% elif usd_profit < 0 %}text-danger{% endif %}">
-                               {{ usd_profit|money:'USD' }}
-                           </span>
+                           {{ usd_total|money:'USD' }}
                        </td>
+                       <td></td>
                    </tr>
                    {% endif %}
                    
                    <!-- UZS Totals row -->
-                   {% if uzs_total_sum %}
+                   {% if uzs_total %}
                    <tr class="fw-bold" style="background-color: #eaecf4;">
-                       <td colspan="6" class="text-end">Jami UZS sotuvlar:</td>
-                       <td class="text-end" colspan="2">
-                           {{ uzs_total_sum|money:'UZS' }}
-                       </td>
+                       <td colspan="5" class="text-end">Jami UZS to'lovlar:</td>
                        <td class="text-end">
-                           <span class="{% if uzs_profit > 0 %}text-success{% elif uzs_profit < 0 %}text-danger{% endif %}">
-                               {{ uzs_profit|money:'UZS' }}
-                           </span>
+                           {{ uzs_total|money:'UZS' }}
                        </td>
+                       <td></td>
                    </tr>
                    {% endif %}
                    {% endif %}
@@ -261,14 +229,87 @@
 
 <!-- CSRF Token for AJAX -->
 <input type="hidden" id="csrf_token" value="{{ csrf_token }}">
-
-<!-- Data for JavaScript -->
-<script id="js-data" type="application/json">
-{{ js_data|json_encode }}
-</script>
 {% endblock %}
 
 {% block extra_js %}
-{# Load the external JavaScript file #}
-<script src="{% static 'finance/sales.js' %}"></script>
-{% endblock %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Style form elements
+        function styleFormElements() {
+            const form = document.getElementById('filter-form');
+            if (!form) return;
+
+            // Style text inputs
+            const textInputs = form.querySelectorAll('input[type="text"], input[type="date"]');
+            textInputs.forEach(input => {
+                input.classList.add('form-control', 'form-control-sm'); 
+            });
+
+            // Style select inputs
+            const selects = form.querySelectorAll('select');
+            selects.forEach(select => {
+                select.classList.add('form-select', 'form-select-sm');
+            });
+        }
+        
+        styleFormElements();
+        
+        // Handle form submission when a SELECT filter changes
+        const filterElements = document.querySelectorAll('#filter-form select');
+        filterElements.forEach(element => {
+            element.addEventListener('change', function() {
+                this.form.submit();
+            });
+        });
+        
+        // Handle visibility of custom date range inputs
+        const dateFilterSelect = document.querySelector('select[name="date_filter"]');
+        const customDateRangeDiv = document.getElementById('custom-date-range');
+        
+        if (dateFilterSelect && customDateRangeDiv) {
+            dateFilterSelect.addEventListener('change', function() {
+                if (this.value === 'custom') {
+                    customDateRangeDiv.classList.remove('d-none');
+                } else {
+                    customDateRangeDiv.classList.add('d-none');
+                    // Clear custom dates if another option is selected
+                    document.querySelector('input[name="start_date"]').value = '';
+                    document.querySelector('input[name="end_date"]').value = '';
+                    // Submit form if not custom
+                    this.form.submit(); 
+                }
+            });
+        }
+        
+        // Export to Excel
+        const exportExcelButton = document.getElementById('exportExcel');
+        if (exportExcelButton) {
+            exportExcelButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                exportTableToExcel('paymentsTable', 'tolovlar');
+            });
+        }
+        
+        function exportTableToExcel(tableID, filename = '') {
+            const table = document.getElementById(tableID);
+            if (!table) return;
+            let tableHTML = table.outerHTML;
+            
+            // Convert table to Excel friendly format
+            tableHTML = tableHTML.replace(/<img[^>]*>/gi, '');  // Remove images
+            
+            // Create download link
+            let link = document.createElement("a");
+            link.download = filename + '.xls';
+            
+            // Create blob and URL
+            let blob = new Blob([tableHTML], {type: 'application/vnd.ms-excel'});
+            link.href = URL.createObjectURL(blob);
+            
+            // Trigger download
+            link.click();
+            URL.revokeObjectURL(link.href); // Clean up
+        }
+    });
+</script>
+{% endblock %} 

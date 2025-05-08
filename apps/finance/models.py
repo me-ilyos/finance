@@ -115,3 +115,49 @@ class TicketSale(models.Model):
         ordering = ["-sale_date"]
         verbose_name = "Ticket Sale"
         verbose_name_plural = "Ticket Sales"
+
+
+class Payment(models.Model):
+    """Records payments for ticket sales"""
+    
+    PAYMENT_TYPES = (
+        ("full", "Full Payment"),
+        ("partial", "Partial Payment"),
+    )
+    
+    payment_id = models.CharField(max_length=50, unique=True, editable=False)
+    payment_date = models.DateTimeField(default=timezone.now)
+    ticket_sale = models.ForeignKey(
+        TicketSale, on_delete=models.CASCADE, related_name="payments"
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(
+        max_length=3, 
+        choices=TicketSale.CURRENCY_CHOICES, 
+        default="UZS"
+    )
+    payment_type = models.CharField(max_length=20, choices=PAYMENT_TYPES, default="full")
+    notes = models.TextField(blank=True, null=True)
+    
+    def save(self, *args, **kwargs):
+        if not self.payment_id:
+            # Generate a payment ID if one doesn't exist
+            # Format: PMT-YYYYMMDD-XXXX (PMT for Payment)
+            today = timezone.now().strftime("%Y%m%d")
+            today_start = timezone.now().replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            today_payments = Payment.objects.filter(payment_date__gte=today_start).count()
+
+            # Create payment ID with sequential number for today
+            self.payment_id = f"PMT-{today}-{today_payments + 1:04d}"
+        
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"Payment {self.payment_id} for {self.ticket_sale.sale_id}"
+    
+    class Meta:
+        ordering = ["-payment_date"]
+        verbose_name = "Payment"
+        verbose_name_plural = "Payments"

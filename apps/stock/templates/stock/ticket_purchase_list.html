@@ -222,6 +222,64 @@
    </div>
 </div>
 
+<!-- Add Purchase Modal -->
+<div class="modal fade" id="addPurchaseModal" tabindex="-1" aria-labelledby="addPurchaseModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="addPurchaseForm">
+                {% csrf_token %} {# Add CSRF token directly in the modal form #}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addPurchaseModalLabel">Yangi Xarid Qo'shish</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="addPurchaseModalAlerts" class="mb-3"></div> {# For displaying errors #}
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="modal_purchase_date" class="form-label">Xarid Sanasi</label>
+                            <input type="datetime-local" class="form-control form-control-sm" id="modal_purchase_date" name="purchase_date" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="modal_supplier" class="form-label">Ta'minotchi</label>
+                            <select class="form-select form-select-sm" id="modal_supplier" name="supplier" required>
+                                <option value="" disabled selected>Tanlang...</option>
+                                {# Supplier options will be populated by JavaScript #}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="modal_quantity" class="form-label">Miqdori</label>
+                            <input type="number" class="form-control form-control-sm" id="modal_quantity" name="quantity" min="1" value="1" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="modal_unit_price" class="form-label">Birlik Narxi</label>
+                            <input type="number" class="form-control form-control-sm" id="modal_unit_price" name="unit_price" min="0.01" step="0.01" placeholder="0.00" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="modal_currency" class="form-label">Valyuta</label>
+                            <select class="form-select form-select-sm" id="modal_currency" name="currency">
+                                <option value="UZS" selected>UZS</option>
+                                <option value="USD">USD</option>
+                            </select>
+                        </div>
+                    </div>
+                     <div class="mb-3">
+                        <label for="modal_commentary" class="form-label">Izoh (ixtiyoriy)</label>
+                        <textarea class="form-control form-control-sm" id="modal_commentary" name="commentary" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Bekor Qilish</button>
+                    <button type="submit" class="btn btn-primary btn-sm" id="savePurchaseModalBtn">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<!-- End Add Purchase Modal -->
+
 <!-- Data for JavaScript -->
 <script id="js-data" type="application/json">
 {{ js_data|safe }}
@@ -233,5 +291,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'stock/purchases.js' %}"></script>
+<script src="{% static 'stock/purchases.js' %}?v={% now 'U' %}"></script>
 {% endblock %}

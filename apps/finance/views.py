@@ -8,10 +8,11 @@ from django.http import JsonResponse
 from django.db.models import Q, Sum, F, Case, When, Value, DecimalField, ExpressionWrapper
 from datetime import timedelta
 from decimal import Decimal
-from .models import Agent, Seller, TicketSale
+from .models import Agent, Seller, TicketSale, Payment
 from apps.stock.models import TicketPurchase
 import django_filters
 from django.urls import reverse
+from django.db import transaction
 
 
 class TicketSaleFilter(django_filters.FilterSet):
@@ -266,23 +267,27 @@ def sale_create(request):
                 sale_data["agent"] = None
                 sale_data["customer_name"] = customer_name
 
-            # --- Transactional Update (Recommended) --- 
-            # Consider wrapping this in a transaction if atomicity is critical
-            # from django.db import transaction
-            # with transaction.atomic():
-            # Create the sale
-            sale = TicketSale.objects.create(**sale_data)
+            # Use transaction to ensure atomicity
+            with transaction.atomic():
+                # Create the sale
+                sale = TicketSale.objects.create(**sale_data)
+                
+                # Update the quantity_sold on the TicketPurchase
+                ticket_purchase.quantity_sold = F("quantity_sold") + quantity
+                ticket_purchase.save(update_fields=["quantity_sold"])
+                
+                # If customer type is individual, automatically create payment record
+                if customer_type == "individual":
+                    Payment.objects.create(
+                        payment_date=sale_date,
+                        ticket_sale=sale,
+                        amount=sale.total_price,  # Use the total_price property
+                        currency=currency,
+                        payment_type="full",
+                        notes=f"Automatic payment for sale {sale.sale_id}"
+                    )
             
-            # Update the quantity_sold on the TicketPurchase
-            ticket_purchase.quantity_sold = F("quantity_sold") + quantity
-            ticket_purchase.save(update_fields=["quantity_sold"])
-            # --- End Transactional Update ---
-            
-            # Refresh ticket_purchase from DB to get updated quantity_sold if needed
-            # ticket_purchase.refresh_from_db()
-
             # Get ticket purchase details for the response
-            # ticket_purchase is already fetched and updated
             return JsonResponse({
                 "success": True,
                 "sale": {
@@ -296,6 +301,7 @@ def sale_create(request):
                     "total_price": float(sale.total_price),
                     "profit": float(sale.profit) if sale.profit is not None else None,
                     "currency": sale.currency,
+                    "payment_created": customer_type == "individual",  # Indicate if payment was created
                 }
             })
 
@@ -312,3 +318,133 @@ def sale_create(request):
             )
 
     return JsonResponse({"success": False, "errors": "Invalid request"}, status=400)
+
+
+class PaymentFilter(django_filters.FilterSet):
+    """FilterSet for payments"""
+    search = django_filters.CharFilter(method='filter_search', label="Qidirish")
+    date_filter = django_filters.ChoiceFilter(
+        choices=(
+            ('today', 'Bugun'),
+            ('week', 'Shu hafta'),
+            ('month', 'Shu oy'),
+            ('custom', 'Maxsus oraliq'),
+        ),
+        method='filter_date',
+        empty_label='Barcha Sanalar',
+        label='Sana Oralig\'i',
+    )
+    start_date = django_filters.DateFilter(field_name='payment_date', lookup_expr='gte', label="Boshlanish sanasi")
+    end_date = django_filters.DateFilter(field_name='payment_date', lookup_expr='lte', label="Tugash sanasi")
+    payment_type = django_filters.ChoiceFilter(
+        choices=Payment.PAYMENT_TYPES,
+        empty_label='Barcha To\'lov Turlari',
+        label="To'lov Turi"
+    )
+    currency = django_filters.ChoiceFilter(
+        choices=TicketSale.CURRENCY_CHOICES,
+        empty_label='Barcha Valyutalar',
+        label="Valyuta"
+    )
+    sort_by = django_filters.ChoiceFilter(
+        choices=(
+            ('-payment_date', 'Eng Yangi'),
+            ('payment_date', 'Eng Eski'),
+            ('-amount', 'Miqdor (Yuqoridan Pastga)'),
+        ),
+        method='filter_sort_by',
+        empty_label=None,
+        label='Saralash',
+        initial='-payment_date',
+    )
+    
+    def filter_search(self, queryset, name, value):
+        if value:
+            return queryset.filter(
+                Q(payment_id__icontains=value) |
+                Q(ticket_sale__sale_id__icontains=value) |
+                Q(ticket_sale__customer_name__icontains=value) |
+                Q(ticket_sale__agent__name__icontains=value) |
+                Q(notes__icontains=value)
+            )
+        return queryset
+    
+    def filter_date(self, queryset, name, value):
+        today = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        if value == 'today':
+            return queryset.filter(payment_date__gte=today)
+        elif value == 'week':
+            start_of_week = today - timedelta(days=today.weekday())
+            return queryset.filter(payment_date__gte=start_of_week)
+        elif value == 'month':
+            start_of_month = today.replace(day=1)
+            return queryset.filter(payment_date__gte=start_of_month)
+        return queryset
+    
+    def filter_sort_by(self, queryset, name, value):
+        return queryset.order_by(value)
+    
+    class Meta:
+        model = Payment
+        fields = [
+            'search', 'date_filter', 'start_date', 'end_date',
+            'payment_type', 'currency'
+        ]
+
+
+class PaymentListView(LoginRequiredMixin, ListView):
+    """View for listing payments with filtering and sorting"""
+    model = Payment
+    template_name = "finance/payment_list.html"
+    context_object_name = "payments"
+    paginate_by = 10
+    filterset_class = PaymentFilter
+
+    def get_queryset(self):
+        queryset = Payment.objects.all().select_related(
+            "ticket_sale", "ticket_sale__agent", "ticket_sale__seller"
+        )
+        
+        # Apply filtering
+        self.filterset = self.filterset_class(self.request.GET, queryset=queryset)
+        return self.filterset.qs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Add filter form
+        context["filterset"] = self.filterset
+        
+        # Get filtered queryset for aggregations
+        payments = self.filterset.qs
+        
+        # Do one single aggregation query with conditional expressions
+        totals = payments.aggregate(
+            usd_total=Sum(
+                Case(
+                    When(currency="USD", then=F("amount")),
+                    default=Value(0),
+                    output_field=DecimalField(max_digits=20, decimal_places=2),
+                )
+            ),
+            uzs_total=Sum(
+                Case(
+                    When(currency="UZS", then=F("amount")),
+                    default=Value(0),
+                    output_field=DecimalField(max_digits=20, decimal_places=2),
+                )
+            ),
+        )
+        
+        # Add totals to context
+        context.update(totals)
+        
+        # Keep track of applied filters for clearing
+        active_filters = {}
+        for key, value in self.request.GET.items():
+            if key != "page" and value:  # Exclude pagination parameter
+                active_filters[key] = value
+        context["active_filters"] = active_filters
+
+        return context
