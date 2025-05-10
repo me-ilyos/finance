@@ -4,35 +4,37 @@ import uuid
 
 
 class Supplier(models.Model):
-    name = models.CharField(max_length=255)
-    created_at = models.DateTimeField(auto_now_add=True)
+    name = models.CharField(max_length=255, verbose_name="Nomi")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Yaratilgan sana")
 
     def __str__(self):
         return self.name
 
     class Meta:
         ordering = ["name"]
+        verbose_name = "Ta'minotchi"
+        verbose_name_plural = "Ta'minotchilar"
 
 
 class TicketPurchase(models.Model):
     CURRENCY_CHOICES = (
-        ("UZS", "Uzbekistan Som"),
-        ("USD", "US Dollar"),
+        ("UZS", "O'zbek so'mi"),
+        ("USD", "AQSH dollari"),
     )
 
-    purchase_id = models.CharField(max_length=50, unique=True, editable=False)
-    purchase_date = models.DateTimeField(default=timezone.now)
+    purchase_id = models.CharField(max_length=50, unique=True, editable=False, verbose_name="Xarid ID")
+    purchase_date = models.DateTimeField(default=timezone.now, verbose_name="Xarid sanasi")
     supplier = models.ForeignKey(
-        Supplier, on_delete=models.CASCADE, related_name="ticket_purchases"
+        Supplier, on_delete=models.CASCADE, related_name="ticket_purchases", verbose_name="Ta'minotchi"
     )
-    commentary = models.TextField(blank=True, null=True)
-    quantity = models.PositiveIntegerField()
-    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
-    currency = models.CharField(max_length=3, choices=CURRENCY_CHOICES, default="UZS")
-    quantity_sold = models.PositiveIntegerField(default=0, editable=False)  # Track sold tickets
+    commentary = models.TextField(blank=True, null=True, verbose_name="Izohlar")
+    quantity = models.PositiveIntegerField(verbose_name="Miqdori")
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Narxi")
+    currency = models.CharField(max_length=3, choices=CURRENCY_CHOICES, default="UZS", verbose_name="Valyuta")
+    quantity_sold = models.PositiveIntegerField(default=0, editable=False, verbose_name="Sotilgan miqdor")  # Track sold tickets
 
     def __str__(self):
-        return f"Purchase {self.purchase_id} - {self.supplier.name}"
+        return f"Xarid {self.purchase_id} - {self.supplier.name}"
 
     @property
     def total_price(self):
@@ -62,5 +64,5 @@ class TicketPurchase(models.Model):
 
     class Meta:
         ordering = ["-purchase_date"]
-        verbose_name = "Ticket Purchase"
-        verbose_name_plural = "Ticket Purchases"
+        verbose_name = "Chipta xaridi"
+        verbose_name_plural = "Chipta xaridlari"

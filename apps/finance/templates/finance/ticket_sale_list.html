@@ -38,7 +38,7 @@
                <div class="col-lg-3 col-md-6 mb-2">
                    {{ filterset.form.search.label_tag }}
                    <div class="input-group input-group-sm">
-                       {{ filterset.form.search }}
+                       {{ filterset.form.search|add_class:"form-control form-control-sm" }}
                        <button class="btn btn-outline-secondary" type="submit">
                            <i class="fas fa-search"></i>
                        </button>
@@ -48,15 +48,15 @@
                <!-- Date Filter -->
                <div class="col-lg-2 col-md-6 mb-2">
                    {{ filterset.form.date_filter.label_tag }}
-                   {{ filterset.form.date_filter }}
+                   {{ filterset.form.date_filter|add_class:"form-select form-select-sm" }}
                    <div id="custom-date-range" class="row gx-1 {% if filterset.form.date_filter.value != 'custom' %}d-none{% endif %} mt-1">
                        <div class="col-6">
                            {{ filterset.form.start_date.label_tag }}
-                           {{ filterset.form.start_date }}
+                           {{ filterset.form.start_date|add_class:"form-control form-control-sm" }}
                        </div>
                        <div class="col-6">
                            {{ filterset.form.end_date.label_tag }}
-                           {{ filterset.form.end_date }}
+                           {{ filterset.form.end_date|add_class:"form-control form-control-sm" }}
                        </div>
                    </div>
                </div>
@@ -64,31 +64,31 @@
                <!-- Customer Type Filter -->
                <div class="col-lg-2 col-md-4 mb-2">
                    {{ filterset.form.customer_type.label_tag }}
-                   {{ filterset.form.customer_type }}
+                   {{ filterset.form.customer_type|add_class:"form-select form-select-sm" }}
                </div>
                
                <!-- Currency Filter -->
                <div class="col-lg-2 col-md-4 mb-2">
                    {{ filterset.form.currency.label_tag }}
-                   {{ filterset.form.currency }}
+                   {{ filterset.form.currency|add_class:"form-select form-select-sm" }}
                </div>
                
                <!-- Agent Filter -->
                <div class="col-lg-2 col-md-4 mb-2">
                    {{ filterset.form.agent.label_tag }}
-                   {{ filterset.form.agent }}
+                   {{ filterset.form.agent|add_class:"form-select form-select-sm" }}
                </div>
                
                <!-- Seller Filter -->
                <div class="col-lg-2 col-md-4 mb-2">
                    {{ filterset.form.seller.label_tag }}
-                   {{ filterset.form.seller }}
+                   {{ filterset.form.seller|add_class:"form-select form-select-sm" }}
                </div>
                
                <!-- Sort By -->
                <div class="col-lg-1 col-md-12 mb-2">
                    {{ filterset.form.sort_by.label_tag }}
-                   {{ filterset.form.sort_by }}
+                   {{ filterset.form.sort_by|add_class:"form-select form-select-sm" }}
                </div>
            </div>
            
@@ -118,13 +118,14 @@
                    <tr>
                        <th style="width: 5%;">Sotuv ID</th>
                        <th style="width: 10%;">Sana</th>
-                       <th style="width: 15%;">Mijoz</th>
-                       <th style="width: 12%;">Sotuvchi</th>
+                       <th style="width: 12%;">Mijoz</th>
+                       <th style="width: 10%;">Sotuvchi</th>
                        <th style="width: 10%;">Xarid</th>
-                       <th style="width: 7%;">Miqdor</th>
-                       <th style="width: 12%;">Narxi</th>
-                       <th style="width: 12%;">Jami</th>
-                       <th style="width: 12%;">Foyda</th>
+                       <th style="width: 6%;">Miqdor</th>
+                       <th style="width: 10%;">Narxi</th>
+                       <th style="width: 10%;">Jami</th>
+                       <th style="width: 10%;">Foyda</th>
+                       <th style="width: 12%;">To'lov Usuli</th>
                    </tr>
                </thead>
                <tbody>
@@ -147,10 +148,23 @@
                        <td class="text-end {% if sale.profit > 0 %}text-success{% elif sale.profit < 0 %}text-danger{% endif %}">
                            {{ sale.profit|money:sale.currency }}
                        </td>
+                       <td>
+                           {% if sale.customer_type == 'individual' %}
+                               {% with payment=sale.payments.first %}
+                                   {% if payment and payment.payment_method %}
+                                       {{ payment.payment_method }}
+                                   {% else %}
+                                       <span class="text-muted">—</span>
+                                   {% endif %}
+                               {% endwith %}
+                           {% else %}
+                               <span class="badge bg-warning">Agent</span>
+                           {% endif %}
+                       </td>
                    </tr>
                    {% empty %}
                    <tr>
-                       <td colspan="9" class="text-center py-4">
+                       <td colspan="10" class="text-center py-4">
                            <div class="empty-state">
                                <i class="fas fa-receipt fa-3x text-muted mb-3"></i>
                                <h5>Hech qanday sotuv topilmadi</h5>
@@ -173,7 +187,7 @@
                        <td class="text-end">
                            {{ total_quantity|intcomma }}
                        </td>
-                       <td colspan="3"></td>
+                       <td colspan="4"></td>
                    </tr>
                    
                    <!-- USD Totals row -->
@@ -188,6 +202,7 @@
                                {{ usd_profit|money:'USD' }}
                            </span>
                        </td>
+                       <td></td>
                    </tr>
                    {% endif %}
                    
@@ -203,6 +218,7 @@
                                {{ uzs_profit|money:'UZS' }}
                            </span>
                        </td>
+                       <td></td>
                    </tr>
                    {% endif %}
                    {% endif %}
@@ -259,6 +275,132 @@
    </div>
 </div>
 
+<!-- Add Sale Modal -->
+<div class="modal fade" id="saleModal" tabindex="-1" aria-labelledby="saleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="saleModalLabel">Yangi Sotuv Qo'shish</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="saleForm">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="customerType" class="form-label">Mijoz Turi</label>
+                            <select class="form-select" id="customerType" name="customer_type" required>
+                                <option value="" selected disabled>Mijoz Turini Tanlang</option>
+                                <option value="individual">Individual Mijoz</option>
+                                <option value="agent">Agent</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 individual-field">
+                            <label for="customerName" class="form-label">Mijoz Ismi</label>
+                            <input type="text" class="form-control" id="customerName" name="customer_name">
+                        </div>
+                        <div class="col-md-6 agent-field d-none">
+                            <label for="agent" class="form-label">Agent</label>
+                            <select class="form-select" id="agent" name="agent">
+                                <option value="" selected disabled>Agentni Tanlang</option>
+                                {% for agent in agents %}
+                                <option value="{{ agent.id }}">{{ agent.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="seller" class="form-label">Sotuvchi</label>
+                            <select class="form-select" id="seller" name="seller" required>
+                                <option value="" selected disabled>Sotuvchini Tanlang</option>
+                                {% for seller in sellers %}
+                                <option value="{{ seller.id }}">{{ seller.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="saleDate" class="form-label">Sotuv Sanasi</label>
+                            <input type="datetime-local" class="form-control" id="saleDate" name="sale_date">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="ticketPurchase" class="form-label">Xarid</label>
+                            <select class="form-select" id="ticketPurchase" name="ticket_purchase" required>
+                                <option value="" selected disabled>Xaridni Tanlang</option>
+                                {% for purchase in ticket_purchases %}
+                                <option value="{{ purchase.id }}" data-currency="{{ purchase.currency }}" data-unit-price="{{ purchase.unit_price }}" data-remaining="{{ purchase.quantity_remaining }}">
+                                    {{ purchase.purchase_id }} - {{ purchase.supplier.name }} ({{ purchase.quantity_remaining }} ta qolgan)
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">
+                                Xarid valyutasi: <span id="purchaseCurrency"></span>, 
+                                Xarid narxi: <span id="purchaseUnitPrice"></span>
+                            </small>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="quantity" class="form-label">Miqdor</label>
+                            <input type="number" class="form-control" id="quantity" name="quantity" min="1" required>
+                            <small class="form-text text-muted">
+                                Mavjud: <span id="quantityRemaining">0</span>
+                            </small>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="unitPrice" class="form-label">Sotuv Narxi</label>
+                            <input type="number" class="form-control" id="unitPrice" name="unit_price" step="0.01" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="currency" class="form-label">Valyuta</label>
+                            <select class="form-select" id="currency" name="currency" required>
+                                <option value="" selected disabled>Valyutani Tanlang</option>
+                                <option value="UZS">UZS</option>
+                                <option value="USD">USD</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3 payment-method-section individual-field">
+                        <div class="col-md-12">
+                            <label for="paymentMethod" class="form-label">To'lov Usuli</label>
+                            <select class="form-select" id="paymentMethod" name="payment_method">
+                                <option value="" selected disabled>To'lov Usulini Tanlang</option>
+                                {% for method in payment_methods %}
+                                <option value="{{ method.id }}" data-currency="{{ method.currency }}" data-type="{{ method.method_type }}">
+                                    {{ method.name }} ({{ method.get_method_type_display }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted payment-method-currency-warning d-none text-danger">
+                                Diqqat: To'lov usuli valyutasi sotuv valyutasidan farq qiladi
+                            </small>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="notes" class="form-label">Izohlar</label>
+                            <textarea class="form-control" id="notes" name="notes" rows="2"></textarea>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div>Jami Sotuv Narxi: <span id="totalPrice">0.00</span></div>
+                        </div>
+                        <div class="col-md-6">
+                            <div>Kutilayotgan Foyda: <span id="expectedProfit">0.00</span></div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Bekor Qilish</button>
+                <button type="button" class="btn btn-primary" id="saveSaleBtn">Saqlash</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- CSRF Token for AJAX -->
 <input type="hidden" id="csrf_token" value="{{ csrf_token }}">
 
@@ -271,4 +413,203 @@
 {% block extra_js %}
 {# Load the external JavaScript file #}
 <script src="{% static 'finance/sales.js' %}"></script>
+
+<script>
+$(document).ready(function() {
+    // Initialize data from the JSON
+    const jsData = JSON.parse(document.getElementById('js-data').textContent);
+    const paymentMethods = jsData.payment_methods || [];
+    
+    // Date filter change handler
+    $('#{{ filterset.form.date_filter.auto_id }}').change(function() {
+        if ($(this).val() === 'custom') {
+            $('#custom-date-range').removeClass('d-none');
+        } else {
+            $('#custom-date-range').addClass('d-none');
+        }
+    });
+    
+    // Customer type change handler
+    $('#customerType').change(function() {
+        const type = $(this).val();
+        if (type === 'individual') {
+            $('.individual-field').removeClass('d-none');
+            $('.agent-field').addClass('d-none');
+            $('#agent').prop('required', false);
+            $('#customerName').prop('required', true);
+            $('#paymentMethod').prop('required', true);
+        } else if (type === 'agent') {
+            $('.individual-field').addClass('d-none');
+            $('.agent-field').removeClass('d-none');
+            $('#agent').prop('required', true);
+            $('#customerName').prop('required', false);
+            $('#paymentMethod').prop('required', false);
+        }
+    });
+    
+    // Ticket purchase change handler
+    $('#ticketPurchase').change(function() {
+        const $selected = $(this).find(':selected');
+        const currency = $selected.data('currency');
+        const unitPrice = $selected.data('unit-price');
+        const remaining = $selected.data('remaining');
+        
+        $('#purchaseCurrency').text(currency);
+        $('#purchaseUnitPrice').text(unitPrice + ' ' + currency);
+        $('#quantityRemaining').text(remaining);
+        $('#currency').val(currency);
+        
+        // Update price calculations
+        updatePriceCalculations();
+    });
+    
+    // Payment method change handler
+    $('#paymentMethod').change(function() {
+        const $selected = $(this).find(':selected');
+        const methodCurrency = $selected.data('currency');
+        const saleCurrency = $('#currency').val();
+        
+        // Show warning if currencies don't match
+        if (methodCurrency && saleCurrency && methodCurrency !== saleCurrency) {
+            $('.payment-method-currency-warning').removeClass('d-none');
+        } else {
+            $('.payment-method-currency-warning').addClass('d-none');
+        }
+    });
+    
+    // Currency change handler
+    $('#currency').change(function() {
+        const currency = $(this).val();
+        const methodCurrency = $('#paymentMethod').find(':selected').data('currency');
+        
+        // Show warning if currencies don't match
+        if (methodCurrency && currency && methodCurrency !== currency) {
+            $('.payment-method-currency-warning').removeClass('d-none');
+        } else {
+            $('.payment-method-currency-warning').addClass('d-none');
+        }
+        
+        // Update price calculations
+        updatePriceCalculations();
+    });
+    
+    // Price/quantity change handlers
+    $('#unitPrice, #quantity').on('input', function() {
+        updatePriceCalculations();
+    });
+    
+    // Function to update price calculations
+    function updatePriceCalculations() {
+        const quantity = parseFloat($('#quantity').val()) || 0;
+        const unitPrice = parseFloat($('#unitPrice').val()) || 0;
+        const currency = $('#currency').val() || '';
+        
+        // Calculate and display total price
+        const totalPrice = quantity * unitPrice;
+        $('#totalPrice').text(totalPrice.toFixed(2) + ' ' + currency);
+        
+        // Calculate and display expected profit
+        const purchaseUnitPrice = parseFloat($('#ticketPurchase').find(':selected').data('unit-price')) || 0;
+        const purchaseCurrency = $('#ticketPurchase').find(':selected').data('currency');
+        
+        if (currency && purchaseCurrency && currency === purchaseCurrency) {
+            const profit = (unitPrice - purchaseUnitPrice) * quantity;
+            const profitClass = profit >= 0 ? 'text-success' : 'text-danger';
+            $('#expectedProfit').text(profit.toFixed(2) + ' ' + currency).removeClass('text-success text-danger').addClass(profitClass);
+        } else {
+            $('#expectedProfit').text('Valyutalar mos kelmaydi');
+        }
+    }
+    
+    // Export to Excel handler
+    $('#exportExcel').click(function(e) {
+        e.preventDefault();
+        window.location.href = jsData.excel_export_url;
+    });
+    
+    // Form submission handler
+    $('#saveSaleBtn').click(function() {
+        const form = document.getElementById('saleForm');
+        
+        // Basic form validation
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+        
+        // Additional validation for payment method
+        const customerType = $('#customerType').val();
+        if (customerType === 'individual' && !$('#paymentMethod').val()) {
+            alert("Individual mijozlar uchun to'lov usuli talab qilinadi");
+            return;
+        }
+        
+        // Get form data
+        const formData = new FormData(form);
+        
+        // Show loading state
+        $('#saveSaleBtn').prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saqlanmoqda...');
+        
+        // Send AJAX request
+        $.ajax({
+            url: jsData.sale_create_url,
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            headers: {
+                'X-CSRFToken': $('#csrf_token').val(),
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            success: function(response) {
+                if (response.success) {
+                    // Show success message
+                    alert('Sotuv muvaffaqiyatli saqlandi!');
+                    // Close modal
+                    $('#saleModal').modal('hide');
+                    // Reload page to show the new sale
+                    window.location.reload();
+                } else {
+                    alert('Xatolik: ' + (response.errors || 'Noma\'lum xatolik'));
+                    $('#saveSaleBtn').prop('disabled', false).text('Saqlash');
+                }
+            },
+            error: function(xhr) {
+                let errorMsg = 'Xatolik yuz berdi';
+                if (xhr.responseJSON && xhr.responseJSON.errors) {
+                    errorMsg = xhr.responseJSON.errors;
+                }
+                alert('Xatolik: ' + errorMsg);
+                $('#saveSaleBtn').prop('disabled', false).text('Saqlash');
+            }
+        });
+    });
+    
+    // Open sale modal handler
+    $('#addSaleBtn').click(function() {
+        // Reset form
+        document.getElementById('saleForm').reset();
+        $('.individual-field, .agent-field').addClass('d-none');
+        $('.payment-method-currency-warning').addClass('d-none');
+        $('#totalPrice').text('0.00');
+        $('#expectedProfit').text('0.00');
+        $('#purchaseCurrency').text('');
+        $('#purchaseUnitPrice').text('');
+        $('#quantityRemaining').text('0');
+        
+        // Set current date and time as default
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const defaultDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+        $('#saleDate').val(defaultDateTime);
+        
+        // Open modal
+        $('#saleModal').modal('show');
+    });
+});
+</script>
 {% endblock %}

@@ -13,7 +13,7 @@ class SupplierAdmin(admin.ModelAdmin):
         count = obj.ticket_purchases.count()
         return count
 
-    purchase_count.short_description = "Purchases"
+    purchase_count.short_description = "Xaridlar soni"
 
 
 @admin.register(TicketPurchase)
@@ -34,10 +34,10 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
 
     # Since purchase_id is now auto-generated, we don't include it in fields
     fieldsets = (
-        ("Basic Information", {"fields": ("supplier", "purchase_date")}),
-        ("Purchase Details", {"fields": ("quantity", "unit_price", "currency")}),
+        ("Asosiy ma'lumot", {"fields": ("supplier", "purchase_date")}),
+        ("Xarid tafsilotlari", {"fields": ("quantity", "unit_price", "currency")}),
         (
-            "Additional Information",
+            "Qo'shimcha ma'lumot",
             {"fields": ("commentary",), "classes": ("collapse",)},
         ),
     )
@@ -47,7 +47,7 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
             return f"${obj.unit_price:,.2f}"
         return f"{obj.unit_price:,.2f} UZS"
 
-    formatted_unit_price.short_description = "Unit Price"
+    formatted_unit_price.short_description = "Narxi"
 
     def formatted_total_price(self, obj):
         total = obj.quantity * obj.unit_price
@@ -55,4 +55,4 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
             return f"${total:,.2f}"
         return f"{total:,.2f} UZS"
 
-    formatted_total_price.short_description = "Total Price"
+    formatted_total_price.short_description = "Umumiy narx"

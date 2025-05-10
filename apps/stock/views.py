@@ -120,15 +120,6 @@ class TicketPurchaseListView(AdminRequiredMixin, LoginRequiredMixin, ListView):
                 active_filters[key] = value
         context["active_filters"] = active_filters
 
-        # --- Add data for JavaScript ---
-        js_suppliers = list(Supplier.objects.values('id', 'name')) # Prepare suppliers for JSON
-        js_data = {
-            'suppliers': js_suppliers,
-            'purchase_create_url': reverse('stock:purchase_create') # Add the URL for the create view
-        }
-        context['js_data'] = json.dumps(js_data) # Convert to JSON string
-        # --- End Add data for JavaScript ---
-
         return context
 
     @property
@@ -150,8 +141,7 @@ def purchase_create(request):
             quantity = request.POST.get("quantity")
             unit_price = request.POST.get("unit_price")
             currency = request.POST.get("currency")
-            flight_details = request.POST.get("flight_details", "")
-            notes = request.POST.get("notes", "")
+            commentary = request.POST.get("commentary", "")
 
             # --- Validation --- 
             if not all([supplier_id, quantity, unit_price, currency]):
@@ -187,8 +177,7 @@ def purchase_create(request):
                 quantity=quantity,
                 unit_price=unit_price,
                 currency=currency,
-                flight_details=flight_details,
-                notes=notes,
+                commentary=commentary,
             )
 
             # Prepare response data

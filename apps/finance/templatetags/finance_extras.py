@@ -54,6 +54,16 @@ def to_list(value):
     """
     return list(value)
 
+@register.filter
+def add_class(field, css_classes):
+    """
+    Add CSS classes to a form field.
+    
+    Example:
+    {{ form.username|add_class:"form-control" }}
+    """
+    return field.as_widget(attrs={"class": css_classes})
+
 @register.simple_tag(takes_context=True)
 def query_transform(context, **kwargs):
     """
@@ -67,4 +77,36 @@ def query_transform(context, **kwargs):
     query = context['request'].GET.copy()
     for k, v in kwargs.items():
         query[k] = v
-    return query.urlencode() 
+    return query.urlencode()
+
+@register.filter
+def startswith(value, arg):
+    """
+    Check if a string starts with the given argument.
+    
+    Example:
+    {% if payment_method.method_type|startswith:'cash' %}
+    """
+    if value:
+        return str(value).startswith(str(arg))
+    return False
+
+@register.filter
+def get_by_id(queryset, id_value):
+    """
+    Get an object from a queryset by its ID.
+    
+    Example:
+    {% with obj=objects|get_by_id:some_id %}
+    """
+    if not queryset:
+        return None
+    
+    try:
+        for obj in queryset:
+            if str(obj.id) == str(id_value):
+                return obj
+    except (AttributeError, ValueError):
+        pass
+    
+    return None 

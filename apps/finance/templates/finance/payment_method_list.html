@@ -1,0 +1,580 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% load finance_extras %}
+{% load static %}
+
+{% block title %}To'lov Usullari | Chipta Boshqaruv Tizimi{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'finance:sale_list' %}">Moliya</a></li>
+<li class="breadcrumb-item active">To'lov Usullari</li>
+{% endblock %}
+
+{% block page_header %}
+<div class="row align-items-center mb-3">
+   <div class="col">
+       <h5 class="mb-0 text-gray-800">To'lov Usullari</h5>
+       <small class="text-muted">UZS Plastik kartalar, VISA kartalar va boshqa to'lov usullarini boshqarish</small>
+   </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Filters and buttons -->
+<div class="card shadow mb-4">
+   <div class="card-body py-3">
+       <form method="get" class="mb-0" id="filter-form">
+           <div class="row g-2 align-items-end">
+               <!-- Search -->
+               <div class="col-lg-3 col-md-6 mb-2">
+                   <label for="search" class="form-label">Qidirish</label>
+                   <div class="input-group input-group-sm">
+                       <input type="text" class="form-control form-control-sm" id="search" name="search" 
+                              value="{{ request.GET.search|default:'' }}" placeholder="Qidirish...">
+                       <button class="btn btn-outline-secondary" type="submit">
+                           <i class="fas fa-search"></i>
+                       </button>
+                   </div>
+               </div>
+               
+               <!-- Method Type Filter -->
+               <div class="col-lg-2 col-md-6 mb-2">
+                   <label for="method_type" class="form-label">To'lov Turi</label>
+                   <select class="form-select form-select-sm" id="method_type" name="method_type">
+                       <option value="">Barcha Turlar</option>
+                       {% for key, value in method_types.items %}
+                       <option value="{{ key }}" {% if request.GET.method_type == key %}selected{% endif %}>{{ value }}</option>
+                       {% endfor %}
+                   </select>
+               </div>
+               
+               <!-- Currency Filter -->
+               <div class="col-lg-2 col-md-6 mb-2">
+                   <label for="currency" class="form-label">Valyuta</label>
+                   <select class="form-select form-select-sm" id="currency" name="currency">
+                       <option value="">Barcha Valyutalar</option>
+                       {% for key, value in currencies.items %}
+                       <option value="{{ key }}" {% if request.GET.currency == key %}selected{% endif %}>{{ value }}</option>
+                       {% endfor %}
+                   </select>
+               </div>
+               
+               <!-- Status Filter -->
+               <div class="col-lg-2 col-md-6 mb-2">
+                   <label for="status" class="form-label">Holati</label>
+                   <select class="form-select form-select-sm" id="status" name="status">
+                       <option value="">Barchasi</option>
+                       <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Faol</option>
+                       <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Nofaol</option>
+                   </select>
+               </div>
+               
+               <!-- Sort By -->
+               <div class="col-lg-2 col-md-6 mb-2">
+                   <label for="sort" class="form-label">Saralash</label>
+                   <select class="form-select form-select-sm" id="sort" name="sort">
+                       <option value="name" {% if request.GET.sort == 'name' or not request.GET.sort %}selected{% endif %}>Nomi (A-Z)</option>
+                       <option value="-created_at" {% if request.GET.sort == '-created_at' %}selected{% endif %}>Eng yangi</option>
+                       <option value="method_type" {% if request.GET.sort == 'method_type' %}selected{% endif %}>To'lov turi</option>
+                   </select>
+               </div>
+               
+               <!-- Filter Button -->
+               <div class="col-lg-1 col-md-12 mb-2">
+                   <button type="submit" class="btn btn-primary btn-sm w-100">
+                       <i class="fas fa-filter me-1"></i> Filter
+                   </button>
+               </div>
+           </div>
+           
+           {% if search_params %}
+           <div class="row mt-2">
+               <div class="col-12 d-flex justify-content-end">
+                   <a href="{% url 'finance:payment_method_list' %}" class="btn btn-sm btn-outline-secondary">
+                       <i class="fas fa-times me-1"></i> Filtrlarni Tozalash
+                   </a>
+               </div>
+           </div>
+           {% endif %}
+       </form>
+   </div>
+</div>
+
+<!-- Payment Method List -->
+<div class="card shadow mb-4">
+   <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+       <h6 class="m-0 font-weight-bold text-primary">To'lov Usullari</h6>
+       <div>
+           <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addPaymentMethodModal">
+               <i class="fas fa-plus-circle me-1"></i> Yangi To'lov Usuli Qo'shish
+           </button>
+       </div>
+   </div>
+   <div class="card-body">
+       <div id="alert-container">
+           <!-- Alerts will be inserted here by JavaScript -->
+       </div>
+       
+       <div class="table-responsive">
+           <table class="table table-bordered table-hover" id="paymentMethodsTable" width="100%" cellspacing="0">
+               <thead class="table-light">
+                   <tr>
+                       <th style="width: 5%;">#</th>
+                       <th style="width: 25%;">Nomi</th>
+                       <th style="width: 20%;">To'lov Turi</th>
+                       <th style="width: 15%;">Valyuta</th>
+                       <th style="width: 15%;">Hisob/Karta Raqami</th>
+                       <th style="width: 10%;">Holati</th>
+                       <th style="width: 10%;">Amallar</th>
+                   </tr>
+               </thead>
+               <tbody>
+                   {% for method in payment_methods %}
+                   <tr>
+                       <td>{{ forloop.counter }}</td>
+                       <td>{{ method.name }}</td>
+                       <td>{{ method.get_method_type_display }}</td>
+                       <td>{{ method.get_currency_display }}</td>
+                       <td>{% if method.account_number %}{{ method.account_number }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+                       <td>
+                           {% if method.is_active %}
+                           <span class="badge bg-success">Faol</span>
+                           {% else %}
+                           <span class="badge bg-danger">Nofaol</span>
+                           {% endif %}
+                       </td>
+                       <td>
+                           <button type="button" class="btn btn-sm btn-outline-primary edit-btn" 
+                                   data-id="{{ method.id }}"
+                                   data-name="{{ method.name }}"
+                                   data-method-type="{{ method.method_type }}"
+                                   data-currency="{{ method.currency }}"
+                                   data-account-number="{{ method.account_number|default:'' }}"
+                                   data-details="{{ method.details|default:'' }}"
+                                   data-is-active="{{ method.is_active|yesno:'true,false' }}">
+                               <i class="fas fa-edit"></i>
+                           </button>
+                           <button type="button" class="btn btn-sm btn-outline-{% if method.is_active %}warning{% else %}success{% endif %} toggle-status-btn" 
+                                   data-id="{{ method.id }}" 
+                                   data-is-active="{{ method.is_active|yesno:'true,false' }}" 
+                                   title="{% if method.is_active %}Nofaol qilish{% else %}Faol qilish{% endif %}">
+                               <i class="fas {% if method.is_active %}fa-toggle-off{% else %}fa-toggle-on{% endif %}"></i>
+                           </button>
+                       </td>
+                   </tr>
+                   {% empty %}
+                   <tr>
+                       <td colspan="7" class="text-center py-4">
+                           <div class="empty-state">
+                               <i class="fas fa-credit-card fa-3x text-muted mb-3"></i>
+                               <h5>Hech qanday to'lov usuli topilmadi</h5>
+                               <p class="text-muted">
+                                   {% if search_params %}
+                                   Filtr mezonlaringizga mos to'lov usuli topilmadi. <a href="{% url 'finance:payment_method_list' %}">Filtrlarni tozalash</a>.
+                                   {% else %}
+                                   Siz hali hech qanday to'lov usuli qo'shmagansiz. "Yangi To'lov Usuli Qo'shish" tugmasini bosib, birinchi to'lov usulingizni qo'shing.
+                                   {% endif %}
+                               </p>
+                           </div>
+                       </td>
+                   </tr>
+                   {% endfor %}
+               </tbody>
+           </table>
+       </div>
+       
+       <!-- Pagination -->
+       {% if is_paginated %}
+       <div class="mt-4 d-flex justify-content-center">
+           <nav aria-label="Page navigation">
+               <ul class="pagination">
+                   {% if page_obj.has_previous %}
+                   <li class="page-item">
+                       <a class="page-link" href="?{% for key, value in search_params.items %}{{ key }}={{ value }}&{% endfor %}page=1" aria-label="First">
+                           <span aria-hidden="true">&laquo;&laquo;</span>
+                       </a>
+                   </li>
+                   <li class="page-item">
+                       <a class="page-link" href="?{% for key, value in search_params.items %}{{ key }}={{ value }}&{% endfor %}page={{ page_obj.previous_page_number }}" aria-label="Previous">
+                           <span aria-hidden="true">&laquo;</span>
+                       </a>
+                   </li>
+                   {% endif %}
+                   
+                   {% for num in page_obj.paginator.page_range %}
+                       {% if page_obj.number == num %}
+                           <li class="page-item active">
+                               <span class="page-link">{{ num }}</span>
+                           </li>
+                       {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                           <li class="page-item">
+                               <a class="page-link" href="?{% for key, value in search_params.items %}{{ key }}={{ value }}&{% endfor %}page={{ num }}">{{ num }}</a>
+                           </li>
+                       {% endif %}
+                   {% endfor %}
+                   
+                   {% if page_obj.has_next %}
+                   <li class="page-item">
+                       <a class="page-link" href="?{% for key, value in search_params.items %}{{ key }}={{ value }}&{% endfor %}page={{ page_obj.next_page_number }}" aria-label="Next">
+                           <span aria-hidden="true">&raquo;</span>
+                       </a>
+                   </li>
+                   <li class="page-item">
+                       <a class="page-link" href="?{% for key, value in search_params.items %}{{ key }}={{ value }}&{% endfor %}page={{ page_obj.paginator.num_pages }}" aria-label="Last">
+                           <span aria-hidden="true">&raquo;&raquo;</span>
+                       </a>
+                   </li>
+                   {% endif %}
+               </ul>
+           </nav>
+       </div>
+       {% endif %}
+   </div>
+</div>
+
+<!-- Add Payment Method Modal -->
+<div class="modal fade" id="addPaymentMethodModal" tabindex="-1" aria-labelledby="addPaymentMethodModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="addPaymentMethodForm">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addPaymentMethodModalLabel">Yangi To'lov Usuli Qo'shish</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="addModalAlerts"></div>
+                    <div class="mb-3">
+                        <label for="add_name" class="form-label">Nomi</label>
+                        <input type="text" class="form-control" id="add_name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="add_method_type" class="form-label">To'lov Turi</label>
+                        <select class="form-select" id="add_method_type" name="method_type" required>
+                            <option value="" selected disabled>Tanlang...</option>
+                            {% for key, value in method_types.items %}
+                            <option value="{{ key }}">{{ value }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="add_currency" class="form-label">Valyuta</label>
+                        <select class="form-select" id="add_currency" name="currency" required>
+                            <option value="" selected disabled>Tanlang...</option>
+                            {% for key, value in currencies.items %}
+                            <option value="{{ key }}">{{ value }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="add_account_number" class="form-label">Hisob/Karta Raqami (ixtiyoriy)</label>
+                        <input type="text" class="form-control" id="add_account_number" name="account_number">
+                    </div>
+                    <div class="mb-3">
+                        <label for="add_details" class="form-label">Qo'shimcha ma'lumot (ixtiyoriy)</label>
+                        <textarea class="form-control" id="add_details" name="details" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="add_is_active" name="is_active" checked>
+                        <label class="form-check-label" for="add_is_active">Faol</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Bekor Qilish</button>
+                    <button type="submit" class="btn btn-primary" id="saveAddBtn">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Payment Method Modal -->
+<div class="modal fade" id="editPaymentMethodModal" tabindex="-1" aria-labelledby="editPaymentMethodModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="editPaymentMethodForm">
+                <input type="hidden" id="edit_id" name="id">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editPaymentMethodModalLabel">To'lov Usulini Tahrirlash</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="editModalAlerts"></div>
+                    <div class="mb-3">
+                        <label for="edit_name" class="form-label">Nomi</label>
+                        <input type="text" class="form-control" id="edit_name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_method_type" class="form-label">To'lov Turi</label>
+                        <select class="form-select" id="edit_method_type" name="method_type" required>
+                            <option value="" disabled>Tanlang...</option>
+                            {% for key, value in method_types.items %}
+                            <option value="{{ key }}">{{ value }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_currency" class="form-label">Valyuta</label>
+                        <select class="form-select" id="edit_currency" name="currency" required>
+                            <option value="" disabled>Tanlang...</option>
+                            {% for key, value in currencies.items %}
+                            <option value="{{ key }}">{{ value }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_account_number" class="form-label">Hisob/Karta Raqami (ixtiyoriy)</label>
+                        <input type="text" class="form-control" id="edit_account_number" name="account_number">
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_details" class="form-label">Qo'shimcha ma'lumot (ixtiyoriy)</label>
+                        <textarea class="form-control" id="edit_details" name="details" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="edit_is_active" name="is_active">
+                        <label class="form-check-label" for="edit_is_active">Faol</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Bekor Qilish</button>
+                    <button type="submit" class="btn btn-primary" id="saveEditBtn">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- CSRF Token for AJAX -->
+<input type="hidden" id="csrf_token" value="{{ csrf_token }}">
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Auto-submit form on filter changes
+        const filterForm = document.getElementById('filter-form');
+        const filterSelects = document.querySelectorAll('#method_type, #currency, #status, #sort');
+        
+        filterSelects.forEach(select => {
+            select.addEventListener('change', () => filterForm.submit());
+        });
+        
+        // Show alert function
+        function showAlert(container, message, type = 'info') {
+            const alertBox = document.createElement('div');
+            alertBox.className = `alert alert-${type} alert-dismissible fade show`;
+            alertBox.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            
+            // Clear previous alerts
+            container.innerHTML = '';
+            container.appendChild(alertBox);
+            
+            // Auto dismiss non-error alerts
+            if (type !== 'danger') {
+                setTimeout(() => {
+                    const alert = bootstrap.Alert.getOrCreateInstance(alertBox);
+                    alert.close();
+                }, 5000);
+            }
+        }
+        
+        // Handle method type to currency dependency
+        function handleMethodTypeDependency(methodTypeSelect, currencySelect) {
+            methodTypeSelect.addEventListener('change', function() {
+                const methodType = this.value;
+                
+                if (methodType === 'plastic_card' || methodType === 'cash_uzs') {
+                    currencySelect.value = 'UZS';
+                } else if (methodType === 'visa_card' || methodType === 'cash_usd') {
+                    currencySelect.value = 'USD';
+                }
+            });
+        }
+        
+        // Setup method type dependency in both modals
+        handleMethodTypeDependency(
+            document.getElementById('add_method_type'),
+            document.getElementById('add_currency')
+        );
+        
+        handleMethodTypeDependency(
+            document.getElementById('edit_method_type'),
+            document.getElementById('edit_currency')
+        );
+        
+        // Add Payment Method form submission
+        const addForm = document.getElementById('addPaymentMethodForm');
+        const addModalAlerts = document.getElementById('addModalAlerts');
+        const mainAlertContainer = document.getElementById('alert-container');
+        
+        addForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const saveBtn = document.getElementById('saveAddBtn');
+            const originalBtnText = saveBtn.innerHTML;
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saqlanmoqda...';
+            
+            const formData = new FormData(addForm);
+            formData.append('csrfmiddlewaretoken', document.getElementById('csrf_token').value);
+            
+            fetch('{% url "finance:payment_method_create" %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert(mainAlertContainer, data.message, 'success');
+                    addForm.reset();
+                    bootstrap.Modal.getInstance(document.getElementById('addPaymentMethodModal')).hide();
+                    window.location.reload(); // Reload to show the new payment method
+                } else {
+                    showAlert(addModalAlerts, data.errors, 'danger');
+                }
+            })
+            .catch(error => {
+                showAlert(addModalAlerts, 'Xatolik yuz berdi: ' + error, 'danger');
+            })
+            .finally(() => {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = originalBtnText;
+            });
+        });
+        
+        // Edit Payment Method button click
+        const editButtons = document.querySelectorAll('.edit-btn');
+        editButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const id = this.dataset.id;
+                const name = this.dataset.name;
+                const methodType = this.dataset.methodType;
+                const currency = this.dataset.currency;
+                const accountNumber = this.dataset.accountNumber;
+                const details = this.dataset.details;
+                const isActive = this.dataset.isActive === 'true';
+                
+                document.getElementById('edit_id').value = id;
+                document.getElementById('edit_name').value = name;
+                document.getElementById('edit_method_type').value = methodType;
+                document.getElementById('edit_currency').value = currency;
+                document.getElementById('edit_account_number').value = accountNumber;
+                document.getElementById('edit_details').value = details;
+                document.getElementById('edit_is_active').checked = isActive;
+                
+                const editModal = new bootstrap.Modal(document.getElementById('editPaymentMethodModal'));
+                editModal.show();
+            });
+        });
+        
+        // Edit Payment Method form submission
+        const editForm = document.getElementById('editPaymentMethodForm');
+        const editModalAlerts = document.getElementById('editModalAlerts');
+        
+        editForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const saveBtn = document.getElementById('saveEditBtn');
+            const originalBtnText = saveBtn.innerHTML;
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saqlanmoqda...';
+            
+            const formData = new FormData(editForm);
+            formData.append('csrfmiddlewaretoken', document.getElementById('csrf_token').value);
+            
+            const id = document.getElementById('edit_id').value;
+            
+            fetch(`{% url "finance:payment_method_update" pk=0 %}`.replace('0', id), {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert(mainAlertContainer, data.message, 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('editPaymentMethodModal')).hide();
+                    window.location.reload(); // Reload to show the updated payment method
+                } else {
+                    showAlert(editModalAlerts, data.errors, 'danger');
+                }
+            })
+            .catch(error => {
+                showAlert(editModalAlerts, 'Xatolik yuz berdi: ' + error, 'danger');
+            })
+            .finally(() => {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = originalBtnText;
+            });
+        });
+        
+        // Toggle status buttons
+        const toggleStatusButtons = document.querySelectorAll('.toggle-status-btn');
+        toggleStatusButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const id = this.dataset.id;
+                const isActive = this.dataset.isActive === 'true';
+                const newStatus = !isActive;
+                
+                if (!confirm(`Haqiqatan ham ushbu to'lov usulini ${newStatus ? 'faollashtirmoqchimisiz' : 'o\'chirmoqchimisiz'}?`)) {
+                    return;
+                }
+                
+                const originalBtnHtml = this.innerHTML;
+                this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+                this.disabled = true;
+                
+                fetch(`{% url "finance:payment_method_toggle_status" pk=0 %}`.replace('0', id), {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': document.getElementById('csrf_token').value
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert(mainAlertContainer, data.message, 'success');
+                        
+                        // If method has active payments and is being deactivated, show warning
+                        if (data.active_payments && !data.is_active) {
+                            showAlert(mainAlertContainer, 'Diqqat: Bu to\'lov usuli to\'lovlarda ishlatilgan. U hali ham mavjud to\'lovlar uchun ko\'rsatiladi.', 'warning');
+                        }
+                        
+                        // Update button
+                        this.dataset.isActive = data.is_active.toString();
+                        this.classList.remove('btn-outline-success', 'btn-outline-warning');
+                        this.classList.add(data.is_active ? 'btn-outline-warning' : 'btn-outline-success');
+                        this.innerHTML = `<i class="fas fa-toggle-${data.is_active ? 'off' : 'on'}"></i>`;
+                        this.title = data.is_active ? 'Nofaol qilish' : 'Faol qilish';
+                        
+                        // Update status badge in the row
+                        const row = this.closest('tr');
+                        const statusBadge = row.querySelector('td:nth-child(6) .badge');
+                        statusBadge.classList.remove('bg-success', 'bg-danger');
+                        statusBadge.classList.add(data.is_active ? 'bg-success' : 'bg-danger');
+                        statusBadge.textContent = data.is_active ? 'Faol' : 'Nofaol';
+                    } else {
+                        showAlert(mainAlertContainer, data.errors, 'danger');
+                        this.innerHTML = originalBtnHtml;
+                    }
+                })
+                .catch(error => {
+                    showAlert(mainAlertContainer, 'Xatolik yuz berdi.', 'danger');
+                    this.innerHTML = originalBtnHtml;
+                })
+                .finally(() => {
+                    this.disabled = false;
+                });
+            });
+        });
+    });
+</script>
+{% endblock %} 
