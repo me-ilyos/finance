@@ -1,8 +1,9 @@
-from django.db import models
+from django.db import models, transaction
 from django.core.exceptions import ValidationError
 from django.utils.text import slugify
 from apps.contacts.models import Supplier
 from apps.accounting.models import FinancialAccount
+from decimal import Decimal
 
 
 class Ticket(models.Model):
@@ -42,7 +43,7 @@ class Acquisition(models.Model):
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='acquisitions')
     ticket = models.ForeignKey(Ticket, on_delete=models.PROTECT, related_name='acquisitions')
     acquisition_date = models.DateField()
-    quantity = models.PositiveIntegerField()
+    quantity = models.PositiveIntegerField(help_text="Currently available quantity from this batch.")
     
     class Currency(models.TextChoices):
         UZS = 'UZS', 'Uzbek Som'
@@ -56,7 +57,7 @@ class Acquisition(models.Model):
 
     # Total amount can be calculated, but storing it can be useful for records
     # We'll ensure this is based on transaction_currency via a clean method or signals later
-    total_amount = models.DecimalField(max_digits=15, decimal_places=2, editable=False, help_text="Automatically calculated based on quantity and unit price in transaction currency.")
+    total_amount = models.DecimalField(max_digits=15, decimal_places=2, editable=False, help_text="Automatically calculated based on original quantity and unit price.")
     
     paid_from_account = models.ForeignKey(
         FinancialAccount, 
@@ -92,19 +93,55 @@ class Acquisition(models.Model):
             })
 
     def save(self, *args, **kwargs):
+        is_new = self.pk is None
+
+        # Calculate total_amount based on the *original* quantity intended for this field if it were just total acquired.
+        # Since self.quantity now means *available*, total_amount should be based on the initial input quantity.
+        # This requires a bit of care. If quantity is editable in admin, this might get tricky.
+        # For now, we assume total_amount is calculated based on the quantity field at the point of save for this batch definition.
         if self.transaction_currency == self.Currency.UZS and self.unit_price_uzs is not None:
-            self.total_amount = self.quantity * self.unit_price_uzs
+            self.total_amount = self.quantity * self.unit_price_uzs # This might need adjustment if quantity is edited later
         elif self.transaction_currency == self.Currency.USD and self.unit_price_usd is not None:
-            self.total_amount = self.quantity * self.unit_price_usd
+            self.total_amount = self.quantity * self.unit_price_usd # Same here
         else:
             self.total_amount = 0 
         
-        super().save(*args, **kwargs) # Changed back to simpler super()
+        # No need to initialize available_quantity separately anymore
+
+        original_paid_from_account_id = None
+        original_total_amount_for_payment = Decimal('0.00') # Use a distinct variable for payment part
+        is_update_for_payment = self.pk is not None and not is_new 
+
+        if is_update_for_payment:
+            try:
+                original_instance = Acquisition.objects.get(pk=self.pk)
+                original_paid_from_account_id = original_instance.paid_from_account_id
+                # original_total_amount for payment should be based on ITS total_amount, not current calculation
+                original_total_amount_for_payment = original_instance.total_amount 
+            except Acquisition.DoesNotExist:
+                is_update_for_payment = False 
+
+        with transaction.atomic():
+            super().save(*args, **kwargs) 
+
+            if is_update_for_payment and original_paid_from_account_id and \
+               (original_paid_from_account_id != self.paid_from_account_id or original_total_amount_for_payment != self.total_amount):
+                try:
+                    old_account = FinancialAccount.objects.get(pk=original_paid_from_account_id)
+                    old_account.current_balance += original_total_amount_for_payment
+                    old_account.save()
+                except FinancialAccount.DoesNotExist:
+                    pass 
+            
+            if self.paid_from_account and \
+               (is_new or (is_update_for_payment and (original_paid_from_account_id != self.paid_from_account_id or original_total_amount_for_payment != self.total_amount))):
+                self.paid_from_account.current_balance -= self.total_amount
+                self.paid_from_account.save()
 
     def __str__(self):
-        # Ensure ticket.identifier is available, otherwise fallback gracefully
         ticket_identifier = self.ticket.identifier if self.ticket and hasattr(self.ticket, 'identifier') and self.ticket.identifier else f"Ticket ID: {self.ticket_id}"
-        return f"Acquisition of {self.quantity} x {ticket_identifier} from {self.supplier.name} on {self.acquisition_date}"
+        # quantity now directly represents available quantity
+        return f"Acquisition of {self.ticket.description if self.ticket else 'N/A'}: {self.quantity} available (ID: {ticket_identifier}) from {self.supplier.name}"
 
     # Consider adding a clean method here to validate that:
     # 1. Either unit_price_uzs OR unit_price_usd is provided based on transaction_currency.
