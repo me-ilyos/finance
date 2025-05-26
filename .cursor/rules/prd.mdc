@@ -1,0 +1,74 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+## Overall project is about
+
+I have a shop that sells air tickets. I buy air tickets from suppliers then sell them to the induvidual customers or agents. Individual customers pay all the sum directly. Agents are allowed to pay in pieces. So I must be able to see how much money I make from selling the tickets to agents and customers. Also I must be able to see how much money is not paid by agents and how much they have paid so far. In my shop my workers will spend money for day to day expenditures like: electricity, maybe paper runout, for internet and etc. They spend money from what we earned from selling tickets in the shop. Also we pay money for tickets from suppliers from our generated income.
+
+### Buying tickets from suppliers
+
+How the process of buying from the suppliers happens. I buy tickets from a supplier whom I also should keep the record of, also I should be able to add suppliers. Every time I acquire a ticket from supplier we need following data:
+
+ - date
+ - Supplier name
+ - type of the ticket: air ticket or tour ticket. 
+   If it is a ticket:
+    
+    - destination
+    - departure date
+    - arrival date
+   
+   If it is a tour ticket:
+    
+    - name of the tour
+    - departure date
+    - arrival date
+ - quantity
+ - price: UZS or USD
+ - total sum: UZS or USD
+ - payment, I should be to choose from which source to pay for the acquired ticket. If the acquisition is in UZS I should be able to choose sources in UZS or otherwise.
+
+ We should be able to store all above data.
+
+
+
+ ### Selling tickets
+
+ So I can sell the tickets to the individual clients or agents. As I am going to sell to agents I must be able to manage agents and update their payments that they owe me. Every time I sell ticket following data is essential.
+
+ - date
+ - ticket from our store, air ticket or tour ticket
+ - buyer: client or agent. If we are selling to a client: Full name of the customer and ID number. If we are selling to the agent: agent's name.
+ - quantity
+ - price
+ - total sum if the ticket is acquired in UZS then the currency of the sale is USD otherwise UZS. 
+ - Profit made by selling.
+ - Payment
+
+ ### Payment 
+ 
+ Payment is kind of a little bit complex in our case. I recieve payment in the following formats:
+
+  - Direct cash payment in USD. 
+  - Direct cash payment in UZS.
+  - Payment by card in UZS. I must be able to choose to which card is being paid to. I can have many cards.
+  - Payment by card in UZS. I must be able to choose to which card is being paid to. I can have many cards.
+  - Payment to my bank account in UZS. I can many bank accounts.
+
+### Expenditures
+
+Daily there could be some cases that we spend money by workers. Like expense for pizza :), or electricity bill and etc.
+ - date
+ - comment for expenditure
+ - amount
+ - source of money. From cash stock or card
+
+
+### Agents
+
+For particular agent I must be able to see how much agent owes and how much paid.
+
+
+All sales, expenses, acquisition - I should be able to see them and filter them by date. Default is by day. Also I should be able to choose by week, month, custom date range. Also generate excel reports.
