@@ -1,0 +1,74 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Completed Features Summary
+
+This document summarizes the features implemented in the air ticket management system.
+
+## 1. Project Setup & Configuration
+
+*   **Settings Refactor:** The Django `settings.py` was split into a tiered configuration:
+    *   `config/settings/base.py`: Common settings.
+    *   `config/settings/local.py`: Development-specific settings (`DEBUG=True`).
+    *   `config/settings/production.py`: Production-specific settings (`DEBUG=False`).
+*   `manage.py`, `wsgi.py`, and `asgi.py` were updated to use `config.settings.local` by default, with `DJANGO_SETTINGS_MODULE` override.
+*   **Project Structure:** An `apps` directory was created at the project root to house all Django applications.
+*   **System Path:** The project root was added to `sys.path` in `manage.py`, `wsgi.py`, and `asgi.py` for proper app discovery.
+
+## 2. Core Applications & Models
+
+The following Django apps were created within the `apps` directory and added to `INSTALLED_APPS`:
+
+### a. `apps.contacts`
+Manages information about suppliers and agents.
+*   **`Supplier` Model:**
+    *   Fields: `name`, `contact_person`, `phone_number`, `email`, `notes`.
+*   **`Agent` Model:**
+    *   Fields: `name`, `contact_person`, `phone_number`, `email`, `outstanding_balance_uzs`, `outstanding_balance_usd`, `notes`.
+
+### b. `apps.inventory`
+Manages tickets and their acquisition.
+*   **`Ticket` Model:**
+    *   Fields: `ticket_type` (Air, Tour), `identifier` (auto-generated based on type, description, departure), `description`, `departure_date_time`, `arrival_date_time`.
+    *   `save()` method auto-generates the `identifier`.
+*   **`Acquisition` Model:** Records ticket purchases from suppliers.
+    *   Fields: `supplier` (FK to `Supplier`), `ticket` (FK to `Ticket`), `acquisition_date`, `quantity` (represents current stock from this batch), `unit_price_uzs`, `unit_price_usd`, `transaction_currency`, `total_amount` (auto-calculated), `paid_from_account` (FK to `FinancialAccount`, nullable), `notes`.
+    *   `save()` method:
+        *   Auto-calculates `total_amount`.
+        *   Updates `FinancialAccount.current_balance` if `paid_from_account` is set (transactionally).
+    *   `clean()` method for validations (e.g., price consistency, account currency match).
+
+### c. `apps.sales`
+Manages ticket sales to agents or clients.
+*   **`Sale` Model:**
+    *   Fields: `sale_date`, `quantity`, `related_acquisition` (FK to `Acquisition`), buyer details (`agent` or `client_full_name`/`id_number`), `unit_sale_price`, `sale_currency` (auto-set from acquisition), `total_sale_amount` (auto-calculated), `profit` (auto-calculated), `paid_to_account` (FK to `FinancialAccount`, nullable).
+    *   `save()` method:
+        *   Sets `sale_currency`, calculates `total_sale_amount` and `profit`.
+        *   Decrements `related_acquisition.quantity` (stock management, transactionally with `select_for_update`).
+        *   Updates `FinancialAccount.current_balance` if `paid_to_account` is set.
+        *   Updates `Agent.outstanding_balance` for agent sales without direct payment.
+    *   `clean()` method for validations (e.g., buyer info, stock availability, account currency match).
+
+### d. `apps.accounting`
+Manages financial accounts and expenditures.
+*   **`FinancialAccount` Model:**
+    *   Fields: `name`, `account_type` (Cash, Card, Bank Account), `currency` (UZS, USD), `current_balance`, `account_details`, `is_active`.
+*   **`Expenditure` Model:** Tracks various operational expenses.
+    *   Fields: `expenditure_date`, `description`, `amount`, `currency`, `paid_from_account` (FK to `FinancialAccount`), `notes`.
+    *   `save()` method updates `FinancialAccount.current_balance` (transactionally, handling creates and updates).
+    *   `clean()` method validates `paid_from_account.currency`.
+
+## 3. Admin Interface
+All core models (`Supplier`, `Agent`, `Ticket`, `Acquisition`, `Sale`, `FinancialAccount`, `Expenditure`) have been registered with the Django admin site with basic configurations for display, filtering, and search.
+
+## 4. Key Logic Implemented
+*   **Automatic Calculations:** Total amounts for acquisitions and sales, profit calculation for sales.
+*   **Stock Management:** `Acquisition.quantity` updated upon sale.
+*   **Financial Account Updates:** `FinancialAccount.current_balance` automatically adjusted based on acquisitions, sales payments, and expenditures. Uses `transaction.atomic()` and `select_for_update()` for data integrity.
+*   **Model Validation:** `clean()` methods implemented for data consistency across models.
+*   **Ticket Identifier:** Auto-generated unique identifier for tickets.
+
+Next steps would typically involve building out views, templates, and forms for user interaction, along with more detailed reporting features.
+

@@ -43,8 +43,9 @@ class Acquisition(models.Model):
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='acquisitions')
     ticket = models.ForeignKey(Ticket, on_delete=models.PROTECT, related_name='acquisitions')
     acquisition_date = models.DateField()
-    quantity = models.PositiveIntegerField(help_text="Currently available quantity from this batch.")
-    
+    initial_quantity = models.PositiveIntegerField(help_text="Initial quantity acquired in this batch.")
+    available_quantity = models.PositiveIntegerField(help_text="Available quantity from this batch for sale. Updated by sales operations.", default=0, editable=False)
+
     class Currency(models.TextChoices):
         UZS = 'UZS', 'Uzbek Som'
         USD = 'USD', 'US Dollar'
@@ -94,56 +95,69 @@ class Acquisition(models.Model):
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
+        _original_initial_quantity = 0
+        _original_available_quantity = 0 # Used if initial_quantity changes on an existing record
 
-        # Calculate total_amount based on the *original* quantity intended for this field if it were just total acquired.
-        # Since self.quantity now means *available*, total_amount should be based on the initial input quantity.
-        # This requires a bit of care. If quantity is editable in admin, this might get tricky.
-        # For now, we assume total_amount is calculated based on the quantity field at the point of save for this batch definition.
-        if self.transaction_currency == self.Currency.UZS and self.unit_price_uzs is not None:
-            self.total_amount = self.quantity * self.unit_price_uzs # This might need adjustment if quantity is edited later
-        elif self.transaction_currency == self.Currency.USD and self.unit_price_usd is not None:
-            self.total_amount = self.quantity * self.unit_price_usd # Same here
-        else:
-            self.total_amount = 0 
-        
-        # No need to initialize available_quantity separately anymore
-
-        original_paid_from_account_id = None
-        original_total_amount_for_payment = Decimal('0.00') # Use a distinct variable for payment part
-        is_update_for_payment = self.pk is not None and not is_new 
-
-        if is_update_for_payment:
+        if not is_new:
             try:
                 original_instance = Acquisition.objects.get(pk=self.pk)
+                _original_initial_quantity = original_instance.initial_quantity
+                _original_available_quantity = original_instance.available_quantity
+                # For financial calculations
                 original_paid_from_account_id = original_instance.paid_from_account_id
-                # original_total_amount for payment should be based on ITS total_amount, not current calculation
-                original_total_amount_for_payment = original_instance.total_amount 
+                original_total_amount_for_payment = original_instance.total_amount
             except Acquisition.DoesNotExist:
-                is_update_for_payment = False 
+                is_new = True # Treat as new if original somehow vanished
+                original_paid_from_account_id = None # Ensure these are reset
+                original_total_amount_for_payment = Decimal('0.00')
+        else:
+            original_paid_from_account_id = None
+            original_total_amount_for_payment = Decimal('0.00')
+
+
+        # Calculate total_amount based on the initial_quantity
+        if self.transaction_currency == self.Currency.UZS and self.unit_price_uzs is not None:
+            self.total_amount = self.initial_quantity * self.unit_price_uzs
+        elif self.transaction_currency == self.Currency.USD and self.unit_price_usd is not None:
+            self.total_amount = self.initial_quantity * self.unit_price_usd
+        else:
+            self.total_amount = Decimal('0.00')
+        
+        if is_new:
+            self.available_quantity = self.initial_quantity # Set available from initial on creation
+        else:
+            # If initial quantity changed on an existing record, adjust available quantity
+            if self.initial_quantity != _original_initial_quantity:
+                quantity_diff = self.initial_quantity - _original_initial_quantity
+                # Adjust available quantity, ensuring it's not negative or more than new initial quantity
+                self.available_quantity = max(0, min(self.initial_quantity, _original_available_quantity + quantity_diff))
+            # If initial_quantity didn't change, available_quantity is preserved (it's managed by sales or other processes)
+
+        # Financial account update logic (largely unchanged, but relies on correct total_amount)
+        # Renamed local variables for clarity in this scope
+        _current_paid_from_account_id = self.paid_from_account_id if self.paid_from_account else None
 
         with transaction.atomic():
-            super().save(*args, **kwargs) 
-
-            if is_update_for_payment and original_paid_from_account_id and \
-               (original_paid_from_account_id != self.paid_from_account_id or original_total_amount_for_payment != self.total_amount):
+            # Revert payment from old account if account changed or total_amount changed
+            if not is_new and original_paid_from_account_id and \
+               (original_paid_from_account_id != _current_paid_from_account_id or original_total_amount_for_payment != self.total_amount):
                 try:
                     old_account = FinancialAccount.objects.get(pk=original_paid_from_account_id)
                     old_account.current_balance += original_total_amount_for_payment
                     old_account.save()
                 except FinancialAccount.DoesNotExist:
+                    # Log this error or handle appropriately
                     pass 
             
+            super().save(*args, **kwargs) # Save the Acquisition instance itself
+
+            # Deduct payment from new/current account if account is set and
+            # (it's a new acquisition or account/total_amount changed)
             if self.paid_from_account and \
-               (is_new or (is_update_for_payment and (original_paid_from_account_id != self.paid_from_account_id or original_total_amount_for_payment != self.total_amount))):
+               (is_new or (original_paid_from_account_id != _current_paid_from_account_id or original_total_amount_for_payment != self.total_amount)):
                 self.paid_from_account.current_balance -= self.total_amount
                 self.paid_from_account.save()
 
     def __str__(self):
         ticket_identifier = self.ticket.identifier if self.ticket and hasattr(self.ticket, 'identifier') and self.ticket.identifier else f"Ticket ID: {self.ticket_id}"
-        # quantity now directly represents available quantity
-        return f"Acquisition of {self.ticket.description if self.ticket else 'N/A'}: {self.quantity} available (ID: {ticket_identifier}) from {self.supplier.name}"
-
-    # Consider adding a clean method here to validate that:
-    # 1. Either unit_price_uzs OR unit_price_usd is provided based on transaction_currency.
-    # 2. total_amount matches quantity * unit_price (in transaction_currency).
-    # 3. paid_from_account.currency matches transaction_currency.
+        return f"Acquisition of {self.ticket.description if self.ticket else 'N/A'}: {self.initial_quantity} bought, {self.available_quantity} available (ID: {ticket_identifier}) from {self.supplier.name}"

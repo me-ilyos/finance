@@ -69,7 +69,7 @@ class Sale(models.Model):
 
         if self.related_acquisition:
             # Effective available quantity for this sale/update
-            effective_available_qty = self.related_acquisition.quantity
+            effective_available_qty = self.related_acquisition.available_quantity
             if self.pk: # if updating an existing sale
                 original_sale = Sale.objects.get(pk=self.pk)
                 if self.related_acquisition_id == original_sale.related_acquisition_id:
@@ -132,32 +132,32 @@ class Sale(models.Model):
         self.profit = self.total_sale_amount - total_cost_for_sold_items # Profit in sale_currency
 
         with transaction.atomic():
-            # 3. Update Stock (Acquisition.quantity)
+            # 3. Update Stock (Acquisition.available_quantity)
             # Lock the related acquisition row
             current_acq_to_update = Acquisition.objects.select_for_update().get(pk=self.related_acquisition_id)
 
             if is_new:
-                if self.quantity > current_acq_to_update.quantity:
-                    raise ValidationError(f"Stock error (save): Tried to sell {self.quantity}, but only {current_acq_to_update.quantity} available.")
-                current_acq_to_update.quantity -= self.quantity
+                if self.quantity > current_acq_to_update.available_quantity:
+                    raise ValidationError(f"Stock error (save): Tried to sell {self.quantity}, but only {current_acq_to_update.available_quantity} available.")
+                current_acq_to_update.available_quantity -= self.quantity
             else: # Handle updates
                 quantity_diff = self.quantity - original_quantity
                 
                 if original_related_acquisition_id and original_related_acquisition_id != self.related_acquisition_id:
                     # Acquisition changed: Revert stock on old, deduct from new
                     old_acq = Acquisition.objects.select_for_update().get(pk=original_related_acquisition_id)
-                    old_acq.quantity += original_quantity
+                    old_acq.available_quantity += original_quantity
                     old_acq.save()
                     
-                    if self.quantity > current_acq_to_update.quantity:
-                        raise ValidationError(f"Stock error (save-acq changed): Tried to sell {self.quantity} from new batch, but only {current_acq_to_update.quantity} available.")
-                    current_acq_to_update.quantity -= self.quantity
+                    if self.quantity > current_acq_to_update.available_quantity:
+                        raise ValidationError(f"Stock error (save-acq changed): Tried to sell {self.quantity} from new batch, but only {current_acq_to_update.available_quantity} available.")
+                    current_acq_to_update.available_quantity -= self.quantity
                 elif quantity_diff != 0: # Same acquisition, quantity changed
                     # We need to ensure this adjustment doesn't make quantity negative based on its current state
-                    if quantity_diff > 0 and quantity_diff > current_acq_to_update.quantity:
-                         raise ValidationError(f"Stock error (save-qty increased): Tried to increase sale by {quantity_diff}, but only {current_acq_to_update.quantity} net available.")
+                    if quantity_diff > 0 and quantity_diff > current_acq_to_update.available_quantity:
+                         raise ValidationError(f"Stock error (save-qty increased): Tried to increase sale by {quantity_diff}, but only {current_acq_to_update.available_quantity} net available.")
                     # If quantity_diff < 0, we are returning stock, which should always be fine.
-                    current_acq_to_update.quantity -= quantity_diff 
+                    current_acq_to_update.available_quantity -= quantity_diff 
             
             current_acq_to_update.save()
             
@@ -191,9 +191,9 @@ class Sale(models.Model):
                     pass 
                 else: # Not paid or partially paid (handled by None for now) - increase outstanding balance
                     agent_to_update = Agent.objects.get(pk=self.agent_id)
-                    if self.sale_currency == Agent.Currency.USD:
+                    if self.sale_currency == Sale.SaleCurrency.USD:
                         agent_to_update.outstanding_balance_usd += self.total_sale_amount
-                    elif self.sale_currency == Agent.Currency.UZS:
+                    elif self.sale_currency == Sale.SaleCurrency.UZS:
                         agent_to_update.outstanding_balance_uzs += self.total_sale_amount
                     agent_to_update.save()
             # Note: Updating agent balance on sale *edit* (if payment status/amount changes) needs careful handling of old state.
