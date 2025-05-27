@@ -1,9 +1,7 @@
 from .base import *
 
-# Override or add settings for production here
 DEBUG = False
 
-# Replace with your actual domain(s) in production
 ALLOWED_HOSTS = ['your_domain.com', 'www.your_domain.com']
 
 # Example: Configure a different database for production
