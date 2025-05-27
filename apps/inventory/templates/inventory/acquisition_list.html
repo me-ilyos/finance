@@ -7,13 +7,75 @@
 
 {% block content %}
 <div class="container-fluid">
+    
+    {% comment %} Display Django Messages {% endcomment %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
     <div class="card shadow mb-4">
-        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+        <div class="card-header py-3">
             <h6 class="m-0 font-weight-bold text-primary">Barcha Xaridlar</h6>
-            <!-- Optional: Add a button to create new acquisition -->
-            <!-- <a href="#" class="btn btn-primary btn-sm">Yangi Xarid Qo'shish</a> -->
         </div>
         <div class="card-body">
+            <form method="get" action="" class="mb-4 p-3 border rounded bg-light">
+                <div class="row g-2 align-items-end">
+                    <!-- Specific Day Filter -->
+                    <div class="col-md-2">
+                        <label for="date_filter_input" class="form-label mb-1"><small>Kun bo'yicha:</small></label>
+                        <input type="date" name="date_filter" id="date_filter_input" class="form-control form-control-sm"
+                               value="{{ current_date_filter|default_if_none:'' }}">
+                    </div>
+                    <div class="col-md-auto">
+                        <button type="submit" name="filter_period" value="day" class="btn btn-sm btn-outline-secondary">Kun</button>
+                    </div>
+
+                    <!-- Week/Month Filters -->
+                    <div class="col-md-auto">
+                         <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="submit" name="filter_period" value="week" class="btn btn-sm btn-outline-secondary">Hafta</button>
+                            <button type="submit" name="filter_period" value="month" class="btn btn-sm btn-outline-secondary">Oy</button>
+                        </div>
+                    </div>
+
+                    <!-- Custom Range Filters -->
+                    <div class="col-md-2">
+                        <label for="start_date_input" class="form-label mb-1"><small>Oraliq (dan):</small></label>
+                        <input type="date" name="start_date" id="start_date_input" class="form-control form-control-sm"
+                               value="{{ current_start_date|default_if_none:'' }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="end_date_input" class="form-label mb-1"><small>Oraliq (gacha):</small></label>
+                        <input type="date" name="end_date" id="end_date_input" class="form-control form-control-sm"
+                               value="{{ current_end_date|default_if_none:'' }}">
+                    </div>
+                    <div class="col-md-auto">
+                         <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
+                        <button type="submit" name="filter_period" value="custom" class="btn btn-sm btn-outline-secondary">Oraliq</button>
+                    </div>
+                    
+                    <!-- Add New Acquisition Button -->
+                    <div class="col-md-auto">
+                        <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
+                        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addAcquisitionModal">
+                            <i class="fas fa-plus me-1"></i> Yangi Xarid
+                        </button>
+                    </div>
+
+                    <!-- Clear Filter -->
+                    <div class="col-md-auto ms-md-auto"> <!-- Push to the right on medium screens and up -->
+                        <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
+                        <a href="{% url 'inventory:acquisition-list' %}" class="btn btn-sm btn-link text-decoration-none">Tozalash</a>
+                    </div>
+                </div>
+            </form>
+
             <div class="table-responsive">
                 <table class="table table-striped table-hover align-middle" id="acquisitionTable" width="100%" cellspacing="0">
                     <thead class="table-light">
@@ -60,7 +122,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="9" class="text-center py-3 px-3">Hozircha xaridlar mavjud emas.</td>
+                            <td colspan="9" class="text-center py-3 px-3">Hozircha xaridlar mavjud emas yoki tanlangan filtrga mos kelmadi.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -72,12 +134,12 @@
                 <ul class="pagination justify-content-center">
                     {% if page_obj.has_previous %}
                         <li class="page-item">
-                            <a class="page-link" href="?page=1" aria-label="First">
+                            <a class="page-link" href="?page=1{% if query_params %}&{{ query_params }}{% endif %}" aria-label="First">
                                 <span aria-hidden="true">&laquo;&laquo;</span>
                             </a>
                         </li>
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}" aria-label="Previous">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if query_params %}&{{ query_params }}{% endif %}" aria-label="Previous">
                                 <span aria-hidden="true">&laquo;</span>
                             </a>
                         </li>
@@ -94,18 +156,18 @@
                         {% if page_obj.number == num %}
                             <li class="page-item active" aria-current="page"><span class="page-link">{{ num }}</span></li>
                         {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                            <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
+                            <li class="page-item"><a class="page-link" href="?page={{ num }}{% if query_params %}&{{ query_params }}{% endif %}">{{ num }}</a></li>
                         {% endif %}
                     {% endfor %}
 
                     {% if page_obj.has_next %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.next_page_number }}" aria-label="Next">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if query_params %}&{{ query_params }}{% endif %}" aria-label="Next">
                                 <span aria-hidden="true">&raquo;</span>
                             </a>
                         </li>
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}" aria-label="Last">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if query_params %}&{{ query_params }}{% endif %}" aria-label="Last">
                                 <span aria-hidden="true">&raquo;&raquo;</span>
                             </a>
                         </li>
@@ -123,4 +185,97 @@
         </div>
     </div>
 </div>
+
+<!-- Add Acquisition Modal -->
+<div class="modal fade" id="addAcquisitionModal" tabindex="-1" aria-labelledby="addAcquisitionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="post" action="{% url 'inventory:acquisition-list' %}" id="acquisitionModalForm">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addAcquisitionModalLabel">Yangi Xarid Qo'shish</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {% for field in acquisition_form %}
+                        <div class="mb-3 row {% if field.name == 'unit_price_uzs' or field.name == 'unit_price_usd' %}price-field-wrapper initially-hidden{% endif %}" 
+                             id="wrapper_{{ field.id_for_label }}">
+                            <label for="{{ field.id_for_label }}" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">{{ field.label }}</label>
+                            <div class="col-sm-8">
+                                {{ field }}
+                                {% if field.help_text %}
+                                    <small class="form-text text-muted">{{ field.help_text }}</small>
+                                {% endif %}
+                                {% for error in field.errors %}
+                                    <div class="invalid-feedback d-block">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                    {% for error in acquisition_form.non_field_errors %}
+                        <div class="alert alert-danger">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Bekor Qilish</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const currencySelectModal = document.getElementById('id_transaction_currency_modal');
+    const priceUzsWrapperModal = document.getElementById('wrapper_id_unit_price_uzs');
+    const priceUsdWrapperModal = document.getElementById('wrapper_id_unit_price_usd');
+    const priceUzsFieldModal = document.getElementById('id_unit_price_uzs');
+    const priceUsdFieldModal = document.getElementById('id_unit_price_usd');
+
+    function togglePriceFieldsModal() {
+        if (!currencySelectModal || !priceUzsWrapperModal || !priceUsdWrapperModal || !priceUzsFieldModal || !priceUsdFieldModal) {
+            // console.warn('Modal price fields or wrappers not found. Check IDs.'); // Kept for debugging if needed
+            return;
+        }
+        const selectedCurrency = currencySelectModal.value;
+
+        priceUzsWrapperModal.classList.add('initially-hidden');
+        priceUzsWrapperModal.style.setProperty('display', 'none', 'important');
+        priceUzsFieldModal.required = false;
+
+        priceUsdWrapperModal.classList.add('initially-hidden');
+        priceUsdWrapperModal.style.setProperty('display', 'none', 'important');
+        priceUsdFieldModal.required = false;
+
+        if (selectedCurrency === 'UZS') {
+            priceUzsWrapperModal.classList.remove('initially-hidden');
+            priceUzsWrapperModal.style.setProperty('display', 'flex', 'important'); 
+            priceUzsFieldModal.required = true;
+            if (priceUsdFieldModal) priceUsdFieldModal.value = '';
+            // Removed: priceUzsFieldModal.value = formatNumberWithSpaces(priceUzsFieldModal.value, false);
+        } else if (selectedCurrency === 'USD') {
+            priceUsdWrapperModal.classList.remove('initially-hidden');
+            priceUsdWrapperModal.style.setProperty('display', 'flex', 'important');
+            priceUsdFieldModal.required = true;
+            if (priceUzsFieldModal) priceUzsFieldModal.value = '';
+            // Removed: priceUsdFieldModal.value = formatNumberWithSpaces(priceUsdFieldModal.value, true);
+        } 
+    }
+
+    if (currencySelectModal) {
+        currencySelectModal.addEventListener('change', togglePriceFieldsModal);
+        togglePriceFieldsModal(); 
+    }
+
+    var addAcquisitionModalElement = document.getElementById('addAcquisitionModal');
+    if (addAcquisitionModalElement) {
+        addAcquisitionModalElement.addEventListener('shown.bs.modal', function () {
+            if (currencySelectModal) togglePriceFieldsModal(); 
+        });
+    }
+});
+</script>
 {% endblock %} 
