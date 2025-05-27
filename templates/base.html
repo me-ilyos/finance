@@ -47,8 +47,8 @@
         #sidebar-wrapper .sidebar-footer {
             position: absolute;
             bottom: 0;
-            width: 100%;
-            padding: 1rem;
+            /* width: 100%; */
+            padding: 1rem 0;
             border-top: 1px solid #495057;
         }
 
@@ -149,12 +149,9 @@
                 </a>
             </div>
             <div class="sidebar-footer">
-                <form method="post" action="#" class="w-100 d-grid">
-                    {% csrf_token %}
-                    <button type="submit" class="list-group-item list-group-item-action w-100 text-start rounded-0">
-                        <i class="fas fa-sign-out-alt"></i> Chiqish
-                    </button>
-                </form>
+                <a href="{% url 'logout' %}" class="list-group-item list-group-item-action text-start rounded-0">
+                    <i class="fas fa-sign-out-alt"></i> Chiqish
+                </a>
             </div>
         </aside>
         <!-- /#sidebar-wrapper -->
@@ -184,11 +181,18 @@
                                     </a>
                                     <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
                                         <li><a class="dropdown-item" href="#">Profil</a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <form method="post" action="{% url 'logout' %}" style="margin: 0;">
+                                                {% csrf_token %}
+                                                <button type="submit" class="dropdown-item">Chiqish</button>
+                                            </form>
+                                        </li>
                                     </ul>
                                 </li>
                             {% else %}
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#">Kirish</a> <!-- Placeholder for login_url -->
+                                    <a class="nav-link" href="{% url 'login' %}">Kirish</a>
                                 </li>
                                 <li class="nav-item">
                                     <a class="nav-link" href="#">Ro'yxatdan o'tish</a> <!-- Placeholder for signup_url -->
@@ -211,11 +215,6 @@
                 {% endblock %}
             </main>
 
-            <footer class="bg-light text-center text-lg-start mt-auto border-top">
-                <div class="text-center p-3" style="background-color: rgba(0, 0, 0, 0.02);">
-                    © {% now "Y" %} AirTicketPro Boshqaruv Tizimi
-                </div>
-            </footer>
         </div>
         <!-- /#page-content-wrapper -->
     </div>

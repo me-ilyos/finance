@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+
+{% block title %}Kirish - Aviachiptalarni Boshqarish{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <h2 class="text-center mb-4">Tizimga Kirish</h2>
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger" role="alert">
+                            {% for error in form.non_field_errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            {{ form.username.label_tag }}
+                            {{ form.username }}
+                            {% if form.username.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.username.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="mb-3">
+                            {{ form.password.label_tag }}
+                            {{ form.password }}
+                            {% if form.password.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.password.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg">Kirish</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<style>
+    body {
+        background-color: #f8f9fa; /* Light gray background for login page */
+    }
+    #sidebar-wrapper, .navbar, footer {
+        display: none; /* Hide sidebar, navbar, and footer on login page */
+    }
+    #page-content-wrapper {
+        min-width: 100vw; /* Ensure content takes full width */
+        padding-left: 0 !important; /* Override any sidebar-related padding */
+    }
+    .main-content-area {
+        padding-top: 3rem; /* Adjust top padding as needed */
+    }
+</style>
+{% endblock %} 
