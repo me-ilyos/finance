@@ -139,7 +139,10 @@
                 <a href="{% url 'inventory:acquisition-list' %}" class="list-group-item list-group-item-action">
                     <i class="fas fa-shopping-cart"></i> Chipta Xaridlari
                 </a>
-                <a href="#" class="list-group-item list-group-item-action active">
+                <a href="{% url 'contacts:supplier-list' %}" class="list-group-item list-group-item-action">
+                    <i class="fas fa-truck-loading"></i> Ta'minotchilar
+                </a>
+                <a href="#" class="list-group-item list-group-item-action">
                     <i class="fas fa-receipt"></i> Chipta Sotuvlari
                 </a>
                 <a href="#" class="list-group-item list-group-item-action">
@@ -148,7 +151,7 @@
                 <a href="#" class="list-group-item list-group-item-action">
                     <i class="fas fa-book"></i> Hisob Kitob
                 </a>
-                <a href="#" class="list-group-item list-group-item-action">
+                <a href="{% url 'contacts:agent-list' %}" class="list-group-item list-group-item-action">
                     <i class="fas fa-users"></i> Agentlar
                 </a>
             </div>

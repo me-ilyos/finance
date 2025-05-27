@@ -13,17 +13,17 @@ class AcquisitionForm(forms.ModelForm):
     )
     ticket_description = forms.CharField(
         widget=forms.TextInput(attrs={'class': 'form-control form-control-sm'}),
-        label="Chipta Tavsifi (Manzil/Tur Nomi)"
+        label="Manzil/Tur Nomi"
     )
     ticket_departure_date_time = forms.DateTimeField(
         widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control form-control-sm'}),
-        label="Uchish/Boshlanish Vaqti",
+        label="Uchish Vaqti",
         initial=timezone.now().strftime('%Y-%m-%dT%H:%M')
     )
     ticket_arrival_date_time = forms.DateTimeField(
         required=False, 
         widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control form-control-sm'}),
-        label="Qo'nish/Tugash Vaqti (Ixtiyoriy)"
+        label="Qo'nish vaqti"
     )
 
     # Acquisition specific fields
@@ -64,12 +64,12 @@ class AcquisitionForm(forms.ModelForm):
         queryset=FinancialAccount.objects.all(), 
         required=False,
         widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
-        label="To'lov Hisobi (Ixtiyoriy)"
+        label="To'lov"
     )
     notes = forms.CharField(
         required=False,
         widget=forms.Textarea(attrs={'class': 'form-control form-control-sm', 'rows': 3}),
-        label="Izohlar (Ixtiyoriy)"
+        label="Izohlar"
     )
 
     class Meta:
@@ -92,17 +92,17 @@ class AcquisitionForm(forms.ModelForm):
         )
         self.fields['ticket_description'] = forms.CharField(
             widget=forms.TextInput(attrs={'class': 'form-control form-control-sm'}),
-            label="Chipta Tavsifi (Manzil/Tur Nomi)" 
+            label="Manzil/Tur Nomi" 
         )
         self.fields['ticket_departure_date_time'] = forms.DateTimeField(
             widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control form-control-sm'}),
-            label="Uchish/Boshlanish Vaqti",
+            label="Uchish Vaqti",
             initial=timezone.now().strftime('%Y-%m-%dT%H:%M')
         )
         self.fields['ticket_arrival_date_time'] = forms.DateTimeField(
             required=False, 
             widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control form-control-sm'}),
-            label="Qo'nish/Tugash Vaqti (Ixtiyoriy)"
+            label="Qo'nish vaqti"
         )
         
         # Reorder fields to put ticket fields first, then acquisition fields

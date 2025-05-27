@@ -72,3 +72,81 @@ All core models (`Supplier`, `Agent`, `Ticket`, `Acquisition`, `Sale`, `Financia
 
 Next steps would typically involve building out views, templates, and forms for user interaction, along with more detailed reporting features.
 
+## Completed Features & Modifications - Air Ticket Management System
+
+This document summarizes the key features and modifications implemented during the current development session.
+
+### 1. Acquisition Listing and Viewing
+
+*   **Acquisition List View (`AcquisitionListView`):**
+    *   Created a Django class-based view (`ListView`) in `apps/inventory/views.py` to display a paginated list of all `Acquisition` records.
+    *   The view fetches acquisitions, ordering them by `acquisition_date` (descending) and then `created_at` (descending) to show the latest entries first.
+    *   It utilizes `select_related` for `supplier`, `ticket`, and `paid_from_account` to optimize database queries.
+*   **HTML Template (`acquisition_list.html`):**
+    *   Created a new template `apps/inventory/templates/inventory/acquisition_list.html` that extends `base.html`.
+    *   Displays acquisition data in a Bootstrap-styled table (`table-striped`, `table-hover`, `align-middle`).
+    *   Table columns include: Sana (Date), Ta'minotchi (Supplier), Chipta (Turi) (Ticket Type), Chipta (Tavsifi) (Ticket Description), Miqdori (Mavjud/Boshl.) (Quantity Available/Initial), Narx (Birlik) (Unit Price), Jami Summa (Total Amount), To'lov Hisobi (Payment Account), Izohlar (Notes).
+    *   Monetary values are formatted with currency symbols (UZS or $) and use `django.contrib.humanize` (`intcomma`) for thousand separators.
+    *   Date format is `dd.mm.YYYY`.
+    *   Long text fields (description, notes) are truncated for better table layout.
+    *   Includes Bootstrap pagination controls.
+*   **URL Configuration:**
+    *   Added URL patterns in `apps/inventory/urls.py` for the `acquisition-list` view.
+    *   Included these inventory URLs in the main `apps/core/urls.py` under the `/inventory/` path and `inventory` namespace.
+*   **Navigation:**
+    *   Added a link "Chipta Xaridlari" (Ticket Acquisitions) in the sidebar of `templates/base.html` pointing to the new list view.
+
+### 2. Date Filtering for Acquisitions
+
+*   **View Logic Update (`AcquisitionListView`):**
+    *   Enhanced `get_queryset` to process GET parameters for date filtering: `filter_period` (day, week, month, custom), `date_filter` (for specific day), `start_date`, `end_date` (for custom range).
+    *   Handles invalid date formats gracefully by showing Django messages.
+    *   `get_context_data` was updated to pass current filter values to the template for form state preservation and to construct query parameters for pagination links (maintaining filters across pages).
+*   **Template Update (`acquisition_list.html`):**
+    *   Added a filter form above the acquisitions table.
+    *   Filter controls are arranged in a single row for a compact layout, including:
+        *   A date input for specific day selection with a "Kun" (Day) button.
+        *   Buttons for "Hafta" (Week) and "Oy" (Month).
+        *   Date inputs for custom start and end dates with an "Oraliq" (Range) button.
+        *   A "Tozalash" (Clear Filter) link to reset all date filters.
+    *   Pagination links now correctly preserve active filters.
+
+### 3. Acquisition Creation via Modal Form
+
+*   **`AcquisitionForm` (`apps/inventory/forms.py`):**
+    *   Created a `ModelForm` for the `Acquisition` model.
+    *   Integrated **on-the-fly Ticket creation**: The form now includes fields to define a new `Ticket` (`ticket_type`, `ticket_description`, `ticket_departure_date_time`, `ticket_arrival_date_time`) directly within the acquisition creation process.
+    *   The `ticket` `ModelChoiceField` was removed from the form, as the ticket is now created and linked within the form's save logic.
+    *   The form's `__init__` method dynamically adds these ticket fields and orders all fields for logical presentation in the modal (ticket fields first).
+    *   The form's `save()` method is overridden to:
+        1.  Create and save a new `Ticket` instance using the provided ticket-specific form data.
+        2.  Assign this newly created `Ticket` to the `Acquisition` instance.
+        3.  Save the `Acquisition` instance.
+    *   Form fields are styled using Bootstrap classes (`form-select-sm`, `form-control-sm`).
+    *   Date/datetime fields use appropriate HTML5 input types.
+    *   `transaction_currency` defaults to 'UZS'.
+*   **View Logic Update (`AcquisitionListView`):**
+    *   Handles `POST` requests to validate and save the `AcquisitionForm`.
+    *   If the form is valid, a success message is displayed, and the user is redirected to the acquisition list.
+    *   If the form is invalid, error messages are displayed, and the form (with errors) is passed back to the template context.
+    *   An unbound `AcquisitionForm` instance is passed to the context for rendering in the modal on GET requests.
+*   **Template Update (`acquisition_list.html`):**
+    *   Added a "Yangi Xarid" (New Acquisition) button in the filter bar (previously in the card header).
+    *   This button triggers a Bootstrap modal (`addAcquisitionModal`).
+    *   The modal contains the `acquisition_form`, rendered field by field to allow for Bootstrap's horizontal form layout (`col-sm-4` for label, `col-sm-8` for field) and error display.
+    *   Includes a section to display Django messages (e.g., for success/error feedback on form submission) at the top of the page.
+*   **Client-Side Interactivity (JavaScript):**
+    *   Added JavaScript in the `extra_js` block for the modal form:
+        *   Dynamically shows/hides the `unit_price_uzs` and `unit_price_usd` input fields based on the selection in the `transaction_currency` dropdown.
+        *   Sets the `required` attribute on the visible price field.
+        *   Ensures the correct price field is visible when the modal is opened/reshown (e.g., after a form validation error or on initial load with default currency).
+        *   The `initially-hidden` CSS class (defined in `base.html`) is used to hide price fields by default, and JS manipulates their display style (`display: flex !important` or `display: none !important`) to override this.
+    *   Removed previously attempted on-the-fly number formatting for price fields due to complexity and user request.
+
+### 4. General Setup & Fixes
+
+*   **`django.contrib.humanize`:** Added to `INSTALLED_APPS` in `config/settings/base.py` to enable template filters like `intcomma`.
+*   **Linter Error Resolution:** Addressed a CSS linter false positive by moving conditional inline styles for hiding elements to a CSS class (`.initially-hidden`) in `base.html` and applying this class conditionally in the template.
+
+This comprehensive set of changes provides a functional interface for listing, filtering, and creating new acquisitions, including the creation of associated tickets directly within the acquisition process.
+
