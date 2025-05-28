@@ -148,5 +148,33 @@ This document summarizes the key features and modifications implemented during t
 *   **`django.contrib.humanize`:** Added to `INSTALLED_APPS` in `config/settings/base.py` to enable template filters like `intcomma`.
 *   **Linter Error Resolution:** Addressed a CSS linter false positive by moving conditional inline styles for hiding elements to a CSS class (`.initially-hidden`) in `base.html` and applying this class conditionally in the template.
 
+### 5. Contact Management (Agents & Suppliers)
+
+*   **Agent and Supplier Listing & Creation:**
+    *   Created `AgentListView` and `SupplierListView` (class-based views) in `apps/contacts/views.py`.
+    *   These views handle both GET requests (displaying a paginated list of agents/suppliers and an empty form for creation) and POST requests (validating and saving new agent/supplier data from a modal form).
+    *   Implemented pagination (10 items per page) for both lists.
+    *   On successful creation, a success message is displayed, and the user is redirected to the respective list.
+    *   On form errors, an error message is displayed, and the form (with errors) is re-rendered in the modal.
+*   **Forms (`AgentForm`, `SupplierForm` in `apps/contacts/forms.py`):
+    *   Created `ModelForms` for `Agent` and `Supplier` models.
+    *   Fields include `name`, `phone_number`, and `notes`.
+    *   Widgets are styled using Bootstrap classes (`form-control-sm`).
+    *   Field labels were translated to Uzbek (e.g., "Nomi", "Telefon Raqami", "Izohlar").
+*   **HTML Templates (`agent_list.html`, `supplier_list.html`):
+    *   Created new templates in `apps/contacts/templates/contacts/`.
+    *   Each template extends `base.html` and displays a list of existing contacts (agents or suppliers) in a Bootstrap table.
+    *   Table columns include relevant information like name, phone number, notes, and creation date. Agent list also shows outstanding balances.
+    *   Includes a "Yangi ... Qo'shish" (Add New ...) button that triggers a Bootstrap modal (`addAgentModal` or `addSupplierModal`).
+    *   The modal contains the respective creation form (`agent_form` or `supplier_form`).
+    *   JavaScript is included to automatically show the modal if the page reloads due to form submission errors.
+*   **URL Configuration:**
+    *   Created `apps/contacts/urls.py` with `app_name = 'contacts'`.
+    *   Defined URL patterns for `agent-list` and `supplier-list` views.
+    *   Included these contact URLs in the main `config/urls.py` under the `/contacts/` path.
+*   **Navigation Update (`templates/base.html`):
+    *   Added "Agentlar" (Agents) and "Ta'minotchilar" (Suppliers) links to the sidebar, pointing to the new list views.
+    *   Sidebar icons were updated for better visual distinction.
+
 This comprehensive set of changes provides a functional interface for listing, filtering, and creating new acquisitions, including the creation of associated tickets directly within the acquisition process.
 

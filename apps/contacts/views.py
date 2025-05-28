@@ -4,6 +4,8 @@ from django.contrib import messages
 from django.core.paginator import Paginator
 from .models import Agent, Supplier
 from .forms import AgentForm, SupplierForm
+from django.views.generic import ListView, CreateView, DetailView
+from apps.sales.models import Sale # To list sales related to an agent
 
 # Create your views here.
 
@@ -72,3 +74,19 @@ class SupplierListView(View):
                 'is_paginated': page_obj.has_other_pages(),
                 'page_obj': page_obj
             })
+
+class AgentDetailView(DetailView):
+    model = Agent
+    template_name = 'contacts/agent_detail.html'
+    context_object_name = 'agent'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        agent = self.get_object()
+        context['agent_sales'] = Sale.objects.filter(agent=agent).select_related(
+            'related_acquisition', 
+            'related_acquisition__ticket', 
+            'paid_to_account'
+        ).order_by('-sale_date')
+        # Add other relevant context later, e.g., payments
+        return context

@@ -1,0 +1,418 @@
+{% extends 'base.html' %}
+{% load humanize %} {% comment %} Load humanize for intcomma {% endcomment %}
+
+{% block title %}Sotuvlar Ro'yxati{% endblock %}
+
+{% block page_title %}Sotuvlar Ro'yxati{% endblock %}
+
+{% block content %}
+<style>
+    .totals-row td {
+        background-color: #CCFFCC !important;
+        font-weight: bold;
+    }
+    .table .price-col { /* Target price columns specifically */
+        min-width: 180px; /* Adjust as needed for two sub-columns */
+        padding-top: 0.25rem; /* Reduced padding for cells with internal grid */
+        padding-bottom: 0.25rem;
+        padding-left: 0;
+        padding-right: 0;
+    }
+    .price-col .col { /* Inner columns for UZS/USD */
+        padding: 0.35rem 0.5rem; /* Padding within UZS/USD sub-cells */
+        font-size: 0.875em; /* Using Bootstrap .small equivalent */
+        line-height: 1.3;
+    }
+    th.price-col > div:first-of-type { /* For main header text like "Birlik Narxi" */
+        margin-bottom: 0.25rem;
+    }
+    .standout-col { /* Applied to th and td for Unit Price, Total Sum, Profit */
+        background-color: #f8f9fa !important; /* Light grey background, !important to override stripe */
+    }
+</style>
+<div class="container-fluid">
+    
+    {% comment %} Display Django Messages {% endcomment %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Barcha Sotuvlar</h6>
+        </div>
+        <div class="card-body">
+            <form method="get" action="" class="mb-4 p-3 border rounded bg-light">
+                <div class="row g-2 align-items-end">
+                    <!-- Specific Day Filter -->
+                    <div class="col-md-2">
+                        <label for="date_filter_input" class="form-label mb-1"><small>Kun bo'yicha:</small></label>
+                        <input type="date" name="date_filter" id="date_filter_input" class="form-control form-control-sm"
+                               value="{{ current_date_filter|default_if_none:'' }}">
+                    </div>
+                    <div class="col-md-auto">
+                        <button type="submit" name="filter_period" value="day" class="btn btn-sm btn-outline-secondary">Kun</button>
+                    </div>
+
+                    <!-- Week/Month Filters -->
+                    <div class="col-md-auto">
+                         <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="submit" name="filter_period" value="week" class="btn btn-sm btn-outline-secondary">Hafta</button>
+                            <button type="submit" name="filter_period" value="month" class="btn btn-sm btn-outline-secondary">Oy</button>
+                        </div>
+                    </div>
+
+                    <!-- Custom Range Filters -->
+                    <div class="col-md-2">
+                        <label for="start_date_input" class="form-label mb-1"><small>dan:</small></label>
+                        <input type="date" name="start_date" id="start_date_input" class="form-control form-control-sm"
+                               value="{{ current_start_date|default_if_none:'' }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="end_date_input" class="form-label mb-1"><small>gacha:</small></label>
+                        <input type="date" name="end_date" id="end_date_input" class="form-control form-control-sm"
+                               value="{{ current_end_date|default_if_none:'' }}">
+                    </div>
+                    <div class="col-md-auto">
+                         <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
+                        <button type="submit" name="filter_period" value="custom" class="btn btn-sm btn-outline-secondary">Oraliq</button>
+                    </div>
+                    
+                    <!-- Add New Sale Button -->
+                    <div class="col-md-auto">
+                        <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
+                        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addSaleModal">
+                            <i class="fas fa-plus me-1"></i> Yangi Sotuv
+                        </button>
+                    </div>
+
+                    <!-- Clear Filter -->
+                    <div class="col-md-auto ms-md-auto"> <!-- Push to the right on medium screens and up -->
+                        <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
+                        <a href="{% url 'sales:sale-list' %}" class="btn btn-sm btn-link text-decoration-none">Tozalash</a>
+                    </div>
+                </div>
+            </form>
+
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle" id="saleTable" width="100%" cellspacing="0">
+                    <thead class="table-light">
+                        <tr class="border-bottom border-2">
+                            <th class="py-3 px-3 fw-semibold">Sana</th>
+                            <th class="py-3 px-3 fw-semibold">Chipta (Turi/Manzil)</th>
+                            <th class="py-3 px-3 fw-semibold">Xaridor</th>
+                            <th class="py-3 px-3 fw-semibold text-center">Miqdori</th>
+                            <th class="text-center fw-semibold price-col standout-col align-middle">
+                                <div>Birlik Narxi</div>
+                                <div class="container-fluid gx-0"><div class="row gx-0">
+                                    <div class="col text-center small border-end py-1">UZS</div>
+                                    <div class="col text-center small py-1">USD</div>
+                                </div></div>
+                            </th>
+                            <th class="text-center fw-semibold price-col standout-col align-middle">
+                                <div>Jami Summa</div>
+                                <div class="container-fluid gx-0"><div class="row gx-0">
+                                    <div class="col text-center small border-end py-1">UZS</div>
+                                    <div class="col text-center small py-1">USD</div>
+                                </div></div>
+                            </th>
+                            <th class="text-center fw-semibold price-col standout-col align-middle">
+                                <div>Foyda</div>
+                                <div class="container-fluid gx-0"><div class="row gx-0">
+                                    <div class="col text-center small border-end py-1">UZS</div>
+                                    <div class="col text-center small py-1">USD</div>
+                                </div></div>
+                            </th>
+                            <th class="py-3 px-3 fw-semibold">To'lov Hisobi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sale in sales %}
+                        <tr>
+                            <td class="py-2 px-3">{{ sale.sale_date|date:"d.m.y H:i" }}</td>
+                            <td class="py-2 px-3">
+                                {{ sale.related_acquisition.ticket.get_ticket_type_display }}<br>
+                                <small class="text-muted">{{ sale.related_acquisition.ticket.description|truncatewords:4 }}</small>
+                            </td>
+                            <td class="py-2 px-3">
+                                {% if sale.agent %}Agent: {{ sale.agent.name }}{% elif sale.client_full_name %}{{ sale.client_full_name }}{% else %}Noma'lum{% endif %}
+                            </td>
+                            <td class="py-2 px-3 text-center">{{ sale.quantity|intcomma }}</td>
+                            <td class="price-col standout-col align-middle">
+                                <div class="container-fluid gx-0"><div class="row gx-0">
+                                    <div class="col text-end small border-end">
+                                        {% if sale.sale_currency == 'UZS' %}{{ sale.unit_sale_price|floatformat:0|intcomma }}{% else %}-{% endif %}
+                                    </div>
+                                    <div class="col text-end small">
+                                        {% if sale.sale_currency == 'USD' %}${{ sale.unit_sale_price|floatformat:2|intcomma }}{% else %}-{% endif %}
+                                    </div>
+                                </div></div>
+                            </td>
+                            <td class="price-col standout-col align-middle">
+                                <div class="container-fluid gx-0"><div class="row gx-0">
+                                    <div class="col text-end small border-end">
+                                        {% if sale.sale_currency == 'UZS' %}{{ sale.total_sale_amount|floatformat:0|intcomma }}{% else %}-{% endif %}
+                                    </div>
+                                    <div class="col text-end small">
+                                        {% if sale.sale_currency == 'USD' %}${{ sale.total_sale_amount|floatformat:2|intcomma }}{% else %}-{% endif %}
+                                    </div>
+                                </div></div>
+                            </td>
+                            <td class="price-col standout-col align-middle">
+                                <div class="container-fluid gx-0"><div class="row gx-0">
+                                    <div class="col text-end small border-end">
+                                        {% if sale.sale_currency == 'UZS' %}{{ sale.profit|floatformat:0|intcomma }}{% else %}-{% endif %}
+                                    </div>
+                                    <div class="col text-end small">
+                                        {% if sale.sale_currency == 'USD' %}${{ sale.profit|floatformat:2|intcomma }}{% else %}-{% endif %}
+                                    </div>
+                                </div></div>
+                            </td>
+                            <td class="py-2 px-3">
+                                {% if sale.paid_to_account %}
+                                    {{ sale.paid_to_account.name }}
+                                {% elif sale.agent %}
+                                    <span class="badge bg-warning text-dark">Agent Qarzi</span>
+                                {% else %}
+                                    <span class="badge bg-danger">To'lanmagan</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center py-3 px-3">Sotuvlar mavjud emas yoki filtrga mos kelmadi.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    {% if sales %} {# Show totals row only if there are sales #}
+                    <tfoot class="totals-row">
+                        <tr>
+                            <td colspan="3" class="text-end fw-bold">Jami:</td>
+                            <td class="text-center fw-bold">{{ totals.total_quantity|default:0|intcomma }}</td>
+                            <td class="price-col standout-col align-middle"></td> {# Removed Unit Price Total #}
+                            <td class="price-col standout-col align-middle">
+                                <div class="container-fluid gx-0"><div class="row gx-0">
+                                    <div class="col text-end small border-end fw-bold">{{ totals.total_sum_uzs|default:0|floatformat:0|intcomma }}</div>
+                                    <div class="col text-end small fw-bold">${{ totals.total_sum_usd|default:0|floatformat:2|intcomma }}</div>
+                                </div></div>
+                            </td>
+                            <td class="price-col standout-col align-middle">
+                                <div class="container-fluid gx-0"><div class="row gx-0">
+                                    <div class="col text-end small border-end fw-bold">{{ totals.total_profit_uzs|default:0|floatformat:0|intcomma }}</div>
+                                    <div class="col text-end small fw-bold">${{ totals.total_profit_usd|default:0|floatformat:2|intcomma }}</div>
+                                </div></div>
+                            </td>
+                            <td></td> {# Empty cell for paid_to_account total #}
+                        </tr>
+                    </tfoot>
+                    {% endif %}
+                </table>
+            </div>
+
+            {% if is_paginated %}
+            <nav aria-label="Page navigation" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1{% if query_params %}&{{ query_params }}{% endif %}" aria-label="First">
+                                <span aria-hidden="true">&laquo;&laquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if query_params %}&{{ query_params }}{% endif %}" aria-label="Previous">
+                                <span aria-hidden="true">&laquo;</span>
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">&laquo;&laquo;</span>
+                        </li>
+                        <li class="page-item disabled">
+                            <span class="page-link">&laquo;</span>
+                        </li>
+                    {% endif %}
+
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <li class="page-item active" aria-current="page"><span class="page-link">{{ num }}</span></li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item"><a class="page-link" href="?page={{ num }}{% if query_params %}&{{ query_params }}{% endif %}">{{ num }}</a></li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if query_params %}&{{ query_params }}{% endif %}" aria-label="Next">
+                                <span aria-hidden="true">&raquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if query_params %}&{{ query_params }}{% endif %}" aria-label="Last">
+                                <span aria-hidden="true">&raquo;&raquo;</span>
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">&raquo;</span>
+                        </li>
+                        <li class="page-item disabled">
+                            <span class="page-link">&raquo;&raquo;</span>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Add Sale Modal -->
+<div class="modal fade" id="addSaleModal" tabindex="-1" aria-labelledby="addSaleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="post" action="{% url 'sales:sale-list' %}" id="saleModalForm">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addSaleModalLabel">Yangi Sotuv Qo'shish</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {% comment %} Non-field errors for the form {% endcomment %}
+                    {% if sale_form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in sale_form.non_field_errors %}
+                                <p class="mb-0">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    {% for field in sale_form %}
+                        <div class="mb-3 row" id="wrapper_{{ field.id_for_label }}">
+                            <label for="{{ field.id_for_label }}" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">
+                                {{ field.label }}
+                                {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+                            <div class="col-sm-8">
+                                {{ field }} 
+                                {% if field.help_text %}
+                                    <small class="form-text text-muted d-block mt-1">{{ field.help_text }}</small>
+                                {% endif %}
+                                {% for error in field.errors %}
+                                    <div class="invalid-feedback d-block">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Bekor Qilish</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const agentSelectModal = document.getElementById('id_agent'); // In modal
+    const clientFullNameModal = document.getElementById('id_client_full_name'); // In modal
+    const clientIDNumberModal = document.getElementById('id_client_id_number'); // In modal
+
+    const relatedAcquisitionSelectModal = document.getElementById('id_related_acquisition'); // In Modal
+    const paidToAccountSelectModal = document.getElementById('id_paid_to_account'); // In Modal
+    const paidToAccountLabelModal = document.querySelector("label[for='id_paid_to_account']");
+
+    const initialPaymentAmountWrapper = document.getElementById('wrapper_id_initial_payment_amount');
+    const initialPaymentAmountInput = document.getElementById('id_initial_payment_amount');
+
+    function toggleClientAgentFields() {
+        if (!agentSelectModal || !clientFullNameModal || !clientIDNumberModal || !initialPaymentAmountWrapper || !paidToAccountLabelModal) return;
+
+        if (agentSelectModal.value) {
+            clientFullNameModal.value = '';
+            clientIDNumberModal.value = '';
+            clientFullNameModal.disabled = true;
+            clientIDNumberModal.disabled = true;
+            initialPaymentAmountWrapper.style.display = 'flex'; // Show initial payment field for agent
+            if (paidToAccountLabelModal) paidToAccountLabelModal.firstChild.textContent = "Boshlang'ich To'lov Hisobi";
+        } else {
+            clientFullNameModal.disabled = false;
+            clientIDNumberModal.disabled = false;
+            initialPaymentAmountWrapper.style.display = 'none'; // Hide initial payment field for client
+            if(initialPaymentAmountInput) initialPaymentAmountInput.value = ''; // Clear value when hidden
+            if (paidToAccountLabelModal) paidToAccountLabelModal.firstChild.textContent = "To'lov Hisobi";
+        }
+    }
+
+    async function updatePaymentAccountOptions() {
+        if (!relatedAcquisitionSelectModal || !paidToAccountSelectModal) return;
+
+        const acquisitionId = relatedAcquisitionSelectModal.value;
+        paidToAccountSelectModal.innerHTML = '<option value="">---------</option>'; 
+
+        if (!acquisitionId) {
+            paidToAccountSelectModal.disabled = true;
+            return;
+        }
+
+        paidToAccountSelectModal.disabled = false;
+        
+        try {
+            const url = `/sales/ajax/get-accounts-for-acquisition/${acquisitionId}/`;
+            const response = await fetch(url);
+            if (!response.ok) {
+                console.error('Error fetching accounts:', response.statusText);
+                paidToAccountSelectModal.innerHTML = '<option value="">Hisoblar yuklanmadi</option>';
+                return;
+            }
+            const accounts = await response.json();
+            if (accounts.error) {
+                console.error('Error from server:', accounts.error);
+                paidToAccountSelectModal.innerHTML = '<option value="">Xatolik: ' + accounts.error + '</option>';
+                return;
+            }
+
+            if (accounts.length === 0) {
+                paidToAccountSelectModal.innerHTML = '<option value="">Mos hisob topilmadi</option>';
+            } else {
+                accounts.forEach(account => {
+                    const option = document.createElement('option');
+                    option.value = account.id;
+                    option.textContent = account.name;
+                    paidToAccountSelectModal.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('JavaScript error fetching accounts:', error);
+            paidToAccountSelectModal.innerHTML = '<option value="">Skript xatosi</option>';
+        }
+    }
+
+    if (agentSelectModal) {
+        agentSelectModal.addEventListener('change', toggleClientAgentFields);
+        toggleClientAgentFields(); 
+    }
+
+    if (relatedAcquisitionSelectModal) {
+        relatedAcquisitionSelectModal.addEventListener('change', updatePaymentAccountOptions);
+    }
+    
+    var addSaleModalElement = document.getElementById('addSaleModal');
+    if (addSaleModalElement) {
+        addSaleModalElement.addEventListener('shown.bs.modal', function () {
+            if (agentSelectModal) toggleClientAgentFields(); // Call to set initial state on modal show
+            if (relatedAcquisitionSelectModal.value) updatePaymentAccountOptions(); // Refresh accounts if acq is pre-selected
+        });
+    }
+});
+</script>
+{% endblock %} 

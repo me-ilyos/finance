@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Agent: {{ agent.name }}{% endblock %}
+
+{% block page_title %}Agent Tafsilotlari: {{ agent.name }}{% endblock %}
+
+{% block content %}
+<style>
+    .card-header {
+        background-color: #f8f9fc; /* Lighter grey for headers */
+        border-bottom: 1px solid #e3e6f0;
+        font-weight: 600; /* Slightly bolder headers */
+    }
+    .card.shadow {
+        box-shadow: 0 .15rem 1.75rem 0 rgba(58,59,69,.1)!important; /* Softer shadow */
+    }
+    .table th {
+        background-color: #f1f3f7; /* Light background for table headers */
+        font-weight: 600;
+    }
+    .badge {
+        font-size: 0.8em;
+        padding: 0.4em 0.7em;
+    }
+    .border-left-danger {
+        border-left: .25rem solid #e74a3b!important;
+    }
+    .text-xs {
+        font-size: .7rem;
+    }
+    .agent-info-card .card-body {
+        display: flex;
+        flex-direction: column;
+    }
+    .agent-info-card .agent-details p {
+        margin-bottom: 0.5rem; /* Tighter spacing for agent details */
+    }
+    .agent-info-card .agent-notes {
+        margin-top: auto; /* Pushes notes to the bottom */
+        padding-top: 0.5rem;
+        font-style: italic;
+    }
+</style>
+<div class="container-fluid">
+    <div class="row">
+        <!-- Agent Information Column -->
+        <div class="col-xl-4 col-lg-5 mb-4">
+            <div class="card shadow h-100 agent-info-card">
+                <div class="card-header py-3">
+                    <h6 class="m-0 text-primary"><i class="fas fa-address-card me-2"></i>Agent Ma'lumotlari</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <i class="fas fa-user-tie fa-3x text-gray-400 me-3"></i>
+                        <div>
+                            <h4 class="mb-0 font-weight-bold text-gray-800">{{ agent.name }}</h4>
+                        </div>
+                    </div>
+                    <div class="agent-details">
+                        <p><strong>Telefon:</strong> {{ agent.phone_number|default:"N/A" }}</p>
+                        <p><strong>Qo'shilgan sana:</strong> {{ agent.created_at|date:"d.m.Y H:i" }}</p>
+                    </div>
+                    {% if agent.notes %}
+                        <p class="card-text agent-notes"><small class="text-muted"><strong>Izohlar:</strong> {{ agent.notes }}</small></p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Debt Information Column -->
+        <div class="col-xl-8 col-lg-7 mb-4">
+            <div class="row">
+                <div class="col-md-6 mb-4 mb-md-0">
+                    <div class="card border-left-danger shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                        Mavjud Qarz (UZS)</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">{{ agent.outstanding_balance_uzs|floatformat:"0"|intcomma }} UZS</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-file-invoice-dollar fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card border-left-danger shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                        Mavjud Qarz (USD)</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">${{ agent.outstanding_balance_usd|floatformat:"2"|intcomma }}</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-file-invoice-dollar fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sales Table -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 text-primary"><i class="fas fa-list-alt me-2"></i>Agentga Qilingan Sotuvlar</h6>
+            <button type="button" class="btn btn-success btn-sm disabled" title="To'lov qilish funksiyasi keyinroq qo'shiladi">
+                <i class="fas fa-hand-holding-usd me-1"></i> To'lov Qilish
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle" id="agentSalesTable" width="100%" cellspacing="0">
+                    <thead class="table-light">
+                        <tr class="border-bottom border-2">
+                            <th class="py-3 px-3">Sotuv Sanasi</th>
+                            <th class="py-3 px-3">Chipta</th>
+                            <th class="py-3 px-3 text-center">Miqdori</th>
+                            <th class="py-3 px-3 text-end">Jami Summa</th>
+                            <th class="py-3 px-3 text-center">To'lov Holati</th>
+                            <th class="py-3 px-3">Sotuv Izohi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sale in agent_sales %}
+                        <tr>
+                            <td class="py-2 px-3">{{ sale.sale_date|date:"d.m.Y H:i" }}</td>
+                            <td class="py-2 px-3">
+                                {{ sale.related_acquisition.ticket.description|truncatewords:6 }}
+                                <small class="text-muted d-block">(Xarid ID: {{ sale.related_acquisition.id }})</small>
+                            </td>
+                            <td class="py-2 px-3 text-center">{{ sale.quantity|intcomma }}</td>
+                            <td class="py-2 px-3 text-end">{{ sale.total_sale_amount|floatformat:2|intcomma }} {{ sale.sale_currency }}</td>
+                            <td class="py-2 px-3 text-center">
+                                {% if sale.agent %}
+                                    {# Agent Sale Scenarios #}
+                                    {% if sale.initial_payment_amount > 0 %}
+                                        {# Agent made an initial payment #}
+                                        {% if sale.initial_payment_amount < sale.total_sale_amount %}
+                                            <span class="badge bg-warning text-dark">Qisman To'langan</span>
+                                        {% elif sale.initial_payment_amount == sale.total_sale_amount and sale.paid_to_account %}
+                                            {# Initial payment covers the whole amount, and account is specified #}
+                                            <span class="badge bg-success">To'liq To'langan ({{ sale.paid_to_account.name }})</span>
+                                        {% else %}
+                                            {# Edge case: initial_payment_amount > 0 but conditions for partial/full not met (e.g. >= total_sale_amount without paid_to_account, or initial_payment > total_sale_amount) #}
+                                            {# This should ideally be caught by form validation if initial_payment_amount > total_sale_amount or if initial_payment_amount > 0 and paid_to_account is missing #}
+                                            <span class="badge bg-danger">To'liq Qarz (Xato: Bosh. To'lov)</span>
+                                        {% endif %}
+                                    {% else %}
+                                        {# No initial payment (initial_payment is None, 0, or not set) #}
+                                        <span class="badge bg-danger">To'liq Qarz</span>
+                                    {% endif %}
+                                {% else %}
+                                    {# Client Sale Scenarios #}
+                                    {% if sale.paid_to_account %}
+                                        <span class="badge bg-success">To'liq To'langan ({{ sale.paid_to_account.name }})</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">To'lanmagan</span>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                            <td class="py-2 px-3">{{ sale.notes|default:"-"|truncatewords:10 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-3 px-3">Bu agent uchun sotuvlar mavjud emas.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Placeholder for Agent Payments List -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 text-primary"><i class="fas fa-history me-2"></i>Agent To'lovlari Tarixi</h6>
+            <!-- Future: Button to add payment could go here -->
+        </div>
+        <div class="card-body">
+            <p class="text-muted">Agent to'lovlari ro'yxati bu yerda ko'rsatiladi (keyinroq qo'shiladi).</p>
+        </div>
+    </div>
+
+    <div class="mt-4 mb-3">
+        <a href="{% url 'contacts:agent-list' %}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left me-1"></i> Agentlar Ro'yxatiga Qaytish
+        </a>
+    </div>
+
+</div>
+{% endblock %} 

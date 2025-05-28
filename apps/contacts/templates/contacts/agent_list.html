@@ -39,10 +39,10 @@
                     <tbody>
                         {% for agent in agents %}
                         <tr>
-                            <td class="py-2 px-3">{{ agent.name }}</td>
+                            <td class="py-2 px-3"><a href="{% url 'contacts:agent-detail' agent.pk %}">{{ agent.name }}</a></td>
                             <td class="py-2 px-3">{{ agent.phone_number|default:"-" }}</td>
-                            <td class="py-2 px-3">{{ agent.outstanding_balance_uzs|intcomma }} UZS</td>
-                            <td class="py-2 px-3">${{ agent.outstanding_balance_usd|intcomma }}</td>
+                            <td class="py-2 px-3 text-end">{{ agent.outstanding_balance_uzs|floatformat:"0"|intcomma }} UZS</td>
+                            <td class="py-2 px-3 text-end">${{ agent.outstanding_balance_usd|floatformat:"2"|intcomma }}</td>
                             <td class="py-2 px-3">{{ agent.notes|default:"-"|truncatewords:15 }}</td>
                             <td class="py-2 px-3">{{ agent.created_at|date:"d.m.Y H:i" }}</td>
                         </tr>
