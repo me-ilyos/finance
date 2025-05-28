@@ -1,9 +1,11 @@
 from django.db import models, transaction
 from django.core.exceptions import ValidationError
 from django.utils.text import slugify
-from apps.contacts.models import Supplier
-from apps.accounting.models import FinancialAccount
+from django.utils import timezone
 from decimal import Decimal
+from django.core.exceptions import ValidationError
+# from apps.contacts.models import Supplier # This will be a string reference
+from apps.accounting.models import FinancialAccount
 
 
 class Ticket(models.Model):
@@ -40,9 +42,13 @@ class Ticket(models.Model):
         return self.identifier
 
 class Acquisition(models.Model):
-    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='acquisitions')
+    supplier = models.ForeignKey(
+        'contacts.Supplier', # Use string reference here
+        on_delete=models.PROTECT,
+        related_name='acquisitions_from_supplier'
+    )
     ticket = models.ForeignKey(Ticket, on_delete=models.PROTECT, related_name='acquisitions')
-    acquisition_date = models.DateField()
+    acquisition_date = models.DateTimeField(default=timezone.now)
     initial_quantity = models.PositiveIntegerField(help_text="Initial quantity acquired in this batch.")
     available_quantity = models.PositiveIntegerField(help_text="Available quantity from this batch for sale. Updated by sales operations.", default=0, editable=False)
 

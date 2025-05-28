@@ -178,3 +178,75 @@ This document summarizes the key features and modifications implemented during t
 
 This comprehensive set of changes provides a functional interface for listing, filtering, and creating new acquisitions, including the creation of associated tickets directly within the acquisition process.
 
+## Session Date: 2024-05-28 (Auto-Generated Summary)
+
+### 1. Agent Payment System (Pay Specific Debts & General Payments)
+
+**Core Functionality:**
+- Agents can make payments towards their outstanding balances.
+- Payments can be general or specifically allocated to individual sales (debts).
+
+**Model Changes:**
+- **`contacts.AgentPayment` Model:**
+    - Created to store payment details: `agent`, `payment_date`, `amount_paid_uzs`, `amount_paid_usd`, `paid_to_account`, `notes`.
+    - Added `related_sale` (ForeignKey to `sales.Sale`) to link payments to specific sales. This field is optional.
+    - `clean()` method validates payment amounts, currency consistency with the selected `paid_to_account`, and if `related_sale` is chosen, validates against the sale's specific balance and currency.
+    - `save()` method updates the `FinancialAccount` balance and, if `related_sale` is provided, updates the `paid_amount_on_this_sale` field of the linked `Sale`.
+- **`contacts.Agent` Model:**
+    - Added helper methods: `get_total_payments_uzs()`, `get_total_payments_usd()`.
+    - Added `update_balance_on_payment(amount_uzs, amount_usd)` to decrement outstanding balances upon successful general or specific payment.
+- **`sales.Sale` Model:**
+    - Added `paid_amount_on_this_sale` field (Decimal) to track total payments received specifically for this sale.
+    - Added `@property balance_due_on_this_sale` (calculates `total_sale_amount - paid_amount_on_this_sale`).
+    - Added `@property is_fully_paid` to check if the sale's balance is zero or less.
+    - `save()` method updated: 
+        - `initial_payment_amount` for an agent sale now contributes to its `paid_amount_on_this_sale`.
+        - Logic adjusted to handle updates to `initial_payment_amount` and its effect on `paid_amount_on_this_sale`.
+
+**Forms:**
+- **`contacts.AgentPaymentForm`:**
+    - Includes fields for `payment_date`, `related_sale`, `amount_paid_uzs`, `amount_paid_usd`, `paid_to_account`, `notes`.
+    - `related_sale` field is a `ModelChoiceField` dynamically populated in `__init__` with the agent's unpaid/partially paid sales. The choice label clearly shows sale ID, date, balance, and currency.
+    - `paid_to_account` queryset initially shows all active UZS/USD accounts; dynamically filtered by JavaScript.
+    - Comprehensive `clean()` method for validations, including checks for payment amounts, currency consistency, and ensuring payment doesn't exceed sale balance if `related_sale` is chosen.
+
+**Views (`contacts.views`):**
+- **`add_agent_payment(request, agent_pk)` view:**
+    - Handles submission of `AgentPaymentForm`.
+    - On valid submission, saves the `AgentPayment` (which triggers updates to `FinancialAccount` and potentially `Sale.paid_amount_on_this_sale` via model's save method).
+    - Calls `agent.update_balance_on_payment()` to adjust the agent's overall outstanding debt.
+- **`AgentDetailView`:**
+    - Context updated to include an instance of `AgentPaymentForm` (for the payment modal) and a list of the agent's past payments (`agent_payments`).
+    - Sales list (`agent_sales`) now uses the `Sale` model's new properties for display.
+- Defined `AgentUpdateView` and `SupplierCreateView` to resolve earlier `AttributeError` and improve CRUD operation structure.
+- Refactored `AgentListView` and `SupplierListView` to handle only GET requests for listing (POST for creation moved to dedicated CreateViews).
+
+**Templates (`contacts/agent_detail.html`):**
+- **Agent Sales Table:** 
+    - Updated to display `ID`, `Sale Date`, `Ticket`, `Quantity`, `Total Sale Amount`, `Paid on this Sale`, `Balance on this Sale`, and `Status`.
+    - Rows are visually styled (e.g., background color) based on whether a sale is fully paid, partially paid, or not paid.
+- **Payment Modal ("To'lov Qilish"):**
+    - Form now includes the "To'lov qilinayotgan Sotuv (Qarz)" (`related_sale`) dropdown.
+    - **Dynamic JavaScript Functionality:**
+        - When a `related_sale` is selected:
+            - The corresponding currency amount field (UZS or USD) is enabled and pre-filled with the sale's balance due.
+            - The other currency amount field is disabled and cleared.
+            - The "Paid to account" dropdown is filtered to show only accounts matching the selected sale's currency.
+        - If no `related_sale` is selected (general payment):
+            - Both UZS and USD amount fields are enabled.
+            - The "Paid to account" dropdown is filtered based on the currency of the amount entered by the user.
+        - Robust JavaScript for parsing account option currencies from their text and managing the state of form fields.
+- **Agent Payment History Table:**
+    - Now includes a column for "Aloqador Sotuv ID" (Related Sale ID).
+
+**Admin (`contacts.admin`):**
+- `AgentPayment` model registered with a custom `AgentPaymentAdmin` for better display and filtering in the Django admin interface.
+
+**Error Resolution during development:**
+- **Circular Imports:** 
+    - Resolved between `contacts.models`, `sales.models`, and `inventory.models` by using string references for `ForeignKey` definitions (e.g., `supplier = models.ForeignKey('contacts.Supplier', ...)`).
+    - Used `apps.get_model()` in `sales.models.Sale.save()` method to dynamically load the `Agent` model to avoid import issues at module load time.
+- **Form Imports:** Corrected `ImportError` in `sales.forms.py` by ensuring `Agent` and `FinancialAccount` models were imported from their correct app locations (`apps.contacts.models` and `apps.accounting.models` respectively).
+- **Template Syntax:** Fixed an `Invalid block tag 'endblock'` error in `agent_detail.html` due to a duplicated/mismatched tag.
+- **JavaScript Debugging:** Iteratively refined and debugged JavaScript for the payment modal to ensure correct parsing of financial account currencies from HTML option text and reliable filtering of the "Paid to account" dropdown. This involved enhancing logging and adjusting parsing logic.
+

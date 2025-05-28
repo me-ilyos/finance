@@ -41,8 +41,27 @@
         padding-top: 0.5rem;
         font-style: italic;
     }
+    .partially-paid {
+        background-color: #fff3cd; /* Light yellow for partially paid rows */
+    }
+    .fully-paid {
+        background-color: #d1e7dd; /* Light green for fully paid rows */
+    }
+    .not-paid {
+        background-color: #f8d7da; /* Light red for not paid rows */
+    }
 </style>
 <div class="container-fluid">
+    {% comment %} Display Django Messages {% endcomment %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
     <div class="row">
         <!-- Agent Information Column -->
         <div class="col-xl-4 col-lg-5 mb-4">
@@ -77,7 +96,7 @@
                             <div class="row no-gutters align-items-center">
                                 <div class="col mr-2">
                                     <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
-                                        Mavjud Qarz (UZS)</div>
+                                        Jami Qarz (UZS)</div>
                                     <div class="h5 mb-0 font-weight-bold text-gray-800">{{ agent.outstanding_balance_uzs|floatformat:"0"|intcomma }} UZS</div>
                                 </div>
                                 <div class="col-auto">
@@ -93,7 +112,7 @@
                             <div class="row no-gutters align-items-center">
                                 <div class="col mr-2">
                                     <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
-                                        Mavjud Qarz (USD)</div>
+                                        Jami Qarz (USD)</div>
                                     <div class="h5 mb-0 font-weight-bold text-gray-800">${{ agent.outstanding_balance_usd|floatformat:"2"|intcomma }}</div>
                                 </div>
                                 <div class="col-auto">
@@ -110,8 +129,8 @@
     <!-- Sales Table -->
     <div class="card shadow mb-4">
         <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-            <h6 class="m-0 text-primary"><i class="fas fa-list-alt me-2"></i>Agentga Qilingan Sotuvlar</h6>
-            <button type="button" class="btn btn-success btn-sm disabled" title="To'lov qilish funksiyasi keyinroq qo'shiladi">
+            <h6 class="m-0 text-primary"><i class="fas fa-list-alt me-2"></i>Agentga Qilingan Sotuvlar (Qarzlar)</h6>
+            <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#addPaymentModal">
                 <i class="fas fa-hand-holding-usd me-1"></i> To'lov Qilish
             </button>
         </div>
@@ -120,57 +139,42 @@
                 <table class="table table-striped table-hover align-middle" id="agentSalesTable" width="100%" cellspacing="0">
                     <thead class="table-light">
                         <tr class="border-bottom border-2">
-                            <th class="py-3 px-3">Sotuv Sanasi</th>
-                            <th class="py-3 px-3">Chipta</th>
-                            <th class="py-3 px-3 text-center">Miqdori</th>
-                            <th class="py-3 px-3 text-end">Jami Summa</th>
-                            <th class="py-3 px-3 text-center">To'lov Holati</th>
-                            <th class="py-3 px-3">Sotuv Izohi</th>
+                            <th class="py-3 px-2">ID</th>
+                            <th class="py-3 px-2">Sana</th>
+                            <th class="py-3 px-2">Chipta</th>
+                            <th class="py-3 px-2 text-center">Miqdori</th>
+                            <th class="py-3 px-2 text-end">Jami Summa</th>
+                            <th class="py-3 px-2 text-end">To'langan (shu sotuvga)</th>
+                            <th class="py-3 px-2 text-end">Qoldiq (shu sotuvga)</th>
+                            <th class="py-3 px-2 text-center">Holati</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for sale in agent_sales %}
-                        <tr>
-                            <td class="py-2 px-3">{{ sale.sale_date|date:"d.m.Y H:i" }}</td>
-                            <td class="py-2 px-3">
-                                {{ sale.related_acquisition.ticket.description|truncatewords:6 }}
-                                <small class="text-muted d-block">(Xarid ID: {{ sale.related_acquisition.id }})</small>
+                        <tr class="{% if sale.is_fully_paid %}fully-paid{% elif sale.paid_amount_on_this_sale > 0 %}partially-paid{% else %}not-paid{% endif %}">
+                            <td class="py-2 px-2">{{ sale.id }}</td>
+                            <td class="py-2 px-2">{{ sale.sale_date|date:"d.m.y H:i" }}</td>
+                            <td class="py-2 px-2">
+                                {{ sale.related_acquisition.ticket.description|truncatewords:5 }}
+                                <small class_="text-muted d-block">(Acq.ID: {{ sale.related_acquisition.id }})</small>
                             </td>
-                            <td class="py-2 px-3 text-center">{{ sale.quantity|intcomma }}</td>
-                            <td class="py-2 px-3 text-end">{{ sale.total_sale_amount|floatformat:2|intcomma }} {{ sale.sale_currency }}</td>
-                            <td class="py-2 px-3 text-center">
-                                {% if sale.agent %}
-                                    {# Agent Sale Scenarios #}
-                                    {% if sale.initial_payment_amount > 0 %}
-                                        {# Agent made an initial payment #}
-                                        {% if sale.initial_payment_amount < sale.total_sale_amount %}
-                                            <span class="badge bg-warning text-dark">Qisman To'langan</span>
-                                        {% elif sale.initial_payment_amount == sale.total_sale_amount and sale.paid_to_account %}
-                                            {# Initial payment covers the whole amount, and account is specified #}
-                                            <span class="badge bg-success">To'liq To'langan ({{ sale.paid_to_account.name }})</span>
-                                        {% else %}
-                                            {# Edge case: initial_payment_amount > 0 but conditions for partial/full not met (e.g. >= total_sale_amount without paid_to_account, or initial_payment > total_sale_amount) #}
-                                            {# This should ideally be caught by form validation if initial_payment_amount > total_sale_amount or if initial_payment_amount > 0 and paid_to_account is missing #}
-                                            <span class="badge bg-danger">To'liq Qarz (Xato: Bosh. To'lov)</span>
-                                        {% endif %}
-                                    {% else %}
-                                        {# No initial payment (initial_payment is None, 0, or not set) #}
-                                        <span class="badge bg-danger">To'liq Qarz</span>
-                                    {% endif %}
+                            <td class="py-2 px-2 text-center">{{ sale.quantity|intcomma }}</td>
+                            <td class="py-2 px-2 text-end">{{ sale.total_sale_amount|floatformat:2|intcomma }} {{ sale.sale_currency }}</td>
+                            <td class="py-2 px-2 text-end">{{ sale.paid_amount_on_this_sale|floatformat:2|intcomma }} {{ sale.sale_currency }}</td>
+                            <td class="py-2 px-2 text-end fw-bold">{{ sale.balance_due_on_this_sale|floatformat:2|intcomma }} {{ sale.sale_currency }}</td>
+                            <td class="py-2 px-2 text-center">
+                                {% if sale.is_fully_paid %}
+                                    <span class="badge bg-success">To'liq To'langan</span>
+                                {% elif sale.paid_amount_on_this_sale > 0 %}
+                                    <span class="badge bg-warning text-dark">Qisman To'langan</span>
                                 {% else %}
-                                    {# Client Sale Scenarios #}
-                                    {% if sale.paid_to_account %}
-                                        <span class="badge bg-success">To'liq To'langan ({{ sale.paid_to_account.name }})</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">To'lanmagan</span>
-                                    {% endif %}
+                                    <span class="badge bg-danger">To'lanmagan</span>
                                 {% endif %}
                             </td>
-                            <td class="py-2 px-3">{{ sale.notes|default:"-"|truncatewords:10 }}</td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="6" class="text-center py-3 px-3">Bu agent uchun sotuvlar mavjud emas.</td>
+                            <td colspan="8" class="text-center py-3 px-3">Bu agent uchun hali aktiv sotuvlar (qarzlar) mavjud emas.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -179,14 +183,42 @@
         </div>
     </div>
 
-    <!-- Placeholder for Agent Payments List -->
+    <!-- Agent Payments History (Remains mostly the same) -->
     <div class="card shadow mb-4">
         <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
             <h6 class="m-0 text-primary"><i class="fas fa-history me-2"></i>Agent To'lovlari Tarixi</h6>
-            <!-- Future: Button to add payment could go here -->
         </div>
         <div class="card-body">
-            <p class="text-muted">Agent to'lovlari ro'yxati bu yerda ko'rsatiladi (keyinroq qo'shiladi).</p>
+            {% if agent_payments %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle" id="agentPaymentsTable" width="100%" cellspacing="0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="py-3 px-3">To'lov Sanasi</th>
+                            <th class="py-3 px-3">Aloqador Sotuv ID</th>
+                            <th class="py-3 px-3 text-end">Summa (UZS)</th>
+                            <th class="py-3 px-3 text-end">Summa (USD)</th>
+                            <th class="py-3 px-3">To'langan Hisob</th>
+                            <th class="py-3 px-3">Izoh</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for payment in agent_payments %}
+                        <tr>
+                            <td class="py-2 px-3">{{ payment.payment_date|date:"d.m.Y H:i" }}</td>
+                            <td class="py-2 px-3 text-center">{% if payment.related_sale %}{{ payment.related_sale.id }}{% else %}-{% endif %}</td>
+                            <td class="py-2 px-3 text-end">{{ payment.amount_paid_uzs|floatformat:"0"|intcomma|default_if_none:"-" }}</td>
+                            <td class="py-2 px-3 text-end">{% if payment.amount_paid_usd %}${{ payment.amount_paid_usd|floatformat:"2"|intcomma }}{% else %}-{% endif %}</td>
+                            <td class="py-2 px-3">{{ payment.paid_to_account.name }}</td>
+                            <td class="py-2 px-3">{{ payment.notes|default:"-"|truncatewords:10 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted">Agent uchun hali to'lovlar amalga oshirilmagan.</p>
+            {% endif %}
         </div>
     </div>
 
@@ -197,4 +229,286 @@
     </div>
 
 </div>
-{% endblock %} 
+
+<!-- Add Payment Modal -->
+<div class="modal fade" id="addPaymentModal" tabindex="-1" aria-labelledby="addPaymentModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="post" action="{% url 'contacts:agent-add-payment' agent_pk=agent.pk %}" id="agentPaymentModalForm">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addPaymentModalLabel">Agent To'lovini Qo'shish: {{ agent.name }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {% if payment_form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in payment_form.non_field_errors %}
+                                <p class="mb-0">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    {% for field in payment_form %}
+                        <div class="mb-3 row" id="div_{{ field.auto_id }}">
+                            <label for="{{ field.id_for_label }}" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">
+                                {{ field.label }}
+                                {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+                            <div class="col-sm-8">
+                                {{ field }} 
+                                {% if field.help_text %}
+                                    <small class="form-text text-muted d-block mt-1">{{ field.help_text }}</small>
+                                {% endif %}
+                                {% for error in field.errors %}
+                                    <div class="invalid-feedback d-block">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                     <div class="alert alert-info alert-dismissible fade show mt-3" role="alert" id="paymentModalInfo">
+                        <small>
+                            <strong>Eslatma:</strong> Ma'lum bir sotuv uchun to'lov qilmoqchi bo'lsangiz, yuqoridan sotuvni tanlang. Shunda to'lov summasi va valyutasi avtomatik cheklanadi.
+                            Aks holda, umumiy qarzga to'lov sifatida kiritiladi.
+                        </small>
+                         <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Bekor Qilish</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock content %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const paymentForm = document.getElementById('agentPaymentModalForm');
+    if (!paymentForm) return;
+
+    const relatedSaleSelect = paymentForm.querySelector('[name="related_sale"]');
+    const amountUzsInput = paymentForm.querySelector('[name="amount_paid_uzs"]');
+    const amountUsdInput = paymentForm.querySelector('[name="amount_paid_usd"]');
+    const paidToAccountSelect = paymentForm.querySelector('[name="paid_to_account"]');
+    
+    let originalAccountOptions = [];
+
+    function buildOriginalAccountOptions() {
+        originalAccountOptions = [];
+        if (paidToAccountSelect) {
+            console.log("Building originalAccountOptions. Current paidToAccountSelect.options:", paidToAccountSelect.options);
+            const optionsFromDOM = paidToAccountSelect.querySelectorAll('option');
+            optionsFromDOM.forEach(opt => {
+                if (opt.value === "") return; // Explicitly skip the placeholder based on value
+                let currency = null;
+                let optionText = opt.text; // Using original case for regex, or use /i for case-insensitivity
+
+                // More specific regex to find "(Type - CURRENCY)" part, making it case insensitive for safety
+                const usdPattern = /\((Cash|Card|Bank Account) - USD\)/i;
+                const uzsPattern = /\((Cash|Card|Bank Account) - UZS\)/i;
+
+                if (usdPattern.test(optionText)) {
+                    currency = 'USD';
+                } else if (uzsPattern.test(optionText)) {
+                    currency = 'UZS';
+                } else {
+                    // Fallback to simple includes, just in case the __str__ format is slightly different
+                    // or if the account type part is different than expected.
+                    let uppercaseOptionText = opt.text.toUpperCase();
+                    if (uppercaseOptionText.includes('(USD)')) {
+                        currency = 'USD';
+                        console.log(`Fallback determined USD for: ${opt.text}`);
+                    } else if (uppercaseOptionText.includes('(UZS)')) {
+                        currency = 'UZS';
+                        console.log(`Fallback determined UZS for: ${opt.text}`);
+                    } else {
+                        console.warn("FINAL: Could not determine currency for account option:", opt.text, "Value:", opt.value);
+                    }
+                }
+                originalAccountOptions.push({ value: opt.value, text: opt.text, currency: currency });
+            });
+            console.log("Built originalAccountOptions:", JSON.stringify(originalAccountOptions, null, 2));
+        } else {
+            console.error("paidToAccountSelect element not found during buildOriginalAccountOptions!");
+        }
+    }
+
+    if (paidToAccountSelect) {
+        buildOriginalAccountOptions();
+    } else {
+         console.error("paidToAccountSelect element not found on DOMContentLoaded!");
+    }
+
+    function updatePaymentFormForSale() {
+        if (!relatedSaleSelect || !amountUzsInput || !amountUsdInput) {
+            console.error("One or more form elements missing for updatePaymentFormForSale");
+            return;
+        }
+        const selectedOption = relatedSaleSelect.options[relatedSaleSelect.selectedIndex];
+        if (!selectedOption || !selectedOption.value) {
+            amountUzsInput.disabled = false;
+            amountUsdInput.disabled = false;
+            if(amountUzsInput) amountUzsInput.value = amountUzsInput.dataset.originalValue || '';
+            if(amountUsdInput) amountUsdInput.value = amountUsdInput.dataset.originalValue || '';
+            filterAccountOptionsByCurrency(null);
+            return;
+        }
+
+        const saleText = selectedOption.text;
+        console.log("Selected Sale Text:", saleText);
+        const balanceMatch = saleText.match(/Balans: ([\d,\.]+) (UZS|USD)/);
+        
+        if (!balanceMatch) {
+            console.warn("Could not parse balance from sale option text: ", saleText);
+            amountUzsInput.disabled = false;
+            amountUsdInput.disabled = false;
+            filterAccountOptionsByCurrency(null);
+            return;
+        }
+
+        const balance = parseFloat(balanceMatch[1].replace(/,/g, ''));
+        const currency = balanceMatch[2];
+        console.log("Parsed Sale Currency:", currency, "Balance:", balance);
+
+        if (currency === 'UZS') {
+            if(amountUzsInput) {
+                amountUzsInput.value = balance.toFixed(0);
+                amountUzsInput.max = balance.toFixed(0);
+                amountUzsInput.disabled = false;
+            }
+            if(amountUsdInput) {
+                amountUsdInput.value = '';
+                amountUsdInput.disabled = true;
+            }
+        } else if (currency === 'USD') {
+            if(amountUsdInput) {
+                amountUsdInput.value = balance.toFixed(2);
+                amountUsdInput.max = balance.toFixed(2);
+                amountUsdInput.disabled = false;
+            }
+            if(amountUzsInput) {
+                amountUzsInput.value = '';
+                amountUzsInput.disabled = true;
+            }
+        }
+        filterAccountOptionsByCurrency(currency);
+    }
+
+
+    function filterAccountOptionsByCurrency(targetCurrency) {
+        if (!paidToAccountSelect) {
+            console.error("paidToAccountSelect not found in filterAccountOptionsByCurrency");
+            return;
+        }
+        console.log(`Filtering accounts for targetCurrency: '${targetCurrency}'`);
+        let previouslySelectedValue = paidToAccountSelect.value;
+        paidToAccountSelect.innerHTML = ''; 
+
+        const placeholder = document.createElement('option');
+        placeholder.value = "";
+        placeholder.text = "---------";
+        paidToAccountSelect.appendChild(placeholder);
+        
+        let foundMatchForPreviouslySelected = false;
+        let addedAnyOption = false;
+
+        console.log("Using originalAccountOptions for filtering:", JSON.stringify(originalAccountOptions, null, 2));
+
+        originalAccountOptions.forEach(opt => {
+            if (opt.value === "") return; 
+
+            console.log("Checking option:", opt.text, "Its currency:", opt.currency);
+            if (!targetCurrency || (opt.currency && opt.currency === targetCurrency)) {
+                console.log("MATCH! Adding option:", opt.text);
+                const optionElement = document.createElement('option');
+                optionElement.value = opt.value;
+                optionElement.text = opt.text;
+                paidToAccountSelect.appendChild(optionElement);
+                addedAnyOption = true;
+                
+                if (opt.value === previouslySelectedValue) {
+                    optionElement.selected = true;
+                    foundMatchForPreviouslySelected = true;
+                    console.log("Re-selected previous value:", opt.text);
+                }
+            }
+        });
+        
+        if (!foundMatchForPreviouslySelected) {
+            paidToAccountSelect.value = ""; 
+            console.log("No match for previously selected value, or no options matched. Setting to placeholder.");
+        } else {
+            console.log("Successfully re-selected or kept selection.");
+        }
+        if (!addedAnyOption && targetCurrency) { // Only warn if a specific currency was targeted and nothing matched
+            console.warn("No account options were added for targetCurrency:", targetCurrency);
+        }
+    }
+
+    if (relatedSaleSelect) {
+        relatedSaleSelect.addEventListener('change', updatePaymentFormForSale);
+        if(amountUzsInput) amountUzsInput.dataset.originalValue = amountUzsInput.value;
+        if(amountUsdInput) amountUsdInput.dataset.originalValue = amountUsdInput.value;
+        
+        // Initial call for updatePaymentFormForSale (if a sale is pre-selected on page load/form error re-render)
+        if (relatedSaleSelect.value) { 
+            console.log("Initial call to updatePaymentFormForSale as a sale is pre-selected.");
+            updatePaymentFormForSale();
+        } else {
+            console.log("No sale pre-selected on page load, filtering accounts for null targetCurrency (all relevant). Initial state.");
+            filterAccountOptionsByCurrency(null); 
+        }
+    }
+    
+    if (amountUzsInput) {
+        amountUzsInput.addEventListener('input', () => {
+            if (!relatedSaleSelect || !relatedSaleSelect.value) { 
+                if (parseFloat(amountUzsInput.value) > 0) {
+                    if(amountUsdInput) amountUsdInput.value = '';
+                    filterAccountOptionsByCurrency('UZS');
+                } else if (amountUsdInput && !parseFloat(amountUzsInput.value) > 0) { // Check if USD is also empty
+                    filterAccountOptionsByCurrency(null); 
+                }
+            }
+        });
+    }
+    if (amountUsdInput) {
+        amountUsdInput.addEventListener('input', () => {
+            if (!relatedSaleSelect || !relatedSaleSelect.value) { 
+                if (parseFloat(amountUsdInput.value) > 0) {
+                    if(amountUzsInput) amountUzsInput.value = '';
+                    filterAccountOptionsByCurrency('USD');
+                } else if (amountUzsInput && !parseFloat(amountUzsInput.value) > 0) { // Check if UZS is also empty
+                    filterAccountOptionsByCurrency(null); 
+                }
+            }
+        });
+    }
+    
+    var addPaymentModalElement = document.getElementById('addPaymentModal');
+    if (addPaymentModalElement) {
+        addPaymentModalElement.addEventListener('shown.bs.modal', function () {
+            console.log("Modal shown. Re-building originalAccountOptions and updating form state.");
+            buildOriginalAccountOptions(); 
+            if (relatedSaleSelect && relatedSaleSelect.value) {
+                 updatePaymentFormForSale(); 
+            } else {
+                // If no sale selected when modal opens, check current amount inputs to filter accounts
+                let currentAmountCurrency = null;
+                if (amountUzsInput && parseFloat(amountUzsInput.value) > 0) currentAmountCurrency = 'UZS';
+                else if (amountUsdInput && parseFloat(amountUzsInput.value) > 0) currentAmountCurrency = 'USD';
+                filterAccountOptionsByCurrency(currentAmountCurrency);
+            }
+        });
+    } else {
+        console.error("addPaymentModalElement not found!");
+    }
+
+});
+</script>
+{% endblock extra_js %}

@@ -1,6 +1,9 @@
 from django import forms
-from .models import Sale, Acquisition, Agent, FinancialAccount
+from .models import Sale, Acquisition
+from apps.contacts.models import Agent
+from apps.accounting.models import FinancialAccount
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 from decimal import Decimal
 
 class AcquisitionChoiceField(forms.ModelChoiceField):
