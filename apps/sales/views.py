@@ -11,6 +11,7 @@ from django.http import JsonResponse
 from apps.inventory.models import Acquisition # For fetching Acquisition instance
 from apps.accounting.models import FinancialAccount # For fetching FinancialAccount instances
 from django.db.models import Sum, Case, When, Value, DecimalField
+from django.core.exceptions import ValidationError # <--- Import ValidationError
 
 class SaleListView(ListView):
     model = Sale
@@ -32,15 +33,15 @@ class SaleListView(ListView):
         end_date_str = self.request.GET.get('end_date', None)
 
         today = timezone.localdate()
+        target_date = today # Default to today
 
         if filter_period == 'day':
-            target_date = today
             if date_filter_str:
                 try:
                     target_date = date.fromisoformat(date_filter_str)
                 except ValueError:
                     messages.error(self.request, "Kiritilgan sana formati noto'g'ri.")
-            # Filter by date part of sale_date (DateTimeField)
+                    # Fallback to today or handle error appropriately, here defaulting to target_date = today
             queryset = queryset.filter(sale_date__date=target_date)
         elif filter_period == 'week':
             start_of_week = today - timedelta(days=today.weekday())
@@ -58,13 +59,17 @@ class SaleListView(ListView):
                 start_date = date.fromisoformat(start_date_str)
                 end_date = date.fromisoformat(end_date_str)
                 if start_date <= end_date:
-                    # Adjust end_date to include the whole day if filtering DateTimeField by date range
                     queryset = queryset.filter(sale_date__date__range=[start_date, end_date])
                 else:
                     messages.error(self.request, "Boshlanish sanasi tugash sanasidan keyin bo'lishi mumkin emas.")
             except ValueError:
                 messages.error(self.request, "Oraliq uchun kiritilgan sana formati noto'g'ri.")
-        
+        elif not filter_period: # Explicitly handle no filter_period (default to today)
+            queryset = queryset.filter(sale_date__date=target_date)
+        # If filter_period is something else, it won't apply date filtering, showing all sales.
+        # Consider if this is desired, or if an error/default should apply.
+        # For now, if filter_period is an unknown value, no date filter is applied from here.
+
         return queryset
 
     def get_context_data(self, **kwargs):
@@ -105,6 +110,12 @@ class SaleListView(ListView):
             ),
             total_profit_usd=Sum(
                 Case(When(sale_currency='USD', then='profit'), default=Value(0), output_field=DecimalField())
+            ),
+            total_initial_payment_uzs=Sum(
+                Case(When(agent__isnull=False, sale_currency='UZS', then='initial_payment_amount'), default=Value(0), output_field=DecimalField())
+            ),
+            total_initial_payment_usd=Sum(
+                Case(When(agent__isnull=False, sale_currency='USD', then='initial_payment_amount'), default=Value(0), output_field=DecimalField())
             )
         )
         context['totals'] = totals
@@ -115,17 +126,17 @@ class SaleListView(ListView):
         form = SaleForm(request.POST)
         if form.is_valid():
             try:
-                form.save() # The save method of Sale model handles stock and financial account updates
+                saved_sale = form.save() # The save method of Sale model handles stock and financial account updates
                 messages.success(request, "Yangi sotuv muvaffaqiyatli qo'shildi.")
                 return redirect(reverse_lazy('sales:sale-list')) 
             except ValidationError as e: # Catch validation errors from model's clean/save
                 messages.error(request, f"Sotuvni saqlashda xatolik: {e}")
-                # Fall through to re-render form with errors
             except Exception as e:
                 messages.error(request, f"Kutilmagan xatolik yuz berdi: {e}")
-                # Fall through to re-render form with errors
+        else:
+            # Existing code to re-render form follows
+            pass # Pass if form is invalid, errors will be in form.errors
         
-        # If form is invalid or save failed, re-render the page with the form and errors
         self.object_list = self.get_queryset()
         context = self.get_context_data(sale_form=form, object_list=self.object_list)
         # Ensure error messages from the form are displayed, or add a generic one

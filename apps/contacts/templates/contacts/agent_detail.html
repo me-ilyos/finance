@@ -50,6 +50,18 @@
     .not-paid {
         background-color: #f8d7da; /* Light red for not paid rows */
     }
+    .price-col-detail .col {
+        padding: 0.35rem 0.5rem; 
+        font-size: 0.875em; 
+        line-height: 1.3;
+    }
+    .price-col-detail .col:first-child { /* UZS */
+        border-right: 1px solid #e3e6f0;
+    }
+    .table tfoot td {
+        font-weight: bold;
+        background-color: #f1f3f7; /* Same as thead for consistency */
+    }
 </style>
 <div class="container-fluid">
     {% comment %} Display Django Messages {% endcomment %}
@@ -143,9 +155,21 @@
                             <th class="py-3 px-2">Sana</th>
                             <th class="py-3 px-2">Chipta</th>
                             <th class="py-3 px-2 text-center">Miqdori</th>
-                            <th class="py-3 px-2 text-end">Jami Summa</th>
-                            <th class="py-3 px-2 text-end">To'langan (shu sotuvga)</th>
-                            <th class="py-3 px-2 text-end">Qoldiq (shu sotuvga)</th>
+                            <th class="py-3 px-2 text-center price-col-detail">Jami Sotuv (Qarz)
+                                <div class="container-fluid gx-0"><div class="row gx-0">
+                                    <div class="col text-center small py-1">UZS</div><div class="col text-center small py-1">USD</div>
+                                </div></div>
+                            </th>
+                            <th class="py-3 px-2 text-center price-col-detail">To'langan (Sotuvga)
+                                <div class="container-fluid gx-0"><div class="row gx-0">
+                                    <div class="col text-center small py-1">UZS</div><div class="col text-center small py-1">USD</div>
+                                </div></div>
+                            </th>
+                            <th class="py-3 px-2 text-center price-col-detail fw-bold">Qoldiq (Sotuv Bo'yicha)
+                                <div class="container-fluid gx-0"><div class="row gx-0">
+                                    <div class="col text-center small py-1">UZS</div><div class="col text-center small py-1">USD</div>
+                                </div></div>
+                            </th>
                             <th class="py-3 px-2 text-center">Holati</th>
                         </tr>
                     </thead>
@@ -156,12 +180,41 @@
                             <td class="py-2 px-2">{{ sale.sale_date|date:"d.m.y H:i" }}</td>
                             <td class="py-2 px-2">
                                 {{ sale.related_acquisition.ticket.description|truncatewords:5 }}
-                                <small class_="text-muted d-block">(Acq.ID: {{ sale.related_acquisition.id }})</small>
+                                <small class="text-muted d-block">(Acq.ID: {{ sale.related_acquisition.id }})</small>
                             </td>
                             <td class="py-2 px-2 text-center">{{ sale.quantity|intcomma }}</td>
-                            <td class="py-2 px-2 text-end">{{ sale.total_sale_amount|floatformat:2|intcomma }} {{ sale.sale_currency }}</td>
-                            <td class="py-2 px-2 text-end">{{ sale.paid_amount_on_this_sale|floatformat:2|intcomma }} {{ sale.sale_currency }}</td>
-                            <td class="py-2 px-2 text-end fw-bold">{{ sale.balance_due_on_this_sale|floatformat:2|intcomma }} {{ sale.sale_currency }}</td>
+                            <td class="py-2 px-0 price-col-detail">
+                                <div class="container-fluid gx-0"><div class="row gx-0">
+                                    <div class="col text-end">{% if sale.sale_currency == 'UZS' %}{{ sale.total_sale_amount|floatformat:0|intcomma }}{% else %}-{% endif %}</div>
+                                    <div class="col text-end">{% if sale.sale_currency == 'USD' %}${{ sale.total_sale_amount|floatformat:2|intcomma }}{% else %}-{% endif %}</div>
+                                </div></div>
+                            </td>
+                            <td class="py-2 px-0 price-col-detail">
+                                <div class="container-fluid gx-0"><div class="row gx-0">
+                                    <div class="col text-end">{% if sale.sale_currency == 'UZS' %}{{ sale.paid_amount_on_this_sale|floatformat:0|intcomma }}{% else %}-{% endif %}</div>
+                                    <div class="col text-end">{% if sale.sale_currency == 'USD' %}${{ sale.paid_amount_on_this_sale|floatformat:2|intcomma }}{% else %}-{% endif %}</div>
+                                </div></div>
+                            </td>
+                            <td class="py-2 px-0 price-col-detail fw-bold">
+                                <div class="container-fluid gx-0"><div class="row gx-0">
+                                    <div class="col text-end">
+                                        {% if sale.sale_currency == 'UZS' %}
+                                            {{ sale.total_sale_amount|floatformat:0|intcomma }}
+                                            {% if sale.paid_amount_on_this_sale >= 0 %}
+                                                <small class="text-muted d-block">(To'langan: {{ sale.paid_amount_on_this_sale|floatformat:0|intcomma }})</small>
+                                            {% endif %}
+                                        {% else %}-{% endif %}
+                                    </div>
+                                    <div class="col text-end">
+                                        {% if sale.sale_currency == 'USD' %}
+                                            ${{ sale.total_sale_amount|floatformat:2|intcomma }}
+                                            {% if sale.paid_amount_on_this_sale >= 0 %}
+                                                <small class="text-muted d-block">(To'langan: ${{ sale.paid_amount_on_this_sale|floatformat:2|intcomma }})</small>
+                                            {% endif %}
+                                        {% else %}-{% endif %}
+                                    </div>
+                                </div></div>
+                            </td>
                             <td class="py-2 px-2 text-center">
                                 {% if sale.is_fully_paid %}
                                     <span class="badge bg-success">To'liq To'langan</span>
@@ -178,6 +231,20 @@
                         </tr>
                         {% endfor %}
                     </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="6" class="text-end"><strong>Jami Qoldiq:</strong></td>
+                            <td class="py-2 px-0 price-col-detail text-end fw-bolder">
+                                <div class="container-fluid gx-0"><div class="row gx-0">
+                                     <div class="col text-end">{{ agent.outstanding_balance_uzs|floatformat:0|intcomma }}</div>
+                                     <div class="col text-end">${{ agent.outstanding_balance_usd|floatformat:2|intcomma }}</div>
+                                </div></div>
+                            </td>
+                            <td class="text-center"> <!-- Empty cell for status column -->
+                                <i class="fas fa-calculator text-primary"></i>
+                            </td> 
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         </div>
@@ -301,79 +368,57 @@ document.addEventListener('DOMContentLoaded', function () {
     function buildOriginalAccountOptions() {
         originalAccountOptions = [];
         if (paidToAccountSelect) {
-            console.log("Building originalAccountOptions. Current paidToAccountSelect.options:", paidToAccountSelect.options);
-            const optionsFromDOM = paidToAccountSelect.querySelectorAll('option');
-            optionsFromDOM.forEach(opt => {
-                if (opt.value === "") return; // Explicitly skip the placeholder based on value
-                let currency = null;
-                let optionText = opt.text; // Using original case for regex, or use /i for case-insensitivity
-
-                // More specific regex to find "(Type - CURRENCY)" part, making it case insensitive for safety
-                const usdPattern = /\((Cash|Card|Bank Account) - USD\)/i;
-                const uzsPattern = /\((Cash|Card|Bank Account) - UZS\)/i;
-
-                if (usdPattern.test(optionText)) {
-                    currency = 'USD';
-                } else if (uzsPattern.test(optionText)) {
-                    currency = 'UZS';
-                } else {
-                    // Fallback to simple includes, just in case the __str__ format is slightly different
-                    // or if the account type part is different than expected.
-                    let uppercaseOptionText = opt.text.toUpperCase();
-                    if (uppercaseOptionText.includes('(USD)')) {
-                        currency = 'USD';
-                        console.log(`Fallback determined USD for: ${opt.text}`);
-                    } else if (uppercaseOptionText.includes('(UZS)')) {
+            Array.from(paidToAccountSelect.options).forEach(opt => {
+                if (opt.value) {
+                    let currency = 'USD';
+                    if (opt.text.includes('(UZS)')) {
                         currency = 'UZS';
-                        console.log(`Fallback determined UZS for: ${opt.text}`);
+                    } else if (opt.text.includes('(USD)')) {
+                        currency = 'USD';
                     } else {
-                        console.warn("FINAL: Could not determine currency for account option:", opt.text, "Value:", opt.value);
+                        if (opt.text.toLowerCase().includes('sum') || opt.text.toLowerCase().includes('so\'m') || opt.text.toLowerCase().includes('uzs')) {
+                            currency = 'UZS';
+                        } else if (opt.text.toLowerCase().includes('dollar') || opt.text.toLowerCase().includes('usd')) {
+                            currency = 'USD';
+                        }
                     }
+                    originalAccountOptions.push({ value: opt.value, text: opt.text, currency: currency });
                 }
-                originalAccountOptions.push({ value: opt.value, text: opt.text, currency: currency });
             });
-            console.log("Built originalAccountOptions:", JSON.stringify(originalAccountOptions, null, 2));
-        } else {
-            console.error("paidToAccountSelect element not found during buildOriginalAccountOptions!");
         }
     }
 
     if (paidToAccountSelect) {
         buildOriginalAccountOptions();
-    } else {
-         console.error("paidToAccountSelect element not found on DOMContentLoaded!");
     }
 
     function updatePaymentFormForSale() {
-        if (!relatedSaleSelect || !amountUzsInput || !amountUsdInput) {
-            console.error("One or more form elements missing for updatePaymentFormForSale");
+        if (!relatedSaleSelect || !amountUzsInput || !amountUsdInput || !paidToAccountSelect) {
             return;
         }
+
+        amountUzsInput.value = '0';
+        amountUsdInput.value = '0';
+        amountUzsInput.disabled = true;
+        amountUsdInput.disabled = true;
+        paidToAccountSelect.disabled = false;
+
         const selectedOption = relatedSaleSelect.options[relatedSaleSelect.selectedIndex];
         if (!selectedOption || !selectedOption.value) {
-            amountUzsInput.disabled = false;
-            amountUsdInput.disabled = false;
-            if(amountUzsInput) amountUzsInput.value = amountUzsInput.dataset.originalValue || '';
-            if(amountUsdInput) amountUsdInput.value = amountUsdInput.dataset.originalValue || '';
             filterAccountOptionsByCurrency(null);
             return;
         }
 
         const saleText = selectedOption.text;
-        console.log("Selected Sale Text:", saleText);
         const balanceMatch = saleText.match(/Balans: ([\d,\.]+) (UZS|USD)/);
         
         if (!balanceMatch) {
-            console.warn("Could not parse balance from sale option text: ", saleText);
-            amountUzsInput.disabled = false;
-            amountUsdInput.disabled = false;
             filterAccountOptionsByCurrency(null);
             return;
         }
 
         const balance = parseFloat(balanceMatch[1].replace(/,/g, ''));
         const currency = balanceMatch[2];
-        console.log("Parsed Sale Currency:", currency, "Balance:", balance);
 
         if (currency === 'UZS') {
             if(amountUzsInput) {
@@ -399,54 +444,32 @@ document.addEventListener('DOMContentLoaded', function () {
         filterAccountOptionsByCurrency(currency);
     }
 
-
     function filterAccountOptionsByCurrency(targetCurrency) {
         if (!paidToAccountSelect) {
-            console.error("paidToAccountSelect not found in filterAccountOptionsByCurrency");
             return;
         }
-        console.log(`Filtering accounts for targetCurrency: '${targetCurrency}'`);
-        let previouslySelectedValue = paidToAccountSelect.value;
-        paidToAccountSelect.innerHTML = ''; 
-
-        const placeholder = document.createElement('option');
-        placeholder.value = "";
-        placeholder.text = "---------";
-        paidToAccountSelect.appendChild(placeholder);
-        
-        let foundMatchForPreviouslySelected = false;
-        let addedAnyOption = false;
-
-        console.log("Using originalAccountOptions for filtering:", JSON.stringify(originalAccountOptions, null, 2));
+        const previouslySelectedValue = paidToAccountSelect.value;
+        paidToAccountSelect.innerHTML = '<option value="">---------</option>';
 
         originalAccountOptions.forEach(opt => {
-            if (opt.value === "") return; 
-
-            console.log("Checking option:", opt.text, "Its currency:", opt.currency);
-            if (!targetCurrency || (opt.currency && opt.currency === targetCurrency)) {
-                console.log("MATCH! Adding option:", opt.text);
-                const optionElement = document.createElement('option');
-                optionElement.value = opt.value;
-                optionElement.text = opt.text;
-                paidToAccountSelect.appendChild(optionElement);
-                addedAnyOption = true;
-                
-                if (opt.value === previouslySelectedValue) {
-                    optionElement.selected = true;
-                    foundMatchForPreviouslySelected = true;
-                    console.log("Re-selected previous value:", opt.text);
-                }
+            if (!targetCurrency || opt.currency === targetCurrency) {
+                const option = document.createElement('option');
+                option.value = opt.value;
+                option.text = opt.text;
+                paidToAccountSelect.appendChild(option);
             }
         });
-        
-        if (!foundMatchForPreviouslySelected) {
-            paidToAccountSelect.value = ""; 
-            console.log("No match for previously selected value, or no options matched. Setting to placeholder.");
-        } else {
-            console.log("Successfully re-selected or kept selection.");
+
+        let foundPrevious = false;
+        for (let i = 0; i < paidToAccountSelect.options.length; i++) {
+            if (paidToAccountSelect.options[i].value === previouslySelectedValue) {
+                paidToAccountSelect.selectedIndex = i;
+                foundPrevious = true;
+                break;
+            }
         }
-        if (!addedAnyOption && targetCurrency) { // Only warn if a specific currency was targeted and nothing matched
-            console.warn("No account options were added for targetCurrency:", targetCurrency);
+        if (!foundPrevious) {
+            paidToAccountSelect.selectedIndex = 0;
         }
     }
 
@@ -455,13 +478,10 @@ document.addEventListener('DOMContentLoaded', function () {
         if(amountUzsInput) amountUzsInput.dataset.originalValue = amountUzsInput.value;
         if(amountUsdInput) amountUsdInput.dataset.originalValue = amountUsdInput.value;
         
-        // Initial call for updatePaymentFormForSale (if a sale is pre-selected on page load/form error re-render)
-        if (relatedSaleSelect.value) { 
-            console.log("Initial call to updatePaymentFormForSale as a sale is pre-selected.");
+        if (relatedSaleSelect.value) {
             updatePaymentFormForSale();
         } else {
-            console.log("No sale pre-selected on page load, filtering accounts for null targetCurrency (all relevant). Initial state.");
-            filterAccountOptionsByCurrency(null); 
+            filterAccountOptionsByCurrency(null);
         }
     }
     
@@ -471,7 +491,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (parseFloat(amountUzsInput.value) > 0) {
                     if(amountUsdInput) amountUsdInput.value = '';
                     filterAccountOptionsByCurrency('UZS');
-                } else if (amountUsdInput && !parseFloat(amountUzsInput.value) > 0) { // Check if USD is also empty
+                } else if (amountUsdInput && !parseFloat(amountUzsInput.value) > 0) {
                     filterAccountOptionsByCurrency(null); 
                 }
             }
@@ -483,7 +503,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (parseFloat(amountUsdInput.value) > 0) {
                     if(amountUzsInput) amountUzsInput.value = '';
                     filterAccountOptionsByCurrency('USD');
-                } else if (amountUzsInput && !parseFloat(amountUzsInput.value) > 0) { // Check if UZS is also empty
+                } else if (amountUzsInput && !parseFloat(amountUzsInput.value) > 0) {
                     filterAccountOptionsByCurrency(null); 
                 }
             }
@@ -493,20 +513,16 @@ document.addEventListener('DOMContentLoaded', function () {
     var addPaymentModalElement = document.getElementById('addPaymentModal');
     if (addPaymentModalElement) {
         addPaymentModalElement.addEventListener('shown.bs.modal', function () {
-            console.log("Modal shown. Re-building originalAccountOptions and updating form state.");
-            buildOriginalAccountOptions(); 
+            buildOriginalAccountOptions();
             if (relatedSaleSelect && relatedSaleSelect.value) {
-                 updatePaymentFormForSale(); 
+                 updatePaymentFormForSale();
             } else {
-                // If no sale selected when modal opens, check current amount inputs to filter accounts
                 let currentAmountCurrency = null;
                 if (amountUzsInput && parseFloat(amountUzsInput.value) > 0) currentAmountCurrency = 'UZS';
                 else if (amountUsdInput && parseFloat(amountUzsInput.value) > 0) currentAmountCurrency = 'USD';
                 filterAccountOptionsByCurrency(currentAmountCurrency);
             }
         });
-    } else {
-        console.error("addPaymentModalElement not found!");
     }
 
 });

@@ -5,248 +5,52 @@ alwaysApply: false
 ---
 # Completed Features Summary
 
-This document summarizes the features implemented in the air ticket management system.
+This document summarizes implemented features.
 
 ## 1. Project Setup & Configuration
-
-*   **Settings Refactor:** The Django `settings.py` was split into a tiered configuration:
-    *   `config/settings/base.py`: Common settings.
-    *   `config/settings/local.py`: Development-specific settings (`DEBUG=True`).
-    *   `config/settings/production.py`: Production-specific settings (`DEBUG=False`).
-*   `manage.py`, `wsgi.py`, and `asgi.py` were updated to use `config.settings.local` by default, with `DJANGO_SETTINGS_MODULE` override.
-*   **Project Structure:** An `apps` directory was created at the project root to house all Django applications.
-*   **System Path:** The project root was added to `sys.path` in `manage.py`, `wsgi.py`, and `asgi.py` for proper app discovery.
+*   **Tiered Settings:** `settings.py` split into `base.py`, `local.py`, (`DEBUG=True`), and `production.py` (`DEBUG=False`).
+*   Configuration files (`manage.py`, `wsgi.py`, `asgi.py`) updated.
+*   **Project Structure:** `apps` directory for Django applications; project root added to `sys.path`.
 
 ## 2. Core Applications & Models
-
-The following Django apps were created within the `apps` directory and added to `INSTALLED_APPS`:
-
-### a. `apps.contacts`
-Manages information about suppliers and agents.
-*   **`Supplier` Model:**
-    *   Fields: `name`, `contact_person`, `phone_number`, `email`, `notes`.
-*   **`Agent` Model:**
-    *   Fields: `name`, `contact_person`, `phone_number`, `email`, `outstanding_balance_uzs`, `outstanding_balance_usd`, `notes`.
-
-### b. `apps.inventory`
-Manages tickets and their acquisition.
-*   **`Ticket` Model:**
-    *   Fields: `ticket_type` (Air, Tour), `identifier` (auto-generated based on type, description, departure), `description`, `departure_date_time`, `arrival_date_time`.
-    *   `save()` method auto-generates the `identifier`.
-*   **`Acquisition` Model:** Records ticket purchases from suppliers.
-    *   Fields: `supplier` (FK to `Supplier`), `ticket` (FK to `Ticket`), `acquisition_date`, `quantity` (represents current stock from this batch), `unit_price_uzs`, `unit_price_usd`, `transaction_currency`, `total_amount` (auto-calculated), `paid_from_account` (FK to `FinancialAccount`, nullable), `notes`.
-    *   `save()` method:
-        *   Auto-calculates `total_amount`.
-        *   Updates `FinancialAccount.current_balance` if `paid_from_account` is set (transactionally).
-    *   `clean()` method for validations (e.g., price consistency, account currency match).
-
-### c. `apps.sales`
-Manages ticket sales to agents or clients.
-*   **`Sale` Model:**
-    *   Fields: `sale_date`, `quantity`, `related_acquisition` (FK to `Acquisition`), buyer details (`agent` or `client_full_name`/`id_number`), `unit_sale_price`, `sale_currency` (auto-set from acquisition), `total_sale_amount` (auto-calculated), `profit` (auto-calculated), `paid_to_account` (FK to `FinancialAccount`, nullable).
-    *   `save()` method:
-        *   Sets `sale_currency`, calculates `total_sale_amount` and `profit`.
-        *   Decrements `related_acquisition.quantity` (stock management, transactionally with `select_for_update`).
-        *   Updates `FinancialAccount.current_balance` if `paid_to_account` is set.
-        *   Updates `Agent.outstanding_balance` for agent sales without direct payment.
-    *   `clean()` method for validations (e.g., buyer info, stock availability, account currency match).
-
-### d. `apps.accounting`
-Manages financial accounts and expenditures.
-*   **`FinancialAccount` Model:**
-    *   Fields: `name`, `account_type` (Cash, Card, Bank Account), `currency` (UZS, USD), `current_balance`, `account_details`, `is_active`.
-*   **`Expenditure` Model:** Tracks various operational expenses.
-    *   Fields: `expenditure_date`, `description`, `amount`, `currency`, `paid_from_account` (FK to `FinancialAccount`), `notes`.
-    *   `save()` method updates `FinancialAccount.current_balance` (transactionally, handling creates and updates).
-    *   `clean()` method validates `paid_from_account.currency`.
+Base Django apps created: `contacts`, `inventory`, `sales`, `accounting`.
+*   **`contacts`:** `Supplier` and `Agent` models (agent includes outstanding balances UZS/USD).
+*   **`inventory`:** `Ticket` (auto-ID) and `Acquisition` models (records purchases, manages stock, updates finances).
+*   **`sales`:** `Sale` model (records sales, calculates profit, manages stock, updates finances/agent balances).
+*   **`accounting`:** `FinancialAccount` (cash/card/bank accounts) and `Expenditure` models (tracks expenses, updates finances).
 
 ## 3. Admin Interface
-All core models (`Supplier`, `Agent`, `Ticket`, `Acquisition`, `Sale`, `FinancialAccount`, `Expenditure`) have been registered with the Django admin site with basic configurations for display, filtering, and search.
+Core models registered with Django admin (basic setup).
 
-## 4. Key Logic Implemented
-*   **Automatic Calculations:** Total amounts for acquisitions and sales, profit calculation for sales.
-*   **Stock Management:** `Acquisition.quantity` updated upon sale.
-*   **Financial Account Updates:** `FinancialAccount.current_balance` automatically adjusted based on acquisitions, sales payments, and expenditures. Uses `transaction.atomic()` and `select_for_update()` for data integrity.
-*   **Model Validation:** `clean()` methods implemented for data consistency across models.
-*   **Ticket Identifier:** Auto-generated unique identifier for tickets.
+## 4. Key Foundational Logic
+*   Automatic calculations: totals (acquisitions, sales), profit.
+*   Stock management: `Acquisition.quantity` updated on sale.
+*   Transactional financial account updates from acquisitions, sales, expenditures.
+*   Model-level validation (`clean()` methods).
 
-Next steps would typically involve building out views, templates, and forms for user interaction, along with more detailed reporting features.
+## Session Summaries (Key Changes)
 
-## Completed Features & Modifications - Air Ticket Management System
+### Acquisition Management
+*   **`AcquisitionListView`:** Displays paginated, sortable list; filterable by date.
+*   **Modal Creation:** For new acquisitions, including on-the-fly `Ticket` creation; dynamic UZS/USD price fields.
+*   Navigation link added.
 
-This document summarizes the key features and modifications implemented during the current development session.
+### Contact Management (Agents & Suppliers)
+*   **List Views & Modal Creation:** `AgentListView` & `SupplierListView` for displaying contacts and adding new ones via modals.
+*   Navigation links added.
 
-### 1. Acquisition Listing and Viewing
+### Agent Payment System (Session: 2024-05-28)
+*   **Core:** Enabled general and debt-specific payments for agents.
+*   **Models Updated:** `AgentPayment` (stores/validates payment details, updates finances/balances), `Agent` (payment totals/balance updates), `Sale` (tracks `paid_amount_on_this_sale`, calculates `balance_due`).
+*   **Agent Detail View:** Payment modal with dynamic form fields (amount, account filtering by sale currency/balance). Sales table shows payment status per sale.
 
-*   **Acquisition List View (`AcquisitionListView`):**
-    *   Created a Django class-based view (`ListView`) in `apps/inventory/views.py` to display a paginated list of all `Acquisition` records.
-    *   The view fetches acquisitions, ordering them by `acquisition_date` (descending) and then `created_at` (descending) to show the latest entries first.
-    *   It utilizes `select_related` for `supplier`, `ticket`, and `paid_from_account` to optimize database queries.
-*   **HTML Template (`acquisition_list.html`):**
-    *   Created a new template `apps/inventory/templates/inventory/acquisition_list.html` that extends `base.html`.
-    *   Displays acquisition data in a Bootstrap-styled table (`table-striped`, `table-hover`, `align-middle`).
-    *   Table columns include: Sana (Date), Ta'minotchi (Supplier), Chipta (Turi) (Ticket Type), Chipta (Tavsifi) (Ticket Description), Miqdori (Mavjud/Boshl.) (Quantity Available/Initial), Narx (Birlik) (Unit Price), Jami Summa (Total Amount), To'lov Hisobi (Payment Account), Izohlar (Notes).
-    *   Monetary values are formatted with currency symbols (UZS or $) and use `django.contrib.humanize` (`intcomma`) for thousand separators.
-    *   Date format is `dd.mm.YYYY`.
-    *   Long text fields (description, notes) are truncated for better table layout.
-    *   Includes Bootstrap pagination controls.
-*   **URL Configuration:**
-    *   Added URL patterns in `apps/inventory/urls.py` for the `acquisition-list` view.
-    *   Included these inventory URLs in the main `apps/core/urls.py` under the `/inventory/` path and `inventory` namespace.
-*   **Navigation:**
-    *   Added a link "Chipta Xaridlari" (Ticket Acquisitions) in the sidebar of `templates/base.html` pointing to the new list view.
-
-### 2. Date Filtering for Acquisitions
-
-*   **View Logic Update (`AcquisitionListView`):**
-    *   Enhanced `get_queryset` to process GET parameters for date filtering: `filter_period` (day, week, month, custom), `date_filter` (for specific day), `start_date`, `end_date` (for custom range).
-    *   Handles invalid date formats gracefully by showing Django messages.
-    *   `get_context_data` was updated to pass current filter values to the template for form state preservation and to construct query parameters for pagination links (maintaining filters across pages).
-*   **Template Update (`acquisition_list.html`):**
-    *   Added a filter form above the acquisitions table.
-    *   Filter controls are arranged in a single row for a compact layout, including:
-        *   A date input for specific day selection with a "Kun" (Day) button.
-        *   Buttons for "Hafta" (Week) and "Oy" (Month).
-        *   Date inputs for custom start and end dates with an "Oraliq" (Range) button.
-        *   A "Tozalash" (Clear Filter) link to reset all date filters.
-    *   Pagination links now correctly preserve active filters.
-
-### 3. Acquisition Creation via Modal Form
-
-*   **`AcquisitionForm` (`apps/inventory/forms.py`):**
-    *   Created a `ModelForm` for the `Acquisition` model.
-    *   Integrated **on-the-fly Ticket creation**: The form now includes fields to define a new `Ticket` (`ticket_type`, `ticket_description`, `ticket_departure_date_time`, `ticket_arrival_date_time`) directly within the acquisition creation process.
-    *   The `ticket` `ModelChoiceField` was removed from the form, as the ticket is now created and linked within the form's save logic.
-    *   The form's `__init__` method dynamically adds these ticket fields and orders all fields for logical presentation in the modal (ticket fields first).
-    *   The form's `save()` method is overridden to:
-        1.  Create and save a new `Ticket` instance using the provided ticket-specific form data.
-        2.  Assign this newly created `Ticket` to the `Acquisition` instance.
-        3.  Save the `Acquisition` instance.
-    *   Form fields are styled using Bootstrap classes (`form-select-sm`, `form-control-sm`).
-    *   Date/datetime fields use appropriate HTML5 input types.
-    *   `transaction_currency` defaults to 'UZS'.
-*   **View Logic Update (`AcquisitionListView`):**
-    *   Handles `POST` requests to validate and save the `AcquisitionForm`.
-    *   If the form is valid, a success message is displayed, and the user is redirected to the acquisition list.
-    *   If the form is invalid, error messages are displayed, and the form (with errors) is passed back to the template context.
-    *   An unbound `AcquisitionForm` instance is passed to the context for rendering in the modal on GET requests.
-*   **Template Update (`acquisition_list.html`):**
-    *   Added a "Yangi Xarid" (New Acquisition) button in the filter bar (previously in the card header).
-    *   This button triggers a Bootstrap modal (`addAcquisitionModal`).
-    *   The modal contains the `acquisition_form`, rendered field by field to allow for Bootstrap's horizontal form layout (`col-sm-4` for label, `col-sm-8` for field) and error display.
-    *   Includes a section to display Django messages (e.g., for success/error feedback on form submission) at the top of the page.
-*   **Client-Side Interactivity (JavaScript):**
-    *   Added JavaScript in the `extra_js` block for the modal form:
-        *   Dynamically shows/hides the `unit_price_uzs` and `unit_price_usd` input fields based on the selection in the `transaction_currency` dropdown.
-        *   Sets the `required` attribute on the visible price field.
-        *   Ensures the correct price field is visible when the modal is opened/reshown (e.g., after a form validation error or on initial load with default currency).
-        *   The `initially-hidden` CSS class (defined in `base.html`) is used to hide price fields by default, and JS manipulates their display style (`display: flex !important` or `display: none !important`) to override this.
-    *   Removed previously attempted on-the-fly number formatting for price fields due to complexity and user request.
-
-### 4. General Setup & Fixes
-
-*   **`django.contrib.humanize`:** Added to `INSTALLED_APPS` in `config/settings/base.py` to enable template filters like `intcomma`.
-*   **Linter Error Resolution:** Addressed a CSS linter false positive by moving conditional inline styles for hiding elements to a CSS class (`.initially-hidden`) in `base.html` and applying this class conditionally in the template.
-
-### 5. Contact Management (Agents & Suppliers)
-
-*   **Agent and Supplier Listing & Creation:**
-    *   Created `AgentListView` and `SupplierListView` (class-based views) in `apps/contacts/views.py`.
-    *   These views handle both GET requests (displaying a paginated list of agents/suppliers and an empty form for creation) and POST requests (validating and saving new agent/supplier data from a modal form).
-    *   Implemented pagination (10 items per page) for both lists.
-    *   On successful creation, a success message is displayed, and the user is redirected to the respective list.
-    *   On form errors, an error message is displayed, and the form (with errors) is re-rendered in the modal.
-*   **Forms (`AgentForm`, `SupplierForm` in `apps/contacts/forms.py`):
-    *   Created `ModelForms` for `Agent` and `Supplier` models.
-    *   Fields include `name`, `phone_number`, and `notes`.
-    *   Widgets are styled using Bootstrap classes (`form-control-sm`).
-    *   Field labels were translated to Uzbek (e.g., "Nomi", "Telefon Raqami", "Izohlar").
-*   **HTML Templates (`agent_list.html`, `supplier_list.html`):
-    *   Created new templates in `apps/contacts/templates/contacts/`.
-    *   Each template extends `base.html` and displays a list of existing contacts (agents or suppliers) in a Bootstrap table.
-    *   Table columns include relevant information like name, phone number, notes, and creation date. Agent list also shows outstanding balances.
-    *   Includes a "Yangi ... Qo'shish" (Add New ...) button that triggers a Bootstrap modal (`addAgentModal` or `addSupplierModal`).
-    *   The modal contains the respective creation form (`agent_form` or `supplier_form`).
-    *   JavaScript is included to automatically show the modal if the page reloads due to form submission errors.
-*   **URL Configuration:**
-    *   Created `apps/contacts/urls.py` with `app_name = 'contacts'`.
-    *   Defined URL patterns for `agent-list` and `supplier-list` views.
-    *   Included these contact URLs in the main `config/urls.py` under the `/contacts/` path.
-*   **Navigation Update (`templates/base.html`):
-    *   Added "Agentlar" (Agents) and "Ta'minotchilar" (Suppliers) links to the sidebar, pointing to the new list views.
-    *   Sidebar icons were updated for better visual distinction.
-
-This comprehensive set of changes provides a functional interface for listing, filtering, and creating new acquisitions, including the creation of associated tickets directly within the acquisition process.
-
-## Session Date: 2024-05-28 (Auto-Generated Summary)
-
-### 1. Agent Payment System (Pay Specific Debts & General Payments)
-
-**Core Functionality:**
-- Agents can make payments towards their outstanding balances.
-- Payments can be general or specifically allocated to individual sales (debts).
-
-**Model Changes:**
-- **`contacts.AgentPayment` Model:**
-    - Created to store payment details: `agent`, `payment_date`, `amount_paid_uzs`, `amount_paid_usd`, `paid_to_account`, `notes`.
-    - Added `related_sale` (ForeignKey to `sales.Sale`) to link payments to specific sales. This field is optional.
-    - `clean()` method validates payment amounts, currency consistency with the selected `paid_to_account`, and if `related_sale` is chosen, validates against the sale's specific balance and currency.
-    - `save()` method updates the `FinancialAccount` balance and, if `related_sale` is provided, updates the `paid_amount_on_this_sale` field of the linked `Sale`.
-- **`contacts.Agent` Model:**
-    - Added helper methods: `get_total_payments_uzs()`, `get_total_payments_usd()`.
-    - Added `update_balance_on_payment(amount_uzs, amount_usd)` to decrement outstanding balances upon successful general or specific payment.
-- **`sales.Sale` Model:**
-    - Added `paid_amount_on_this_sale` field (Decimal) to track total payments received specifically for this sale.
-    - Added `@property balance_due_on_this_sale` (calculates `total_sale_amount - paid_amount_on_this_sale`).
-    - Added `@property is_fully_paid` to check if the sale's balance is zero or less.
-    - `save()` method updated: 
-        - `initial_payment_amount` for an agent sale now contributes to its `paid_amount_on_this_sale`.
-        - Logic adjusted to handle updates to `initial_payment_amount` and its effect on `paid_amount_on_this_sale`.
-
-**Forms:**
-- **`contacts.AgentPaymentForm`:**
-    - Includes fields for `payment_date`, `related_sale`, `amount_paid_uzs`, `amount_paid_usd`, `paid_to_account`, `notes`.
-    - `related_sale` field is a `ModelChoiceField` dynamically populated in `__init__` with the agent's unpaid/partially paid sales. The choice label clearly shows sale ID, date, balance, and currency.
-    - `paid_to_account` queryset initially shows all active UZS/USD accounts; dynamically filtered by JavaScript.
-    - Comprehensive `clean()` method for validations, including checks for payment amounts, currency consistency, and ensuring payment doesn't exceed sale balance if `related_sale` is chosen.
-
-**Views (`contacts.views`):**
-- **`add_agent_payment(request, agent_pk)` view:**
-    - Handles submission of `AgentPaymentForm`.
-    - On valid submission, saves the `AgentPayment` (which triggers updates to `FinancialAccount` and potentially `Sale.paid_amount_on_this_sale` via model's save method).
-    - Calls `agent.update_balance_on_payment()` to adjust the agent's overall outstanding debt.
-- **`AgentDetailView`:**
-    - Context updated to include an instance of `AgentPaymentForm` (for the payment modal) and a list of the agent's past payments (`agent_payments`).
-    - Sales list (`agent_sales`) now uses the `Sale` model's new properties for display.
-- Defined `AgentUpdateView` and `SupplierCreateView` to resolve earlier `AttributeError` and improve CRUD operation structure.
-- Refactored `AgentListView` and `SupplierListView` to handle only GET requests for listing (POST for creation moved to dedicated CreateViews).
-
-**Templates (`contacts/agent_detail.html`):**
-- **Agent Sales Table:** 
-    - Updated to display `ID`, `Sale Date`, `Ticket`, `Quantity`, `Total Sale Amount`, `Paid on this Sale`, `Balance on this Sale`, and `Status`.
-    - Rows are visually styled (e.g., background color) based on whether a sale is fully paid, partially paid, or not paid.
-- **Payment Modal ("To'lov Qilish"):**
-    - Form now includes the "To'lov qilinayotgan Sotuv (Qarz)" (`related_sale`) dropdown.
-    - **Dynamic JavaScript Functionality:**
-        - When a `related_sale` is selected:
-            - The corresponding currency amount field (UZS or USD) is enabled and pre-filled with the sale's balance due.
-            - The other currency amount field is disabled and cleared.
-            - The "Paid to account" dropdown is filtered to show only accounts matching the selected sale's currency.
-        - If no `related_sale` is selected (general payment):
-            - Both UZS and USD amount fields are enabled.
-            - The "Paid to account" dropdown is filtered based on the currency of the amount entered by the user.
-        - Robust JavaScript for parsing account option currencies from their text and managing the state of form fields.
-- **Agent Payment History Table:**
-    - Now includes a column for "Aloqador Sotuv ID" (Related Sale ID).
-
-**Admin (`contacts.admin`):**
-- `AgentPayment` model registered with a custom `AgentPaymentAdmin` for better display and filtering in the Django admin interface.
-
-**Error Resolution during development:**
-- **Circular Imports:** 
-    - Resolved between `contacts.models`, `sales.models`, and `inventory.models` by using string references for `ForeignKey` definitions (e.g., `supplier = models.ForeignKey('contacts.Supplier', ...)`).
-    - Used `apps.get_model()` in `sales.models.Sale.save()` method to dynamically load the `Agent` model to avoid import issues at module load time.
-- **Form Imports:** Corrected `ImportError` in `sales.forms.py` by ensuring `Agent` and `FinancialAccount` models were imported from their correct app locations (`apps.contacts.models` and `apps.accounting.models` respectively).
-- **Template Syntax:** Fixed an `Invalid block tag 'endblock'` error in `agent_detail.html` due to a duplicated/mismatched tag.
-- **JavaScript Debugging:** Iteratively refined and debugged JavaScript for the payment modal to ensure correct parsing of financial account currencies from HTML option text and reliable filtering of the "Paid to account" dropdown. This involved enhancing logging and adjusting parsing logic.
+### Sale Form & Agent Payment Automation (Session: 2024-05-29)
+*   **`SaleForm`:** Added dynamic `initial_payment_amount` & `initial_payment_account` for agent sales (with validation).
+*   **`Sale.save()`:** Auto-creates/updates `AgentPayment` for initial payments; sets `paid_amount_on_this_sale`.
+*   **`AgentPayment.save()`:** Transactional updates for financial/agent/sale records.
+*   **`SaleListView` & Template:** Modal updated for initial payments. JS for dynamic fields & AJAX-populated, currency-aware account dropdowns.
+*   **Agent Detail Page:** Improved UZS/USD display in sales table (total, paid, balance with original debt shown).
+*   **UI/UX:** Better visibility for profit/initial payments in sales list; refined currency displays.
+*   **Cleanup:** Removed debug `print`/`console.log` statements. Addressed initial payment display logic.
+*   *(Ongoing Issue: Agent sales disappearing from list post-creation was under investigation.)*
 

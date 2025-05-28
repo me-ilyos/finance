@@ -4,7 +4,7 @@ from django.contrib import messages
 from django.core.paginator import Paginator
 from .models import Agent, Supplier, AgentPayment
 from .forms import AgentForm, SupplierForm, AgentPaymentForm
-from django.views.generic import ListView, CreateView, DetailView, UpdateView
+from django.views.generic import ListView, DetailView, UpdateView
 from apps.sales.models import Sale # To list sales related to an agent
 from django.urls import reverse_lazy, reverse # Added reverse
 from django.db import transaction # Added transaction
@@ -16,33 +16,70 @@ from django.core.exceptions import ValidationError # Added ValidationError
 class AgentListView(View):
     def get(self, request):
         agents = Agent.objects.all().order_by('-created_at')
-        paginator = Paginator(agents, 10) # Show 10 agents per page
+        paginator = Paginator(agents, 10)
         page_number = request.GET.get('page')
         page_obj = paginator.get_page(page_number)
-        # agent_form = AgentForm() # Removed, add handled by AgentCreateView via button
+        agent_form = AgentForm() # Instantiate form for the modal
         return render(request, 'contacts/agent_list.html', {
             'agents': page_obj,
-            # 'agent_form': agent_form,
+            'agent_form': agent_form, # Pass form to context
             'is_paginated': page_obj.has_other_pages(),
             'page_obj': page_obj
         })
 
-    # POST method removed from AgentListView, handled by AgentCreateView
+    def post(self, request): # Add POST method to handle form submission
+        agent_form = AgentForm(request.POST)
+        if agent_form.is_valid():
+            agent_form.save()
+            messages.success(request, "Agent muvaffaqiyatli qo'shildi.")
+            return redirect('contacts:agent-list')
+        else:
+            # If form is invalid, re-render the list with errors
+            agents = Agent.objects.all().order_by('-created_at')
+            paginator = Paginator(agents, 10)
+            page_number = request.GET.get('page') # Preserve pagination
+            page_obj = paginator.get_page(page_number)
+            messages.error(request, "Agent qo'shishda xatolik yuz berdi. Ma'lumotlarni tekshiring.")
+            return render(request, 'contacts/agent_list.html', {
+                'agents': page_obj,
+                'agent_form': agent_form, # Pass invalid form back to show errors
+                'is_paginated': page_obj.has_other_pages(),
+                'page_obj': page_obj
+            })
 
 class SupplierListView(View):
     def get(self, request):
         suppliers = Supplier.objects.all().order_by('-created_at')
-        paginator = Paginator(suppliers, 10)  # Show 10 suppliers per page
+        paginator = Paginator(suppliers, 10)
         page_number = request.GET.get('page')
         page_obj = paginator.get_page(page_number)
-        # supplier_form = SupplierForm() # Removed, add handled by SupplierCreateView via button
+        supplier_form = SupplierForm() # Instantiate form for the modal
         return render(request, 'contacts/supplier_list.html', {
             'suppliers': page_obj,
-            # 'supplier_form': supplier_form,
+            'supplier_form': supplier_form, # Pass form to context
             'is_paginated': page_obj.has_other_pages(),
             'page_obj': page_obj
         })
-    # POST method removed from SupplierListView, handled by SupplierCreateView
+
+    def post(self, request): # Add POST method to handle form submission
+        supplier_form = SupplierForm(request.POST)
+        if supplier_form.is_valid():
+            supplier_form.save()
+            messages.success(request, "Yetkazib beruvchi muvaffaqiyatli qo'shildi.")
+            return redirect('contacts:supplier-list')
+        else:
+            # If form is invalid, re-render the list with errors
+            suppliers = Supplier.objects.all().order_by('-created_at')
+            paginator = Paginator(suppliers, 10)
+            page_number = request.GET.get('page') # Preserve pagination
+            page_obj = paginator.get_page(page_number)
+            messages.error(request, "Yetkazib beruvchi qo'shishda xatolik yuz berdi. Ma'lumotlarni tekshiring.")
+            return render(request, 'contacts/supplier_list.html', {
+                'suppliers': page_obj,
+                'supplier_form': supplier_form, # Pass invalid form back to show errors
+                'is_paginated': page_obj.has_other_pages(),
+                'page_obj': page_obj
+            })
 
 class AgentDetailView(DetailView):
     model = Agent
@@ -62,40 +99,20 @@ class AgentDetailView(DetailView):
         context['agent_payments'] = AgentPayment.objects.filter(agent=agent).select_related('paid_to_account').order_by('-payment_date')
         return context
 
-class AgentCreateView(CreateView):
-    model = Agent
-    form_class = AgentForm
-    template_name = 'contacts/agent_form.html' # Should be a generic form template or specific create form
-    success_url = reverse_lazy('contacts:agent-list')
-
-    def form_valid(self, form):
-        messages.success(self.request, "Agent muvaffaqiyatli qo'shildi.")
-        return super().form_valid(form)
-
 class AgentUpdateView(UpdateView): # Added AgentUpdateView
     model = Agent
     form_class = AgentForm
-    template_name = 'contacts/agent_form.html' # Can reuse the same form template
+    template_name = 'contacts/contact_form.html' # Changed to a generic name
     success_url = reverse_lazy('contacts:agent-list')
 
     def form_valid(self, form):
         messages.success(self.request, "Agent muvaffaqiyatli yangilandi.")
         return super().form_valid(form)
 
-class SupplierCreateView(CreateView): # Added SupplierCreateView
-    model = Supplier
-    form_class = SupplierForm
-    template_name = 'contacts/supplier_form.html' # Should be a generic form template or specific create form
-    success_url = reverse_lazy('contacts:supplier-list')
-
-    def form_valid(self, form):
-        messages.success(self.request, "Yetkazib beruvchi muvaffaqiyatli qo'shildi.")
-        return super().form_valid(form)
-
 class SupplierUpdateView(UpdateView):
     model = Supplier
     form_class = SupplierForm
-    template_name = 'contacts/supplier_form.html'
+    template_name = 'contacts/contact_form.html' # Changed to a generic name
     success_url = reverse_lazy('contacts:supplier-list')
 
     def form_valid(self, form):
@@ -111,13 +128,13 @@ def add_agent_payment(request, agent_pk):
                 with transaction.atomic():
                     payment = form.save(commit=False)
                     payment.agent = agent
-                    payment.save() # This will call AgentPayment.save() which updates FinancialAccount
+                    payment.save() # This will now call the refactored AgentPayment.save()
 
-                    # Update agent's outstanding balance
-                    agent.update_balance_on_payment(
-                        amount_paid_uzs=payment.amount_paid_uzs or Decimal('0.00'),
-                        amount_paid_usd=payment.amount_paid_usd or Decimal('0.00')
-                    )
+                    # Agent balance is now updated within AgentPayment.save(), so remove from here
+                    # agent.update_balance_on_payment(
+                    #     amount_paid_uzs=payment.amount_paid_uzs or Decimal('0.00'),
+                    #     amount_paid_usd=payment.amount_paid_usd or Decimal('0.00')
+                    # )
                 messages.success(request, "Agent to'lovi muvaffaqiyatli qo'shildi.")
             except ValidationError as e:
                 messages.error(request, f"To'lovni saqlashda xatolik: {e}")

@@ -4,7 +4,6 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
-# Create your models here.
 
 class FinancialAccount(models.Model):
     class AccountType(models.TextChoices):

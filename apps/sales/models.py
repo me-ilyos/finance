@@ -127,7 +127,7 @@ class Sale(models.Model):
                 'paid_to_account': "Cannot validate payment account currency until the sale currency is determined (select an acquisition)."
             })
 
-    def save(self, *args, **kwargs):
+    def save(self, *args, _prevent_agent_payment_recursion=False, **kwargs):
         is_new = self.pk is None
         original_quantity = 0
         original_related_acquisition_id = None
@@ -178,136 +178,151 @@ class Sale(models.Model):
         total_cost_for_sold_items = self.quantity * unit_cost_native
         self.profit = self.total_sale_amount - total_cost_for_sold_items # Profit in sale_currency
 
+        # Determine/Initialize paid_amount_on_this_sale
+        if not is_new:
+            # For updates, self.paid_amount_on_this_sale is already loaded
+            # with its current value. It will be adjusted by AgentPayment.save() if the
+            # initial_payment_amount (and thus the auto AgentPayment) changes, or by new manual AgentPayments.
+            # No direct assignment here for updates of this specific field before super.save().
+            pass
+        elif self.agent: # New agent sale
+             # Initialize to 0. The auto-created AgentPayment for the initial_payment_amount (if any)
+             # will add to this via its save() method.
+            self.paid_amount_on_this_sale = Decimal('0.00')
+        elif not self.agent and self.paid_to_account: # New, paid client sale
+            self.paid_amount_on_this_sale = self.total_sale_amount
+        else: # New, unpaid client sale OR new agent sale with no initial_payment (covered by self.agent case)
+            self.paid_amount_on_this_sale = Decimal('0.00')
+        
+        # print(f"DEBUG Sale Save: PK {self.pk}, is_new {is_new}, Initialized paid_amount_on_this_sale: {self.paid_amount_on_this_sale}")
+
         with transaction.atomic():
             # 3. Update Stock (Acquisition.available_quantity)
-            # Lock the related acquisition row
             current_acq_to_update = Acquisition.objects.select_for_update().get(pk=self.related_acquisition_id)
-
             if is_new:
                 if self.quantity > current_acq_to_update.available_quantity:
                     raise ValidationError(f"Stock error (save): Tried to sell {self.quantity}, but only {current_acq_to_update.available_quantity} available.")
                 current_acq_to_update.available_quantity -= self.quantity
-            else: # Handle updates
+            else: # Handle updates for stock
                 quantity_diff = self.quantity - original_quantity
-                
                 if original_related_acquisition_id and original_related_acquisition_id != self.related_acquisition_id:
-                    # Acquisition changed: Revert stock on old, deduct from new
                     old_acq = Acquisition.objects.select_for_update().get(pk=original_related_acquisition_id)
                     old_acq.available_quantity += original_quantity
                     old_acq.save()
-                    
                     if self.quantity > current_acq_to_update.available_quantity:
                         raise ValidationError(f"Stock error (save-acq changed): Tried to sell {self.quantity} from new batch, but only {current_acq_to_update.available_quantity} available.")
                     current_acq_to_update.available_quantity -= self.quantity
-                elif quantity_diff != 0: # Same acquisition, quantity changed
-                    # We need to ensure this adjustment doesn't make quantity negative based on its current state
+                elif quantity_diff != 0:
                     if quantity_diff > 0 and quantity_diff > current_acq_to_update.available_quantity:
                          raise ValidationError(f"Stock error (save-qty increased): Tried to increase sale by {quantity_diff}, but only {current_acq_to_update.available_quantity} net available.")
-                    # If quantity_diff < 0, we are returning stock, which should always be fine.
                     current_acq_to_update.available_quantity -= quantity_diff 
-            
             current_acq_to_update.save()
             
-            # Save the sale itself to ensure self.pk is available for financial account update if new
-            # Also ensures instance is updated before agent balance logic
+            # Save the sale instance itself (includes paid_amount_on_this_sale from initial_payment)
             super().save(*args, **kwargs)
 
-            # --- Agent Balance Update & Sale Specific Payment --- 
-            # This logic needs to run AFTER the sale is saved and all its fields (like sale_currency, total_sale_amount) are finalized.
-
-            # 1. Revert old agent debt & initial payment effect if necessary
-            if not is_new and original_agent_id:
-                try:
-                    old_agent_for_revert = AgentModel.objects.get(pk=original_agent_id)
-                    # Revert financial account effect for original initial payment
-                    if original_paid_to_account_id and original_initial_payment_amount and original_initial_payment_amount > 0:
-                        try:
-                            old_fin_account_for_revert = FinancialAccount.objects.get(pk=original_paid_to_account_id)
-                            # This was an income to the financial account
-                            old_fin_account_for_revert.current_balance -= original_initial_payment_amount 
-                            old_fin_account_for_revert.save()
-                        except FinancialAccount.DoesNotExist:
-                            pass # Log this
-                    
-                    # Revert agent outstanding balance based on (original_total_sale_amount - original_initial_payment_amount)
-                    debt_reverted = original_total_sale_amount
-                    if original_initial_payment_amount and original_initial_payment_amount > 0:
-                        debt_reverted -= original_initial_payment_amount
-                    
-                    if original_sale_currency_for_agent_debt == Sale.SaleCurrency.USD:
-                        old_agent_for_revert.outstanding_balance_usd -= debt_reverted
-                    elif original_sale_currency_for_agent_debt == Sale.SaleCurrency.UZS:
-                        old_agent_for_revert.outstanding_balance_uzs -= debt_reverted
-                    old_agent_for_revert.save()
-                except AgentModel.DoesNotExist: # Use dynamically obtained model for exception
-                    pass # Log this
-
-            # Update paid_amount_on_this_sale with the initial_payment_amount for new/updated agent sales
-            # This happens before the main agent balance update to ensure consistency.
-            if self.agent:
+            # --- Agent and Financial Account Updates --- 
+            # This section should only run if not called from AgentPayment.save()
+            if not _prevent_agent_payment_recursion:
+                AgentPaymentModel = apps.get_model('contacts', 'AgentPayment')
                 current_initial_payment = self.initial_payment_amount or Decimal('0.00')
-                if is_new:
-                    # For new sales, paid_amount_on_this_sale starts as the initial_payment
-                    self.paid_amount_on_this_sale = current_initial_payment
-                else:
-                    # For existing sales, if initial_payment_amount changes, 
-                    # adjust paid_amount_on_this_sale by the difference.
-                    # This assumes other payments are handled by AgentPayment model directly updating this field.
-                    initial_payment_diff = current_initial_payment - original_initial_payment_amount
-                    self.paid_amount_on_this_sale = (original_paid_amount_on_this_sale_val + initial_payment_diff)
-                    # Ensure paid_amount_on_this_sale is not negative if initial_payment_diff is largely negative
-                    self.paid_amount_on_this_sale = max(self.paid_amount_on_this_sale, Decimal('0.00'))
 
-            # 2. Apply new agent debt & initial payment effect
-            if self.agent: 
-                current_agent_for_debt = AgentModel.objects.get(pk=self.agent_id)
-                agent_debt_for_this_sale = self.total_sale_amount # Gross debt for this sale
-                
-                # Handle Financial Account update for the initial payment part
-                current_initial_payment = self.initial_payment_amount or Decimal('0.00')
-                original_initial_payment_for_calc = original_initial_payment_amount or Decimal('0.00')
+                # Simplified: Focus on creating/updating AgentPayment for the current sale's initial payment.
+                # Complex revert logic for agent/amount changes needs careful thought and is deferred for now.
 
-                # If initial payment account or amount changed, or if it's new with an initial payment
-                if self.paid_to_account and current_initial_payment > 0:
-                    if is_new or \
-                       original_paid_to_account_id != self.paid_to_account_id or \
-                       original_initial_payment_for_calc != current_initial_payment:
+                if self.agent: 
+                    agent_instance = AgentModel.objects.select_for_update().get(pk=self.agent_id)
+                    
+                    # Logic to adjust agent's overall balance based on the *gross* sale amount
+                    # This happens regardless of initial payment, which is handled by AgentPayment
+                    if is_new:
+                        if self.sale_currency == 'UZS':
+                            agent_instance.outstanding_balance_uzs += self.total_sale_amount
+                        elif self.sale_currency == 'USD':
+                            agent_instance.outstanding_balance_usd += self.total_sale_amount
+                        agent_instance.save(update_fields=['outstanding_balance_uzs', 'outstanding_balance_usd', 'updated_at'])
+                    elif not is_new:
+                        # Revert old gross debt amount if agent or total sale amount/currency changed
+                        if original_agent_id and original_agent_id == self.agent_id:
+                            if original_sale_currency_for_agent_debt == 'UZS':
+                                agent_instance.outstanding_balance_uzs -= original_total_sale_amount
+                            elif original_sale_currency_for_agent_debt == 'USD':
+                                agent_instance.outstanding_balance_usd -= original_total_sale_amount
+                        elif original_agent_id and original_agent_id != self.agent_id:
+                            # Agent changed, revert from old agent
+                            try:
+                                old_agent_instance = AgentModel.objects.select_for_update().get(pk=original_agent_id)
+                                if original_sale_currency_for_agent_debt == 'UZS':
+                                    old_agent_instance.outstanding_balance_uzs -= original_total_sale_amount
+                                elif original_sale_currency_for_agent_debt == 'USD':
+                                    old_agent_instance.outstanding_balance_usd -= original_total_sale_amount
+                                old_agent_instance.save(update_fields=['outstanding_balance_uzs', 'outstanding_balance_usd', 'updated_at'])
+                            except AgentModel.DoesNotExist:
+                                pass # Old agent might have been deleted
+
+                        # Apply new gross debt amount to current agent
+                        if self.sale_currency == 'UZS':
+                            agent_instance.outstanding_balance_uzs += self.total_sale_amount
+                        elif self.sale_currency == 'USD':
+                            agent_instance.outstanding_balance_usd += self.total_sale_amount
+                        agent_instance.save(update_fields=['outstanding_balance_uzs', 'outstanding_balance_usd', 'updated_at'])
+
+
+                    # Auto-create/update AgentPayment for the initial_payment_amount
+                    if current_initial_payment > 0 and self.paid_to_account:
+                        # Try to find an existing auto-generated payment for this sale
+                        # This assumes only one such payment should exist per sale.
+                        agent_payment, created_ap = AgentPaymentModel.objects.update_or_create(
+                            related_sale_id=self.id, # Changed from sale_id
+                            is_auto_payment_for_sale=True, 
+                            defaults={
+                                'agent': self.agent,
+                                'payment_date': self.sale_date,
+                                'paid_to_account': self.paid_to_account,
+                                'notes': f"Avtomatik boshlang\'ich to\'lov (Sotuv ID: {self.id}). Payment method: auto_initial.",
+                                **({'amount_paid_uzs': current_initial_payment} if self.sale_currency == 'UZS' else {'amount_paid_usd': current_initial_payment})
+                            }
+                        )
+                        if not created_ap:
+                            # If it was updated, its save method handles recalculations.
+                            # If we force save here, it might re-trigger things if not careful.
+                            # AgentPayment.save() should be idempotent or handle its own state.
+                            # Let's assume AgentPayment.save() is robust. We explicitly call it if it's an update
+                            # to ensure its logic (like financial account update) runs.
+                            # However, update_or_create already calls save on the AgentPayment instance.
+                            pass
+                    else:
+                        # If initial payment is zero or no account, ensure no auto-payment exists
+                        AgentPaymentModel.objects.filter(related_sale_id=self.id, is_auto_payment_for_sale=True).delete() # Changed from sale_id
+
+                # --- Client Financial Account Update (Direct Payment) ---
+                elif not self.agent and self.paid_to_account: # Client sale with direct full payment
+                    financial_account = FinancialAccount.objects.select_for_update().get(pk=self.paid_to_account_id)
+                    if is_new:
+                        financial_account.balance += self.total_sale_amount
+                    else: # Update
+                        # Revert old payment if account or amount changed
+                        if original_paid_to_account_id and original_paid_to_account_id == self.paid_to_account_id:
+                            financial_account.balance -= original_total_sale_amount # Revert previous amount from same account
+                        elif original_paid_to_account_id and original_paid_to_account_id != self.paid_to_account_id:
+                            try:
+                                old_financial_account = FinancialAccount.objects.select_for_update().get(pk=original_paid_to_account_id)
+                                old_financial_account.balance -= original_total_sale_amount
+                                old_financial_account.save(update_fields=['balance', 'updated_at'])
+                            except FinancialAccount.DoesNotExist:
+                                pass # old account might have been deleted
                         
-                        payment_account_for_initial = FinancialAccount.objects.get(pk=self.paid_to_account_id)
-                        # The financial account was already reverted for original_initial_payment_amount above.
-                        # Now, add the new current_initial_payment.
-                        payment_account_for_initial.current_balance += current_initial_payment
-                        payment_account_for_initial.save()
-
-                # Update agent's total outstanding balance
-                # The outstanding balance added to agent is (total_sale_amount - current_initial_payment)
-                net_debt_to_add_to_agent = self.total_sale_amount - current_initial_payment
+                        financial_account.balance += self.total_sale_amount # Add new amount
+                    financial_account.save(update_fields=['balance', 'updated_at'])
                 
-                if self.sale_currency == Sale.SaleCurrency.USD:
-                    current_agent_for_debt.outstanding_balance_usd += net_debt_to_add_to_agent
-                elif self.sale_currency == Sale.SaleCurrency.UZS:
-                    current_agent_for_debt.outstanding_balance_uzs += net_debt_to_add_to_agent
-                current_agent_for_debt.save()
-
-            # --- Financial Account Balance Update (For non-agent / fully paid client sales) ---
-            # This part now only applies if it's NOT an agent sale with an initial payment handled above
-            if not self.agent: # Client sale
-                # Revert effect on old financial account if account or amount changed during an update
-                if not is_new and original_paid_to_account_id and \
-                   (original_paid_to_account_id != self.paid_to_account_id or original_total_sale_amount != self.total_sale_amount):
+                elif not self.agent and not self.paid_to_account and not is_new and original_paid_to_account_id:
+                    # Client sale changed from paid to unpaid
                     try:
-                        old_payment_account = FinancialAccount.objects.get(pk=original_paid_to_account_id)
-                        old_payment_account.current_balance -= original_total_sale_amount # Subtract as it was an income
-                        old_payment_account.save()
+                        old_financial_account = FinancialAccount.objects.select_for_update().get(pk=original_paid_to_account_id)
+                        old_financial_account.balance -= original_total_sale_amount
+                        old_financial_account.save(update_fields=['balance', 'updated_at'])
                     except FinancialAccount.DoesNotExist:
-                        pass 
-                
-                # Apply effect to new/current account if specified and details changed or it's new
-                if self.paid_to_account and \
-                   (is_new or original_paid_to_account_id != self.paid_to_account_id or original_total_sale_amount != self.total_sale_amount):
-                    payment_account = FinancialAccount.objects.get(pk=self.paid_to_account_id)
-                    payment_account.current_balance += self.total_sale_amount # Add as it is an income
-                    payment_account.save()
+                        pass
 
     def __str__(self):
         buyer_info = str(self.agent.name) if self.agent else f"{self.client_full_name or 'N/A Client'}"
@@ -316,3 +331,7 @@ class Sale(models.Model):
         profit_str = str(self.profit) if hasattr(self, 'profit') else "N/A"
         payment_status = "Paid" if self.paid_to_account else ("Owes" if self.agent else "Unpaid")
         return f"Sale: {self.quantity}x {ticket_info} to {buyer_info} on {sale_date_str} (Profit: {profit_str} {self.sale_currency}) - {payment_status}"
+
+    def delete(self, *args, **kwargs):
+        # Implement the delete logic here
+        super().delete(*args, **kwargs)

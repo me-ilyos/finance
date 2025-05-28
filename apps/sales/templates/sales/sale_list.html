@@ -29,6 +29,15 @@
     .standout-col { /* Applied to th and td for Unit Price, Total Sum, Profit */
         background-color: #f8f9fa !important; /* Light grey background, !important to override stripe */
     }
+    /* Removed alternating background style for sub-columns */
+    .initial-payment {
+        color: #28a745; /* Bootstrap success green */
+        font-weight: bold;
+    }
+    .profit-value {
+        color: #20c997; /* Teal color for better visibility */
+        font-weight: bold;
+    }
 </style>
 <div class="container-fluid">
     
@@ -157,20 +166,34 @@
                             <td class="price-col standout-col align-middle">
                                 <div class="container-fluid gx-0"><div class="row gx-0">
                                     <div class="col text-end small border-end">
-                                        {% if sale.sale_currency == 'UZS' %}{{ sale.total_sale_amount|floatformat:0|intcomma }}{% else %}-{% endif %}
+                                        {% if sale.sale_currency == 'UZS' %}
+                                            {{ sale.total_sale_amount|floatformat:0|intcomma }}
+                                            {% if sale.agent and sale.paid_amount_on_this_sale > 0 %}
+                                                (<span class="initial-payment">{{ sale.paid_amount_on_this_sale|floatformat:0|intcomma }}</span>)
+                                            {% endif %}
+                                        {% else %}-{% endif %}
                                     </div>
                                     <div class="col text-end small">
-                                        {% if sale.sale_currency == 'USD' %}${{ sale.total_sale_amount|floatformat:2|intcomma }}{% else %}-{% endif %}
+                                        {% if sale.sale_currency == 'USD' %}
+                                            ${{ sale.total_sale_amount|floatformat:2|intcomma }}
+                                            {% if sale.agent and sale.paid_amount_on_this_sale > 0 %}
+                                                (<span class="initial-payment">${{ sale.paid_amount_on_this_sale|floatformat:2|intcomma }}</span>)
+                                            {% endif %}
+                                        {% else %}-{% endif %}
                                     </div>
                                 </div></div>
                             </td>
                             <td class="price-col standout-col align-middle">
                                 <div class="container-fluid gx-0"><div class="row gx-0">
                                     <div class="col text-end small border-end">
-                                        {% if sale.sale_currency == 'UZS' %}{{ sale.profit|floatformat:0|intcomma }}{% else %}-{% endif %}
+                                        {% if sale.sale_currency == 'UZS' %}
+                                            <span class="profit-value">{{ sale.profit|floatformat:0|intcomma }}</span>
+                                        {% else %}-{% endif %}
                                     </div>
                                     <div class="col text-end small">
-                                        {% if sale.sale_currency == 'USD' %}${{ sale.profit|floatformat:2|intcomma }}{% else %}-{% endif %}
+                                        {% if sale.sale_currency == 'USD' %}
+                                            <span class="profit-value">${{ sale.profit|floatformat:2|intcomma }}</span>
+                                        {% else %}-{% endif %}
                                     </div>
                                 </div></div>
                             </td>
@@ -178,7 +201,12 @@
                                 {% if sale.paid_to_account %}
                                     {{ sale.paid_to_account.name }}
                                 {% elif sale.agent %}
-                                    <span class="badge bg-warning text-dark">Agent Qarzi</span>
+                                    <span class="badge bg-warning text-dark">Agent Qarzi</span> 
+                                    {% if sale.paid_amount_on_this_sale and sale.paid_amount_on_this_sale > 0 %}
+                                        <small class="d-block text-muted">To'langan: {{ sale.paid_amount_on_this_sale|floatformat:0|intcomma }} {{ sale.sale_currency }}</small>
+                                    {% elif sale.initial_payment_amount and sale.initial_payment_amount == 0 %}
+                                        <small class="d-block text-muted">To'lov qilinmagan</small>
+                                    {% endif %}
                                 {% else %}
                                     <span class="badge bg-danger">To'lanmagan</span>
                                 {% endif %}
@@ -204,8 +232,12 @@
                             </td>
                             <td class="price-col standout-col align-middle">
                                 <div class="container-fluid gx-0"><div class="row gx-0">
-                                    <div class="col text-end small border-end fw-bold">{{ totals.total_profit_uzs|default:0|floatformat:0|intcomma }}</div>
-                                    <div class="col text-end small fw-bold">${{ totals.total_profit_usd|default:0|floatformat:2|intcomma }}</div>
+                                    <div class="col text-end small border-end fw-bold">
+                                        {{ totals.total_profit_uzs|default:0|floatformat:0|intcomma }}
+                                    </div>
+                                    <div class="col text-end small fw-bold">
+                                        ${{ totals.total_profit_usd|default:0|floatformat:2|intcomma }}
+                                    </div>
                                 </div></div>
                             </td>
                             <td></td> {# Empty cell for paid_to_account total #}
@@ -370,13 +402,11 @@ document.addEventListener('DOMContentLoaded', function () {
             const url = `/sales/ajax/get-accounts-for-acquisition/${acquisitionId}/`;
             const response = await fetch(url);
             if (!response.ok) {
-                console.error('Error fetching accounts:', response.statusText);
                 paidToAccountSelectModal.innerHTML = '<option value="">Hisoblar yuklanmadi</option>';
                 return;
             }
             const accounts = await response.json();
             if (accounts.error) {
-                console.error('Error from server:', accounts.error);
                 paidToAccountSelectModal.innerHTML = '<option value="">Xatolik: ' + accounts.error + '</option>';
                 return;
             }
@@ -392,7 +422,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
             }
         } catch (error) {
-            console.error('JavaScript error fetching accounts:', error);
             paidToAccountSelectModal.innerHTML = '<option value="">Skript xatosi</option>';
         }
     }
@@ -412,6 +441,15 @@ document.addEventListener('DOMContentLoaded', function () {
             if (agentSelectModal) toggleClientAgentFields(); // Call to set initial state on modal show
             if (relatedAcquisitionSelectModal.value) updatePaymentAccountOptions(); // Refresh accounts if acq is pre-selected
         });
+    }
+
+    // Handle modal display if form has errors on page load
+    const saleFormErrors = document.querySelector('#saleModalForm .invalid-feedback, #saleModalForm .alert-danger');
+    const addSaleModalElementFromDOM = document.getElementById('addSaleModal'); // Re-get to be safe
+
+    if (saleFormErrors && addSaleModalElementFromDOM) {
+        var addSaleModalInstance = new bootstrap.Modal(addSaleModalElementFromDOM);
+        addSaleModalInstance.show();
     }
 });
 </script>
