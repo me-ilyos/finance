@@ -126,12 +126,6 @@ class Expenditure(models.Model):
                 # We just need to deduct the new self.amount
                 pass # amount_to_deduct_from_current_account is already self.amount
 
-            if current_payment_account.current_balance < amount_to_deduct_from_current_account:
-                raise ValidationError(
-                    f"Insufficient balance in {current_payment_account.name} to cover this expenditure of {amount_to_deduct_from_current_account} {self.currency}. "
-                    f"Current balance: {current_payment_account.current_balance} {current_payment_account.currency}."
-                )
-            
             current_payment_account.current_balance -= amount_to_deduct_from_current_account
             current_payment_account.save()
 

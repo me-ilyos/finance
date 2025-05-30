@@ -1,0 +1,347 @@
+{% extends 'base.html' %}
+{% load humanize %} {% comment %} Load humanize for intcomma {% endcomment %}
+
+{% block title %}Xarajatlar Ro'yxati{% endblock %}
+
+{% block page_title %}Xarajatlar Ro'yxati{% endblock %}
+
+{% block content %}
+<style>
+    .totals-row td {
+        background-color: #FFE0B2 !important; /* Light orange for expenditure totals */
+        font-weight: bold;
+    }
+    .table .amount-col {
+        min-width: 150px; 
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+        padding-left: 0;
+        padding-right: 0;
+    }
+    .amount-col .col {
+        padding: 0.35rem 0.5rem;
+        font-size: 0.875em;
+        line-height: 1.3;
+    }
+    th.amount-col > div:first-of-type {
+        margin-bottom: 0.25rem;
+    }
+    .standout-col {
+        background-color: #f8f9fa !important;
+    }
+</style>
+<div class="container-fluid">
+    
+    {% comment %} Display Django Messages {% endcomment %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Barcha Xarajatlar</h6>
+        </div>
+        <div class="card-body">
+            <form method="get" action="" class="mb-4 p-3 border rounded bg-light">
+                <div class="row g-2 align-items-end">
+                    <!-- Specific Day Filter -->
+                    <div class="col-md-2">
+                        <label for="date_filter_input" class="form-label mb-1"><small>Kun bo'yicha:</small></label>
+                        <input type="date" name="date_filter" id="date_filter_input" class="form-control form-control-sm"
+                               value="{{ current_date_filter|default_if_none:'' }}">
+                    </div>
+                    <div class="col-md-auto">
+                        <button type="submit" name="filter_period" value="day" class="btn btn-sm btn-outline-secondary">Kun</button>
+                    </div>
+
+                    <!-- Week/Month Filters -->
+                    <div class="col-md-auto">
+                         <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="submit" name="filter_period" value="week" class="btn btn-sm btn-outline-secondary">Hafta</button>
+                            <button type="submit" name="filter_period" value="month" class="btn btn-sm btn-outline-secondary">Oy</button>
+                        </div>
+                    </div>
+
+                    <!-- Custom Range Filters -->
+                    <div class="col-md-2">
+                        <label for="start_date_input" class="form-label mb-1"><small>dan:</small></label>
+                        <input type="date" name="start_date" id="start_date_input" class="form-control form-control-sm"
+                               value="{{ current_start_date|default_if_none:'' }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="end_date_input" class="form-label mb-1"><small>gacha:</small></label>
+                        <input type="date" name="end_date" id="end_date_input" class="form-control form-control-sm"
+                               value="{{ current_end_date|default_if_none:'' }}">
+                    </div>
+                    <div class="col-md-auto">
+                         <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
+                        <button type="submit" name="filter_period" value="custom" class="btn btn-sm btn-outline-secondary">Oraliq</button>
+                    </div>
+                    
+                    <!-- Add New Expenditure Button -->
+                    <div class="col-md-auto">
+                        <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
+                        <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#addExpenditureModal">
+                            <i class="fas fa-minus-circle me-1"></i> Yangi Xarajat
+                        </button>
+                    </div>
+
+                    <!-- Clear Filter -->
+                    <div class="col-md-auto ms-md-auto"> 
+                        <label class="form-label mb-1">&nbsp;</label> 
+                        <a href="{% url 'accounting:expenditure-list' %}" class="btn btn-sm btn-link text-decoration-none">Tozalash</a>
+                    </div>
+                </div>
+            </form>
+
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle" id="expenditureTable" width="100%" cellspacing="0">
+                    <thead class="table-light">
+                        <tr class="border-bottom border-2">
+                            <th class="py-3 px-3 fw-semibold">Sana</th>
+                            <th class="py-3 px-3 fw-semibold">Tavsifi</th>
+                            <th class="text-center fw-semibold amount-col standout-col align-middle">
+                                <div>Miqdori</div>
+                                <div class="container-fluid gx-0"><div class="row gx-0">
+                                    <div class="col text-center small border-end py-1">UZS</div>
+                                    <div class="col text-center small py-1">USD</div>
+                                </div></div>
+                            </th>
+                            <th class="py-3 px-3 fw-semibold">To'lov Hisobi</th>
+                            <th class="py-3 px-3 fw-semibold">Izohlar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for expenditure in expenditures %}
+                        <tr>
+                            <td class="py-2 px-3">{{ expenditure.expenditure_date|date:"d.m.y H:i" }}</td>
+                            <td class="py-2 px-3">{{ expenditure.description }}</td>
+                            <td class="amount-col standout-col align-middle">
+                                <div class="container-fluid gx-0"><div class="row gx-0">
+                                    <div class="col text-end small border-end">
+                                        {% if expenditure.currency == 'UZS' %}{{ expenditure.amount|floatformat:0|intcomma }}{% else %}-{% endif %}
+                                    </div>
+                                    <div class="col text-end small">
+                                        {% if expenditure.currency == 'USD' %}${{ expenditure.amount|floatformat:2|intcomma }}{% else %}-{% endif %}
+                                    </div>
+                                </div></div>
+                            </td>
+                            <td class="py-2 px-3">{{ expenditure.paid_from_account.name }} ({{expenditure.paid_from_account.get_account_type_display }})</td>
+                            <td class="py-2 px-3">{{ expenditure.notes|default:""|truncatewords:10 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-3 px-3">Xarajatlar mavjud emas yoki filtrga mos kelmadi.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    {% if expenditures %}
+                    <tfoot class="totals-row">
+                        <tr>
+                            <td colspan="2" class="text-end fw-bold">Jami Xarajat:</td>
+                            <td class="amount-col standout-col align-middle">
+                                <div class="container-fluid gx-0"><div class="row gx-0">
+                                    <div class="col text-end small border-end fw-bold">{{ totals.total_amount_uzs|default:0|floatformat:0|intcomma }}</div>
+                                    <div class="col text-end small fw-bold">${{ totals.total_amount_usd|default:0|floatformat:2|intcomma }}</div>
+                                </div></div>
+                            </td>
+                            <td colspan="2"></td> 
+                        </tr>
+                    </tfoot>
+                    {% endif %}
+                </table>
+            </div>
+
+            {% if is_paginated %}
+            <nav aria-label="Page navigation" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1{% if query_params %}&{{ query_params }}{% endif %}" aria-label="First">
+                                <span aria-hidden="true">&laquo;&laquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if query_params %}&{{ query_params }}{% endif %}" aria-label="Previous">
+                                <span aria-hidden="true">&laquo;</span>
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">&laquo;&laquo;</span>
+                        </li>
+                        <li class="page-item disabled">
+                            <span class="page-link">&laquo;</span>
+                        </li>
+                    {% endif %}
+
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <li class="page-item active" aria-current="page"><span class="page-link">{{ num }}</span></li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item"><a class="page-link" href="?page={{ num }}{% if query_params %}&{{ query_params }}{% endif %}">{{ num }}</a></li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if query_params %}&{{ query_params }}{% endif %}" aria-label="Next">
+                                <span aria-hidden="true">&raquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if query_params %}&{{ query_params }}{% endif %}" aria-label="Last">
+                                <span aria-hidden="true">&raquo;&raquo;</span>
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">&raquo;</span>
+                        </li>
+                        <li class="page-item disabled">
+                            <span class="page-link">&raquo;&raquo;</span>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Add Expenditure Modal -->
+<div class="modal fade" id="addExpenditureModal" tabindex="-1" aria-labelledby="addExpenditureModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="post" action="{% url 'accounting:expenditure-list' %}" id="expenditureModalForm">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addExpenditureModalLabel">Yangi Xarajat Qo'shish</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {% if expenditure_form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in expenditure_form.non_field_errors %}
+                                <p class="mb-0">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    {% for field in expenditure_form %}
+                        <div class="mb-3 row" id="wrapper_{{ field.id_for_label }}">
+                            <label for="{{ field.id_for_label }}" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">
+                                {{ field.label }}
+                                {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+                            <div class="col-sm-8">
+                                {{ field }} 
+                                {% if field.help_text %}
+                                    <small class="form-text text-muted d-block mt-1">{{ field.help_text }}</small>
+                                {% endif %}
+                                {% for error in field.errors %}
+                                    <div class="invalid-feedback d-block">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Bekor Qilish</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Handle modal display if form has errors on page load
+    const expenditureFormErrors = document.querySelector('#expenditureModalForm .invalid-feedback, #expenditureModalForm .alert-danger');
+    const addExpenditureModalElement = document.getElementById('addExpenditureModal');
+
+    if (expenditureFormErrors && addExpenditureModalElement) {
+        var addExpenditureModalInstance = new bootstrap.Modal(addExpenditureModalElement);
+        addExpenditureModalInstance.show();
+    }
+
+    // Dynamic filtering for paid_from_account based on currency selection in modal
+    const currencySelectModal = document.getElementById('id_currency'); // In modal
+    const paidFromAccountSelectModal = document.getElementById('id_paid_from_account'); // In modal
+    let allAccounts = [];
+
+    // Store all account options initially if the select element exists
+    if (paidFromAccountSelectModal) {
+        Array.from(paidFromAccountSelectModal.options).forEach(option => {
+            if (option.value) { // Exclude the empty "Select Account" option
+                allAccounts.push({
+                    value: option.value,
+                    text: option.text,
+                    currency: option.text.includes('USD') ? 'USD' : (option.text.includes('UZS') ? 'UZS' : '') // Basic currency detection from text
+                });
+            }
+        });
+    }
+    
+    function filterAccountsByCurrency() {
+        if (!currencySelectModal || !paidFromAccountSelectModal || allAccounts.length === 0) return;
+
+        const selectedCurrency = currencySelectModal.value;
+        const currentAccountValue = paidFromAccountSelectModal.value; // Preserve selection if possible
+
+        // Clear existing options except the first one (placeholder)
+        while (paidFromAccountSelectModal.options.length > 1) {
+            paidFromAccountSelectModal.remove(1);
+        }
+        
+        allAccounts.forEach(account => {
+            // A more robust way would be to fetch account currency via an attribute or separate data
+            // For now, this relies on the account name containing its currency (e.g., "Cash UZS")
+            // This is a simplification. Ideally, FinancialAccount model would expose currency directly
+            // or the form field would pass this info.
+            // Let's assume for now the 'clean' method in the form handles the strict validation.
+            // Here we just provide a client-side hint.
+            if (selectedCurrency === "" || account.text.includes(selectedCurrency)) {
+                 const option = document.createElement('option');
+                 option.value = account.value;
+                 option.text = account.text;
+                 paidFromAccountSelectModal.appendChild(option);
+            }
+        });
+
+        // Try to reselect previous value if it's still valid
+        if (Array.from(paidFromAccountSelectModal.options).some(opt => opt.value === currentAccountValue)) {
+            paidFromAccountSelectModal.value = currentAccountValue;
+        } else if (paidFromAccountSelectModal.options.length > 1) {
+            // If previous selection is no longer valid, select the first available actual account
+            // paidFromAccountSelectModal.value = paidFromAccountSelectModal.options[1].value;
+        } else {
+            // If no accounts match, the placeholder remains selected.
+        }
+    }
+
+    if (currencySelectModal) {
+        currencySelectModal.addEventListener('change', filterAccountsByCurrency);
+        // Initial filter call in case a currency is pre-selected (e.g. form redisplay with errors)
+        filterAccountsByCurrency();
+    }
+    
+    // When modal is shown, re-trigger the filter if necessary
+    if (addExpenditureModalElement) {
+        addExpenditureModalElement.addEventListener('shown.bs.modal', function () {
+            if (currencySelectModal) filterAccountsByCurrency();
+        });
+    }
+
+});
+</script>
+{% endblock %} 

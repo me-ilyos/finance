@@ -145,18 +145,15 @@
                 <a href="{% url 'sales:sale-list' %}" class="list-group-item list-group-item-action">
                     <i class="fas fa-receipt"></i> Chipta Sotuvlari
                 </a>
-                <a href="#" class="list-group-item list-group-item-action">
-                    <i class="fas fa-money-bill-wave"></i> To'lovlar
-                </a>
-                <a href="#" class="list-group-item list-group-item-action">
-                    <i class="fas fa-book"></i> Hisob Kitob
+                <a href="{% url 'accounting:expenditure-list' %}" class="list-group-item list-group-item-action">
+                    <i class="fas fa-credit-card"></i> Xarajatlar
                 </a>
                 <a href="{% url 'contacts:agent-list' %}" class="list-group-item list-group-item-action">
                     <i class="fas fa-users"></i> Agentlar
                 </a>
             </div>
             <div class="sidebar-footer">
-                <a href="{% url 'logout' %}" class="list-group-item list-group-item-action text-start rounded-0">
+                <a href="{% url 'core:logout' %}" class="list-group-item list-group-item-action text-start rounded-0">
                     <i class="fas fa-sign-out-alt"></i> Chiqish
                 </a>
             </div>
@@ -174,7 +171,7 @@
                     <!-- Breadcrumb or page title area -->
                     <nav aria-label="breadcrumb" class="ms-2">
                         <ol class="breadcrumb mb-0">
-                            <li class="breadcrumb-item"><a href="#">Bosh Sahifa</a></li>
+                            <li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}">Bosh Sahifa</a></li>
                             <li class="breadcrumb-item active" aria-current="page">{% block page_title %}Boshqaruv Paneli{% endblock %}</li>
                         </ol>
                     </nav>
@@ -190,7 +187,7 @@
                                         <li><a class="dropdown-item" href="#">Profil</a></li>
                                         <li><hr class="dropdown-divider"></li>
                                         <li>
-                                            <form method="post" action="{% url 'logout' %}" style="margin: 0;">
+                                            <form method="post" action="{% url 'core:logout' %}" style="margin: 0;">
                                                 {% csrf_token %}
                                                 <button type="submit" class="dropdown-item">Chiqish</button>
                                             </form>
@@ -199,7 +196,7 @@
                                 </li>
                             {% else %}
                                 <li class="nav-item">
-                                    <a class="nav-link" href="{% url 'login' %}">Kirish</a>
+                                    <a class="nav-link" href="{% url 'core:login' %}">Kirish</a>
                                 </li>
                                 <li class="nav-item">
                                     <a class="nav-link" href="#">Ro'yxatdan o'tish</a> <!-- Placeholder for signup_url -->

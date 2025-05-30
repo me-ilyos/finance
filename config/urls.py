@@ -20,8 +20,8 @@ from django.views.generic import RedirectView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', RedirectView.as_view(pattern_name='login', permanent=False)),
-    path('core/', include('apps.core.urls')),
+    path('', RedirectView.as_view(pattern_name='core:login', permanent=False)),
+    path('core/', include('apps.core.urls', namespace='core')),
     path('contacts/', include('apps.contacts.urls')),
     path('inventory/', include('apps.inventory.urls', namespace='inventory')),
     path('accounting/', include('apps.accounting.urls', namespace='accounting')),
