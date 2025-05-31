@@ -1,35 +1,15 @@
 {% extends 'base.html' %}
-{% load humanize %} {% comment %} Load humanize for intcomma {% endcomment %}
+{% load humanize static %}
 
 {% block title %}Xarajatlar Ro'yxati{% endblock %}
 
 {% block page_title %}Xarajatlar Ro'yxati{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/expenditure_list.css' %}">
+{% endblock %}
+
 {% block content %}
-<style>
-    .totals-row td {
-        background-color: #FFE0B2 !important; /* Light orange for expenditure totals */
-        font-weight: bold;
-    }
-    .table .amount-col {
-        min-width: 150px; 
-        padding-top: 0.25rem;
-        padding-bottom: 0.25rem;
-        padding-left: 0;
-        padding-right: 0;
-    }
-    .amount-col .col {
-        padding: 0.35rem 0.5rem;
-        font-size: 0.875em;
-        line-height: 1.3;
-    }
-    th.amount-col > div:first-of-type {
-        margin-bottom: 0.25rem;
-    }
-    .standout-col {
-        background-color: #f8f9fa !important;
-    }
-</style>
 <div class="container-fluid">
     
     {% comment %} Display Django Messages {% endcomment %}
@@ -219,7 +199,7 @@
 <div class="modal fade" id="addExpenditureModal" tabindex="-1" aria-labelledby="addExpenditureModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <form method="post" action="{% url 'accounting:expenditure-list' %}" id="expenditureModalForm">
+            <form method="post" action="{% url 'accounting:expenditure-create' %}" id="expenditureModalForm">
                 {% csrf_token %}
                 <div class="modal-header">
                     <h5 class="modal-title" id="addExpenditureModalLabel">Yangi Xarajat Qo'shish</h5>
@@ -263,85 +243,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    // Handle modal display if form has errors on page load
-    const expenditureFormErrors = document.querySelector('#expenditureModalForm .invalid-feedback, #expenditureModalForm .alert-danger');
-    const addExpenditureModalElement = document.getElementById('addExpenditureModal');
-
-    if (expenditureFormErrors && addExpenditureModalElement) {
-        var addExpenditureModalInstance = new bootstrap.Modal(addExpenditureModalElement);
-        addExpenditureModalInstance.show();
-    }
-
-    // Dynamic filtering for paid_from_account based on currency selection in modal
-    const currencySelectModal = document.getElementById('id_currency'); // In modal
-    const paidFromAccountSelectModal = document.getElementById('id_paid_from_account'); // In modal
-    let allAccounts = [];
-
-    // Store all account options initially if the select element exists
-    if (paidFromAccountSelectModal) {
-        Array.from(paidFromAccountSelectModal.options).forEach(option => {
-            if (option.value) { // Exclude the empty "Select Account" option
-                allAccounts.push({
-                    value: option.value,
-                    text: option.text,
-                    currency: option.text.includes('USD') ? 'USD' : (option.text.includes('UZS') ? 'UZS' : '') // Basic currency detection from text
-                });
-            }
-        });
-    }
-    
-    function filterAccountsByCurrency() {
-        if (!currencySelectModal || !paidFromAccountSelectModal || allAccounts.length === 0) return;
-
-        const selectedCurrency = currencySelectModal.value;
-        const currentAccountValue = paidFromAccountSelectModal.value; // Preserve selection if possible
-
-        // Clear existing options except the first one (placeholder)
-        while (paidFromAccountSelectModal.options.length > 1) {
-            paidFromAccountSelectModal.remove(1);
-        }
-        
-        allAccounts.forEach(account => {
-            // A more robust way would be to fetch account currency via an attribute or separate data
-            // For now, this relies on the account name containing its currency (e.g., "Cash UZS")
-            // This is a simplification. Ideally, FinancialAccount model would expose currency directly
-            // or the form field would pass this info.
-            // Let's assume for now the 'clean' method in the form handles the strict validation.
-            // Here we just provide a client-side hint.
-            if (selectedCurrency === "" || account.text.includes(selectedCurrency)) {
-                 const option = document.createElement('option');
-                 option.value = account.value;
-                 option.text = account.text;
-                 paidFromAccountSelectModal.appendChild(option);
-            }
-        });
-
-        // Try to reselect previous value if it's still valid
-        if (Array.from(paidFromAccountSelectModal.options).some(opt => opt.value === currentAccountValue)) {
-            paidFromAccountSelectModal.value = currentAccountValue;
-        } else if (paidFromAccountSelectModal.options.length > 1) {
-            // If previous selection is no longer valid, select the first available actual account
-            // paidFromAccountSelectModal.value = paidFromAccountSelectModal.options[1].value;
-        } else {
-            // If no accounts match, the placeholder remains selected.
-        }
-    }
-
-    if (currencySelectModal) {
-        currencySelectModal.addEventListener('change', filterAccountsByCurrency);
-        // Initial filter call in case a currency is pre-selected (e.g. form redisplay with errors)
-        filterAccountsByCurrency();
-    }
-    
-    // When modal is shown, re-trigger the filter if necessary
-    if (addExpenditureModalElement) {
-        addExpenditureModalElement.addEventListener('shown.bs.modal', function () {
-            if (currencySelectModal) filterAccountsByCurrency();
-        });
-    }
-
-});
-</script>
+<script src="{% static 'js/expenditure_form.js' %}"></script>
 {% endblock %} 
