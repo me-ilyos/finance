@@ -1,152 +1,150 @@
-from django.shortcuts import render, redirect, get_object_or_404
-from django.views import View
+from django.shortcuts import get_object_or_404, redirect
 from django.contrib import messages
-from django.core.paginator import Paginator
+from django.views.generic import DetailView, UpdateView, ListView, CreateView
+from django.urls import reverse_lazy, reverse
+from django.http import HttpResponseRedirect
+import logging
+
 from .models import Agent, Supplier, AgentPayment
 from .forms import AgentForm, SupplierForm, AgentPaymentForm
-from django.views.generic import ListView, DetailView, UpdateView
-from apps.sales.models import Sale # To list sales related to an agent
-from django.urls import reverse_lazy, reverse # Added reverse
-from django.db import transaction # Added transaction
-from decimal import Decimal # Added Decimal
-from django.core.exceptions import ValidationError # Added ValidationError
+from .services import ContactFormService, AgentPaymentService
 
-# Create your views here.
+logger = logging.getLogger(__name__)
 
-class AgentListView(View):
-    def get(self, request):
-        agents = Agent.objects.all().order_by('-created_at')
-        paginator = Paginator(agents, 10)
-        page_number = request.GET.get('page')
-        page_obj = paginator.get_page(page_number)
-        agent_form = AgentForm() # Instantiate form for the modal
-        return render(request, 'contacts/agent_list.html', {
-            'agents': page_obj,
-            'agent_form': agent_form, # Pass form to context
-            'is_paginated': page_obj.has_other_pages(),
-            'page_obj': page_obj
-        })
 
-    def post(self, request): # Add POST method to handle form submission
-        agent_form = AgentForm(request.POST)
-        if agent_form.is_valid():
-            agent_form.save()
-            messages.success(request, "Agent muvaffaqiyatli qo'shildi.")
-            return redirect('contacts:agent-list')
-        else:
-            # If form is invalid, re-render the list with errors
-            agents = Agent.objects.all().order_by('-created_at')
-            paginator = Paginator(agents, 10)
-            page_number = request.GET.get('page') # Preserve pagination
-            page_obj = paginator.get_page(page_number)
-            messages.error(request, "Agent qo'shishda xatolik yuz berdi. Ma'lumotlarni tekshiring.")
-            return render(request, 'contacts/agent_list.html', {
-                'agents': page_obj,
-                'agent_form': agent_form, # Pass invalid form back to show errors
-                'is_paginated': page_obj.has_other_pages(),
-                'page_obj': page_obj
-            })
-
-class SupplierListView(View):
-    def get(self, request):
-        suppliers = Supplier.objects.all().order_by('-created_at')
-        paginator = Paginator(suppliers, 10)
-        page_number = request.GET.get('page')
-        page_obj = paginator.get_page(page_number)
-        supplier_form = SupplierForm() # Instantiate form for the modal
-        return render(request, 'contacts/supplier_list.html', {
-            'suppliers': page_obj,
-            'supplier_form': supplier_form, # Pass form to context
-            'is_paginated': page_obj.has_other_pages(),
-            'page_obj': page_obj
-        })
-
-    def post(self, request): # Add POST method to handle form submission
-        supplier_form = SupplierForm(request.POST)
-        if supplier_form.is_valid():
-            supplier_form.save()
-            messages.success(request, "Yetkazib beruvchi muvaffaqiyatli qo'shildi.")
-            return redirect('contacts:supplier-list')
-        else:
-            # If form is invalid, re-render the list with errors
-            suppliers = Supplier.objects.all().order_by('-created_at')
-            paginator = Paginator(suppliers, 10)
-            page_number = request.GET.get('page') # Preserve pagination
-            page_obj = paginator.get_page(page_number)
-            messages.error(request, "Yetkazib beruvchi qo'shishda xatolik yuz berdi. Ma'lumotlarni tekshiring.")
-            return render(request, 'contacts/supplier_list.html', {
-                'suppliers': page_obj,
-                'supplier_form': supplier_form, # Pass invalid form back to show errors
-                'is_paginated': page_obj.has_other_pages(),
-                'page_obj': page_obj
-            })
-
-class AgentDetailView(DetailView):
+class AgentListView(CreateView):
+    """Combined list and create view for agents"""
     model = Agent
-    template_name = 'contacts/agent_detail.html'
-    context_object_name = 'agent'
+    form_class = AgentForm
+    template_name = 'contacts/agent_list.html'
+    success_url = reverse_lazy('contacts:agent-list')
+    paginate_by = 10
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        agent = self.get_object()
-        context['agent_sales'] = Sale.objects.filter(agent=agent).select_related(
-            'related_acquisition', 'related_acquisition__ticket', 'paid_to_account'
-        ).order_by('-sale_date')
-        
-        # Add payment form to context
-        context['payment_form'] = AgentPaymentForm(initial={'agent': agent.pk}, agent=agent) 
-        # Add agent payments to context
-        context['agent_payments'] = AgentPayment.objects.filter(agent=agent).select_related('paid_to_account').order_by('-payment_date')
+        context['agents'] = Agent.objects.all().order_by('-created_at')
+        context['agent_form'] = context['form']
         return context
 
-class AgentUpdateView(UpdateView): # Added AgentUpdateView
+    def form_valid(self, form):
+        try:
+            ContactFormService.create_agent(form.cleaned_data)
+            messages.success(self.request, "Agent muvaffaqiyatli qo'shildi.")
+        except Exception as e:
+            logger.error(f"Error creating agent: {e}")
+            messages.error(self.request, "Agent yaratishda xatolik yuz berdi.")
+        return HttpResponseRedirect(self.success_url)
+
+    def form_invalid(self, form):
+        messages.error(self.request, "Agent qo'shishda xatolik. Ma'lumotlarni tekshiring.")
+        return super().form_invalid(form)
+
+
+class SupplierListView(CreateView):
+    """Combined list and create view for suppliers"""
+    model = Supplier
+    form_class = SupplierForm
+    template_name = 'contacts/supplier_list.html'
+    success_url = reverse_lazy('contacts:supplier-list')
+    paginate_by = 10
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['suppliers'] = Supplier.objects.all().order_by('-created_at')
+        context['supplier_form'] = context['form']
+        return context
+
+    def form_valid(self, form):
+        try:
+            ContactFormService.create_supplier(form.cleaned_data)
+            messages.success(self.request, "Yetkazib beruvchi muvaffaqiyatli qo'shildi.")
+        except Exception as e:
+            logger.error(f"Error creating supplier: {e}")
+            messages.error(self.request, "Yetkazib beruvchi yaratishda xatolik yuz berdi.")
+        return HttpResponseRedirect(self.success_url)
+
+    def form_invalid(self, form):
+        messages.error(self.request, "Yetkazib beruvchi qo'shishda xatolik. Ma'lumotlarni tekshiring.")
+        return super().form_invalid(form)
+
+
+class SupplierDetailView(DetailView):
+    """Detail view for suppliers"""
+    model = Supplier
+    template_name = 'contacts/supplier_detail.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Use service to get supplier acquisitions
+        from django.apps import apps
+        Acquisition = apps.get_model('inventory', 'Acquisition')
+        context['supplier_acquisitions'] = Acquisition.objects.filter(
+            supplier=self.object
+        ).select_related('ticket').order_by('-acquisition_date')[:10]
+        return context
+
+
+class AgentDetailView(DetailView):
+    """Detail view for agents"""
+    model = Agent
+    template_name = 'contacts/agent_detail.html'
+
+    def get_queryset(self):
+        return Agent.objects.prefetch_related(
+            'agent_sales__related_acquisition__ticket',
+            'agent_sales__paid_to_account',
+            'payments__paid_to_account'
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        agent = self.object
+        context['agent_sales'] = agent.agent_sales.all().order_by('-sale_date')
+        context['agent_payments'] = agent.payments.all().order_by('-payment_date')
+        context['payment_form'] = AgentPaymentForm(initial={'agent': agent.pk}, agent=agent)
+        return context
+
+
+class AgentUpdateView(UpdateView):
+    """Update view for agents"""
     model = Agent
     form_class = AgentForm
-    template_name = 'contacts/contact_form.html' # Changed to a generic name
+    template_name = 'contacts/contact_form.html'
     success_url = reverse_lazy('contacts:agent-list')
 
     def form_valid(self, form):
         messages.success(self.request, "Agent muvaffaqiyatli yangilandi.")
         return super().form_valid(form)
 
+
 class SupplierUpdateView(UpdateView):
+    """Update view for suppliers"""
     model = Supplier
     form_class = SupplierForm
-    template_name = 'contacts/contact_form.html' # Changed to a generic name
+    template_name = 'contacts/contact_form.html'
     success_url = reverse_lazy('contacts:supplier-list')
 
     def form_valid(self, form):
         messages.success(self.request, "Yetkazib beruvchi muvaffaqiyatli yangilandi.")
         return super().form_valid(form)
 
+
 def add_agent_payment(request, agent_pk):
+    """Simple function-based view for adding agent payments"""
     agent = get_object_or_404(Agent, pk=agent_pk)
+    
     if request.method == 'POST':
         form = AgentPaymentForm(request.POST, agent=agent)
         if form.is_valid():
-            try:
-                with transaction.atomic():
-                    payment = form.save(commit=False)
-                    payment.agent = agent
-                    payment.save() # This will now call the refactored AgentPayment.save()
-
-                    # Agent balance is now updated within AgentPayment.save(), so remove from here
-                    # agent.update_balance_on_payment(
-                    #     amount_paid_uzs=payment.amount_paid_uzs or Decimal('0.00'),
-                    #     amount_paid_usd=payment.amount_paid_usd or Decimal('0.00')
-                    # )
+            payment, error = AgentPaymentService.create_payment(form, agent)
+            if payment:
                 messages.success(request, "Agent to'lovi muvaffaqiyatli qo'shildi.")
-            except ValidationError as e:
-                messages.error(request, f"To'lovni saqlashda xatolik: {e}")
-            except Exception as e:
-                messages.error(request, f"Kutilmagan xatolik: {e}")
+            else:
+                messages.error(request, error)
         else:
-            # Form is invalid, gather errors to display
-            error_message = "To'lovni qo'shishda xatolik. Iltimos, ma'lumotlarni tekshiring."
             for field, errors in form.errors.items():
+                field_label = form.fields[field].label if field != '__all__' else 'Forma'
                 for error in errors:
-                    messages.error(request, f"{form.fields[field].label if field != '__all__' else 'Forma'}: {error}")
-            # messages.error(request, error_message)
+                    messages.error(request, f"{field_label}: {error}")
 
-    # Always redirect back to agent detail page, messages will be displayed there
     return redirect(reverse('contacts:agent-detail', kwargs={'pk': agent_pk}))

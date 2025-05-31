@@ -1,0 +1,71 @@
+/* Agent Detail Page Styles */
+
+.card-header {
+    background-color: #f8f9fc;
+    border-bottom: 1px solid #e3e6f0;
+    font-weight: 600;
+}
+
+.card.shadow {
+    box-shadow: 0 .15rem 1.75rem 0 rgba(58,59,69,.1)!important;
+}
+
+.table th {
+    background-color: #f1f3f7;
+    font-weight: 600;
+}
+
+.badge {
+    font-size: 0.8em;
+    padding: 0.4em 0.7em;
+}
+
+.border-left-danger {
+    border-left: .25rem solid #e74a3b!important;
+}
+
+.text-xs {
+    font-size: .7rem;
+}
+
+.agent-info-card .card-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.agent-info-card .agent-details p {
+    margin-bottom: 0.5rem;
+}
+
+.agent-info-card .agent-notes {
+    margin-top: auto;
+    padding-top: 0.5rem;
+    font-style: italic;
+}
+
+.partially-paid {
+    background-color: #fff3cd;
+}
+
+.fully-paid {
+    background-color: #d1e7dd;
+}
+
+.not-paid {
+    background-color: #f8d7da;
+}
+
+.price-col-detail .col {
+    padding: 0.35rem 0.5rem; 
+    font-size: 0.875em; 
+    line-height: 1.3;
+}
+
+.price-col-detail .col:first-child {
+    border-right: 1px solid #e3e6f0;
+}
+
+.table tfoot td {
+    font-weight: bold;
+    background-color: #f1f3f7;
+} 

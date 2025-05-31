@@ -1,0 +1,21 @@
+<!-- Agent Information Card Component -->
+<div class="card shadow h-100 agent-info-card">
+    <div class="card-header py-3">
+        <h6 class="m-0 text-primary"><i class="fas fa-address-card me-2"></i>Agent Ma'lumotlari</h6>
+    </div>
+    <div class="card-body">
+        <div class="d-flex align-items-center mb-3">
+            <i class="fas fa-user-tie fa-3x text-gray-400 me-3"></i>
+            <div>
+                <h4 class="mb-0 font-weight-bold text-gray-800">{{ agent.name }}</h4>
+            </div>
+        </div>
+        <div class="agent-details">
+            <p><strong>Telefon:</strong> {{ agent.phone_number|default:"N/A" }}</p>
+            <p><strong>Qo'shilgan sana:</strong> {{ agent.created_at|date:"d.m.Y H:i" }}</p>
+        </div>
+        {% if agent.notes %}
+            <p class="card-text agent-notes"><small class="text-muted"><strong>Izohlar:</strong> {{ agent.notes }}</small></p>
+        {% endif %}
+    </div>
+</div> 

@@ -2,7 +2,8 @@ from django import forms
 from django.db import models
 from .models import Agent, Supplier, AgentPayment
 from apps.accounting.models import FinancialAccount
-from apps.sales.models import Sale
+from apps.core.constants import CurrencyChoices
+from .validators import PaymentValidator
 from decimal import Decimal
 
 class AgentForm(forms.ModelForm):
@@ -37,7 +38,7 @@ class SupplierForm(forms.ModelForm):
 
 class AgentPaymentForm(forms.ModelForm):
     related_sale = forms.ModelChoiceField(
-        queryset=Sale.objects.none(),
+        queryset=None,  # Will be set in __init__
         required=False,
         label="To'lov qilinayotgan Sotuv (Qarz)",
         widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
@@ -61,54 +62,60 @@ class AgentPaymentForm(forms.ModelForm):
         
         if agent:
             self.instance.agent = agent
-            self.fields['related_sale'].queryset = Sale.objects.filter(
-                agent=agent,
-                total_sale_amount__gt=models.F('paid_amount_on_this_sale') 
-            ).select_related('related_acquisition__ticket').order_by('-sale_date')
-            self.fields['related_sale'].label_from_instance = lambda obj: f"Sotuv {obj.id} ({obj.sale_date.strftime('%d-%m-%Y')}) - Balans: {obj.balance_due_on_this_sale} {obj.sale_currency}"
+            self._setup_related_sale_queryset(agent)
 
+        self._setup_account_queryset()
+
+    def _setup_related_sale_queryset(self, agent):
+        """Setup queryset for related sales"""
+        from django.apps import apps
+        Sale = apps.get_model('sales', 'Sale')
+        
+        self.fields['related_sale'].queryset = Sale.objects.filter(
+            agent=agent,
+            total_sale_amount__gt=models.F('paid_amount_on_this_sale') 
+        ).select_related('related_acquisition__ticket').order_by('-sale_date')
+        
+        self.fields['related_sale'].label_from_instance = self._format_sale_label
+
+    def _setup_account_queryset(self):
+        """Setup queryset for payment accounts"""
         self.fields['paid_to_account'].queryset = FinancialAccount.objects.filter(
-            is_active=True, currency__in=[FinancialAccount.Currency.UZS, FinancialAccount.Currency.USD]
+            is_active=True, 
+            currency__in=[CurrencyChoices.UZS, CurrencyChoices.USD]
         ).order_by('currency', 'name')
 
+    def _format_sale_label(self, obj):
+        """Format sale label for display"""
+        return f"Sotuv {obj.id} ({obj.sale_date.strftime('%d-%m-%Y')}) - Balans: {obj.balance_due_on_this_sale} {obj.sale_currency}"
+
     def clean(self):
+        """Validate form data using centralized validator"""
         cleaned_data = super().clean()
+        
+        # Get values with defaults
         amount_uzs = cleaned_data.get('amount_paid_uzs') or Decimal('0.00')
         amount_usd = cleaned_data.get('amount_paid_usd') or Decimal('0.00')
         paid_to_account = cleaned_data.get('paid_to_account')
         related_sale = cleaned_data.get('related_sale')
-
-        if amount_uzs <= 0 and amount_usd <= 0:
-            self.add_error(None, "To'lov miqdori noldan katta bo'lishi kerak.")
-
-        payment_currency = None
-        payment_amount = Decimal('0.00')
-        if amount_uzs > 0 and amount_usd > 0:
-            self.add_error(None, "Bir vaqtda UZS va USD da to'lov qilish mumkin emas. Iltimos alohida to'lov kiriting.")
-        elif amount_uzs > 0:
-            payment_currency = 'UZS'
-            payment_amount = amount_uzs
-        elif amount_usd > 0:
-            payment_currency = 'USD'
-            payment_amount = amount_usd
         
-        if related_sale:
-            if payment_currency and related_sale.sale_currency != payment_currency:
-                self.add_error(None, f"To'lov valyutasi ({payment_currency}) tanlangan sotuv valyutasiga ({related_sale.sale_currency}) mos kelishi kerak.")
-            
-            if payment_currency == related_sale.sale_currency:
-                if payment_amount > related_sale.balance_due_on_this_sale:
-                    self.add_error(
-                        'amount_paid_uzs' if payment_currency == 'UZS' else 'amount_paid_usd',
-                        f"To'lov miqdori ({payment_amount} {payment_currency}) tanlangan sotuv qoldig'idan ({related_sale.balance_due_on_this_sale} {related_sale.sale_currency}) oshmasligi kerak."
-                    )
-            elif not payment_currency and (amount_uzs > 0 or amount_usd > 0):
-                 self.add_error(None, "To'lov valyutasini aniqlashda xatolik.")
-
-        if paid_to_account and payment_currency:
-            if paid_to_account.currency != payment_currency:
-                self.add_error('paid_to_account', f"Hisob raqam valyutasi ({paid_to_account.currency}) to'lov valyutasiga ({payment_currency}) mos kelishi kerak.")
-        elif (amount_uzs > 0 or amount_usd > 0) and not paid_to_account:
-             self.add_error('paid_to_account', "To'lov miqdori kiritilgan bo'lsa, bu maydon to'ldirilishi shart.")
+        # Use centralized validation
+        try:
+            PaymentValidator.validate_agent_payment(
+                agent=self.instance.agent,
+                amount_uzs=amount_uzs,
+                amount_usd=amount_usd,
+                paid_to_account=paid_to_account,
+                related_sale=related_sale,
+                payment_instance=self.instance
+            )
+        except forms.ValidationError as e:
+            # Add errors to form
+            if hasattr(e, 'error_dict'):
+                for field, errors in e.error_dict.items():
+                    for error in errors:
+                        self.add_error(field, error.message)
+            else:
+                self.add_error(None, str(e))
 
         return cleaned_data 

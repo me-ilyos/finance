@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Supplier: {{ supplier.name }}{% endblock %}
+
+{% block page_title %}Yetkazib beruvchi: {{ supplier.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row">
+        <!-- Supplier Information -->
+        <div class="col-lg-4 mb-4">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 text-primary">
+                        <i class="fas fa-truck me-2"></i>Yetkazib beruvchi ma'lumotlari
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <i class="fas fa-building fa-3x text-gray-400 me-3"></i>
+                        <div>
+                            <h4 class="mb-0 font-weight-bold text-gray-800">{{ supplier.name }}</h4>
+                        </div>
+                    </div>
+                    
+                    <div class="supplier-details">
+                        {% if supplier.contact_person %}
+                            <p><strong>Mas'ul shaxs:</strong> {{ supplier.contact_person }}</p>
+                        {% endif %}
+                        {% if supplier.phone_number %}
+                            <p><strong>Telefon:</strong> {{ supplier.phone_number }}</p>
+                        {% endif %}
+                        {% if supplier.email %}
+                            <p><strong>Email:</strong> {{ supplier.email }}</p>
+                        {% endif %}
+                        <p><strong>Qo'shilgan sana:</strong> {{ supplier.created_at|date:"d.m.Y H:i" }}</p>
+                        {% if supplier.notes %}
+                            <div class="mt-3">
+                                <strong>Izohlar:</strong>
+                                <p class="text-muted">{{ supplier.notes }}</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mt-3">
+                        <a href="{% url 'contacts:supplier-edit' supplier.pk %}" class="btn btn-primary btn-sm">
+                            <i class="fas fa-edit me-1"></i>Tahrirlash
+                        </a>
+                        <a href="{% url 'contacts:supplier-list' %}" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-arrow-left me-1"></i>Ortga
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Acquisitions -->
+        <div class="col-lg-8 mb-4">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 text-primary">
+                        <i class="fas fa-shopping-cart me-2"></i>So'nggi xaridlar ({{ supplier_acquisitions|length }})
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if supplier_acquisitions %}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Sana</th>
+                                        <th>Chipta</th>
+                                        <th>Miqdor</th>
+                                        <th>Narx</th>
+                                        <th>Jami</th>
+                                        <th>Valyuta</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for acquisition in supplier_acquisitions %}
+                                    <tr>
+                                        <td>{{ acquisition.id }}</td>
+                                        <td>{{ acquisition.acquisition_date|date:"d.m.Y" }}</td>
+                                        <td>
+                                            {% if acquisition.ticket %}
+                                                {{ acquisition.ticket.description|truncatewords:3 }}
+                                            {% else %}
+                                                N/A
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ acquisition.quantity|intcomma }}</td>
+                                        <td>
+                                            {% if acquisition.transaction_currency == 'UZS' %}
+                                                {{ acquisition.unit_price_uzs|floatformat:0|intcomma }}
+                                            {% else %}
+                                                ${{ acquisition.unit_price_usd|floatformat:2|intcomma }}
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if acquisition.transaction_currency == 'UZS' %}
+                                                {{ acquisition.total_cost_uzs|floatformat:0|intcomma }}
+                                            {% else %}
+                                                ${{ acquisition.total_cost_usd|floatformat:2|intcomma }}
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-{% if acquisition.transaction_currency == 'UZS' %}success{% else %}info{% endif %}">
+                                                {{ acquisition.transaction_currency }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="text-center mt-3">
+                            <a href="{% url 'inventory:acquisition-list' %}?supplier={{ supplier.id }}" class="btn btn-outline-primary">
+                                <i class="fas fa-list me-1"></i>Barcha xaridlarni ko'rish
+                            </a>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-inbox fa-3x text-gray-400 mb-3"></i>
+                            <p class="text-muted">Hozircha bu yetkazib beruvchidan xaridlar mavjud emas.</p>
+                            <a href="{% url 'inventory:acquisition-create' %}?supplier={{ supplier.id }}" class="btn btn-primary">
+                                <i class="fas fa-plus me-1"></i>Birinchi xaridni qo'shish
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

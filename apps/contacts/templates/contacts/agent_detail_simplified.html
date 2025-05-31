@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% load static %}
+
+{% block title %}Agent: {{ agent.name }}{% endblock %}
+
+{% block page_title %}Agent Tafsilotlari: {{ agent.name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'contacts/css/agent_detail.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    {% comment %} Display Django Messages {% endcomment %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row">
+        <!-- Agent Information Column -->
+        <div class="col-xl-4 col-lg-5 mb-4">
+            {% include 'contacts/components/agent_info_card.html' %}
+        </div>
+
+        <!-- Debt Information Column -->
+        <div class="col-xl-8 col-lg-7 mb-4">
+            {% include 'contacts/components/debt_info_cards.html' %}
+        </div>
+    </div>
+
+    <!-- Sales Table -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 text-primary">
+                <i class="fas fa-list-alt me-2"></i>Agentga Qilingan Sotuvlar (Qarzlar)
+            </h6>
+            <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#addPaymentModal">
+                <i class="fas fa-hand-holding-usd me-1"></i> To'lov Qilish
+            </button>
+        </div>
+        <div class="card-body">
+            {% include 'contacts/components/sales_table.html' %}
+        </div>
+    </div>
+
+    <!-- Payments Table -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 text-primary">
+                <i class="fas fa-money-bill-wave me-2"></i>Agent To'lovlari Tarixi
+            </h6>
+        </div>
+        <div class="card-body">
+            {% include 'contacts/components/payments_table.html' %}
+        </div>
+    </div>
+
+    <!-- Payment Modal -->
+    {% include 'contacts/components/payment_modal.html' %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'contacts/js/agent_detail.js' %}"></script>
+{% endblock %} 
