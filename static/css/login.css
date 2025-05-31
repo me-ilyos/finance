@@ -1,0 +1,78 @@
+/* Login Page Styles */
+
+body.login-page {
+    background-color: #f8f9fa;
+}
+
+/* Hide navigation elements on login page */
+body.login-page #sidebar-wrapper,
+body.login-page .navbar,
+body.login-page footer {
+    display: none;
+}
+
+body.login-page #page-content-wrapper {
+    min-width: 100vw;
+    padding-left: 0 !important;
+}
+
+body.login-page .main-content-area {
+    padding-top: 3rem;
+}
+
+/* Login form styling */
+.login-card {
+    border-radius: 10px;
+    border: none;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.login-form-wrapper {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-container {
+    max-width: 400px;
+    width: 100%;
+    padding: 2rem;
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.login-title {
+    color: #333;
+    font-weight: 600;
+    margin-bottom: 2rem;
+    text-align: center;
+}
+
+.form-control:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+.btn-login {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    padding: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.btn-login:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.alert-danger {
+    border-radius: 8px;
+    border: none;
+    background-color: #fee;
+    color: #c33;
+} 

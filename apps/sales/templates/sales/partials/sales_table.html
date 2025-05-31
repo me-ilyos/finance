@@ -1,0 +1,151 @@
+{% load sales_filters %}
+
+<!-- Sales Table -->
+<div class="table-responsive">
+    <table class="table table-striped table-hover align-middle" id="saleTable" width="100%" cellspacing="0">
+        <thead class="table-light">
+            <tr class="border-bottom border-2">
+                <th class="py-3 px-3 fw-semibold">Sana</th>
+                <th class="py-3 px-3 fw-semibold">Chipta (Turi/Manzil)</th>
+                <th class="py-3 px-3 fw-semibold">Xaridor</th>
+                <th class="py-3 px-3 fw-semibold text-center">Miqdori</th>
+                <th class="text-center fw-semibold price-col standout-col align-middle">
+                    <div>Birlik Narxi</div>
+                    <div class="container-fluid gx-0"><div class="row gx-0">
+                        <div class="col text-center small border-end py-1">UZS</div>
+                        <div class="col text-center small py-1">USD</div>
+                    </div></div>
+                </th>
+                <th class="text-center fw-semibold price-col standout-col align-middle">
+                    <div>Jami Summa</div>
+                    <div class="container-fluid gx-0"><div class="row gx-0">
+                        <div class="col text-center small border-end py-1">UZS</div>
+                        <div class="col text-center small py-1">USD</div>
+                    </div></div>
+                </th>
+                <th class="text-center fw-semibold price-col standout-col align-middle">
+                    <div>Foyda</div>
+                    <div class="container-fluid gx-0"><div class="row gx-0">
+                        <div class="col text-center small border-end py-1">UZS</div>
+                        <div class="col text-center small py-1">USD</div>
+                    </div></div>
+                </th>
+                <th class="py-3 px-3 fw-semibold">To'lov Hisobi</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sale in sales %}
+            <tr>
+                <td class="py-2 px-3">{{ sale.sale_date|date:"d.m.y H:i" }}</td>
+                <td class="py-2 px-3">
+                    {{ sale.related_acquisition.ticket.get_ticket_type_display }}<br>
+                    <small class="text-muted">{{ sale.related_acquisition|ticket_description_short }}</small>
+                </td>
+                <td class="py-2 px-3">{{ sale|buyer_display }}</td>
+                <td class="py-2 px-3 text-center">{{ sale.quantity|safe_intcomma }}</td>
+                
+                <!-- Unit Price Column -->
+                <td class="price-col standout-col align-middle">
+                    <div class="container-fluid gx-0"><div class="row gx-0">
+                        <div class="col text-end small border-end">
+                            {% with sale|currency_unit_price_in_column:"UZS" as uzs_price %}
+                                {% if uzs_price %}{{ uzs_price|currency_display:"UZS" }}{% else %}-{% endif %}
+                            {% endwith %}
+                        </div>
+                        <div class="col text-end small">
+                            {% with sale|currency_unit_price_in_column:"USD" as usd_price %}
+                                {% if usd_price %}{{ usd_price|currency_display:"USD" }}{% else %}-{% endif %}
+                            {% endwith %}
+                        </div>
+                    </div></div>
+                </td>
+                
+                <!-- Total Amount Column -->
+                <td class="price-col standout-col align-middle">
+                    <div class="container-fluid gx-0"><div class="row gx-0">
+                        <div class="col text-end small border-end">
+                            {% with sale|currency_amount_in_column:"UZS" as uzs_amount %}
+                                {% if uzs_amount %}
+                                    {{ uzs_amount|currency_display:"UZS" }}
+                                    {% if sale|has_initial_payment %}
+                                        <br><span class="initial-payment">({{ sale.paid_amount_on_this_sale|currency_display:"UZS" }})</span>
+                                    {% endif %}
+                                {% else %}-{% endif %}
+                            {% endwith %}
+                        </div>
+                        <div class="col text-end small">
+                            {% with sale|currency_amount_in_column:"USD" as usd_amount %}
+                                {% if usd_amount %}
+                                    {{ usd_amount|currency_display:"USD" }}
+                                    {% if sale|has_initial_payment %}
+                                        <br><span class="initial-payment">({{ sale.paid_amount_on_this_sale|currency_display:"USD" }})</span>
+                                    {% endif %}
+                                {% else %}-{% endif %}
+                            {% endwith %}
+                        </div>
+                    </div></div>
+                </td>
+                
+                <!-- Profit Column -->
+                <td class="price-col standout-col align-middle">
+                    <div class="container-fluid gx-0"><div class="row gx-0">
+                        <div class="col text-end small border-end">
+                            {% with sale|currency_profit_in_column:"UZS" as uzs_profit %}
+                                {% if uzs_profit %}<span class="profit-value">{{ uzs_profit|currency_display:"UZS" }}</span>{% else %}-{% endif %}
+                            {% endwith %}
+                        </div>
+                        <div class="col text-end small">
+                            {% with sale|currency_profit_in_column:"USD" as usd_profit %}
+                                {% if usd_profit %}<span class="profit-value">{{ usd_profit|currency_display:"USD" }}</span>{% else %}-{% endif %}
+                            {% endwith %}
+                        </div>
+                    </div></div>
+                </td>
+                
+                <!-- Payment Status Column -->
+                <td class="py-2 px-3">
+                    {% with sale|payment_status_display as payment_info %}
+                        {% if payment_info.type == 'account' %}
+                            {{ payment_info.name }}
+                        {% elif payment_info.type == 'agent_debt' %}
+                            <span class="badge {{ payment_info.badge }}">{{ payment_info.text }}</span>
+                            {% if payment_info.payment_text %}
+                                <small class="d-block text-muted">{{ payment_info.payment_text }}</small>
+                            {% endif %}
+                        {% elif payment_info.type == 'unpaid' %}
+                            <span class="badge {{ payment_info.badge }}">{{ payment_info.text }}</span>
+                        {% endif %}
+                    {% endwith %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="8" class="text-center py-3 px-3">Sotuvlar mavjud emas yoki filtrga mos kelmadi.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        
+        {% if sales %} {# Show totals row only if there are sales #}
+        <tfoot class="totals-row">
+            <tr>
+                <td colspan="3" class="text-end fw-bold">Jami:</td>
+                <td class="text-center fw-bold">{{ totals.total_quantity|default:0|safe_intcomma }}</td>
+                <td class="price-col standout-col align-middle"></td> {# Empty Unit Price Total #}
+                <td class="price-col standout-col align-middle">
+                    <div class="container-fluid gx-0"><div class="row gx-0">
+                        <div class="col text-end small border-end fw-bold">{{ totals.total_sum_uzs|default:0|currency_display:"UZS" }}</div>
+                        <div class="col text-end small fw-bold">{{ totals.total_sum_usd|default:0|currency_display:"USD" }}</div>
+                    </div></div>
+                </td>
+                <td class="price-col standout-col align-middle">
+                    <div class="container-fluid gx-0"><div class="row gx-0">
+                        <div class="col text-end small border-end fw-bold">{{ totals.total_profit_uzs|default:0|currency_display:"UZS" }}</div>
+                        <div class="col text-end small fw-bold">{{ totals.total_profit_usd|default:0|currency_display:"USD" }}</div>
+                    </div></div>
+                </td>
+                <td></td> {# Empty cell for payment status total #}
+            </tr>
+        </tfoot>
+        {% endif %}
+    </table>
+</div> 

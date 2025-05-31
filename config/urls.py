@@ -17,13 +17,25 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from django.views.generic import RedirectView
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
+    # Admin
     path('admin/', admin.site.urls),
+    
+    # Root redirect to login
     path('', RedirectView.as_view(pattern_name='core:login', permanent=False)),
+    
+    # App URLs
     path('core/', include('apps.core.urls', namespace='core')),
     path('contacts/', include('apps.contacts.urls')),
     path('inventory/', include('apps.inventory.urls', namespace='inventory')),
     path('accounting/', include('apps.accounting.urls', namespace='accounting')),
     path('sales/', include('apps.sales.urls', namespace='sales')),
 ]
+
+# Static files serving in development
+if settings.DEBUG:
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

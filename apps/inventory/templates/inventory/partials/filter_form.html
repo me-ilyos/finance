@@ -1,0 +1,52 @@
+<form method="get" action="" class="mb-4 p-3 border rounded bg-light">
+    <div class="row g-2 align-items-end">
+        <!-- Specific Day Filter -->
+        <div class="col-md-2">
+            <label for="date_filter_input" class="form-label mb-1"><small>Kun bo'yicha:</small></label>
+            <input type="date" name="date_filter" id="date_filter_input" class="form-control form-control-sm"
+                   value="{{ current_date_filter|default_if_none:'' }}">
+        </div>
+        <div class="col-md-auto">
+            <button type="submit" name="filter_period" value="day" class="btn btn-sm btn-outline-secondary">Kun</button>
+        </div>
+
+        <!-- Week/Month Filters -->
+        <div class="col-md-auto">
+             <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
+            <div class="btn-group btn-group-sm" role="group">
+                <button type="submit" name="filter_period" value="week" class="btn btn-sm btn-outline-secondary">Hafta</button>
+                <button type="submit" name="filter_period" value="month" class="btn btn-sm btn-outline-secondary">Oy</button>
+            </div>
+        </div>
+
+        <!-- Custom Range Filters -->
+        <div class="col-md-2">
+            <label for="start_date_input" class="form-label mb-1"><small>dan:</small></label>
+            <input type="date" name="start_date" id="start_date_input" class="form-control form-control-sm"
+                   value="{{ current_start_date|default_if_none:'' }}">
+        </div>
+        <div class="col-md-2">
+            <label for="end_date_input" class="form-label mb-1"><small>gacha:</small></label>
+            <input type="date" name="end_date" id="end_date_input" class="form-control form-control-sm"
+                   value="{{ current_end_date|default_if_none:'' }}">
+        </div>
+        <div class="col-md-auto">
+             <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
+            <button type="submit" name="filter_period" value="custom" class="btn btn-sm btn-outline-secondary">Oraliq</button>
+        </div>
+        
+        <!-- Add New Acquisition Button -->
+        <div class="col-md-auto">
+            <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addAcquisitionModal">
+                <i class="fas fa-plus me-1"></i> Yangi Xarid
+            </button>
+        </div>
+
+        <!-- Clear Filter -->
+        <div class="col-md-auto ms-md-auto"> <!-- Push to the right on medium screens and up -->
+            <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
+            <a href="{% url 'inventory:acquisition-list' %}" class="btn btn-sm btn-link text-decoration-none">Tozalash</a>
+        </div>
+    </div>
+</form> 

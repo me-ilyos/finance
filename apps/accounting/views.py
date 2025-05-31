@@ -8,7 +8,11 @@ from django.db.models.functions import Coalesce
 from datetime import timedelta
 from .models import Expenditure, FinancialAccount
 from .forms import ExpenditureForm
+from .services import ExpenditureService
 from apps.core.services import DateFilterService
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ExpenditureListView(ListView):
@@ -66,10 +70,15 @@ class ExpenditureCreateView(CreateView):
     success_url = reverse_lazy('accounting:expenditure-list')
     
     def form_valid(self, form):
-        messages.success(self.request, "Xarajat muvaffaqiyatli qo'shildi.")
-        return super().form_valid(form)
+        try:
+            ExpenditureService.create_expenditure(form.cleaned_data)
+            messages.success(self.request, "Xarajat muvaffaqiyatli qo'shildi.")
+            return redirect(self.success_url)
+        except Exception as e:
+            logger.error(f"Error creating expenditure: {e}")
+            messages.error(self.request, "Xarajat yaratishda xatolik yuz berdi.")
+            return self.form_invalid(form)
     
     def form_invalid(self, form):
         messages.error(self.request, "Formada xatoliklar mavjud. Iltimos, to'g'rilang.")
-        # Redirect back to list view with form errors
-        return redirect(self.success_url)
+        return super().form_invalid(form)

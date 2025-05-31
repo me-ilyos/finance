@@ -1,0 +1,46 @@
+<!-- Add Sale Modal -->
+<div class="modal fade" id="addSaleModal" tabindex="-1" aria-labelledby="addSaleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="post" action="{% url 'sales:sale-list' %}" id="saleModalForm">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addSaleModalLabel">Yangi Sotuv Qo'shish</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {% comment %} Non-field errors for the form {% endcomment %}
+                    {% if sale_form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in sale_form.non_field_errors %}
+                                <p class="mb-0">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    {% for field in sale_form %}
+                        <div class="mb-3 row" id="wrapper_{{ field.id_for_label }}">
+                            <label for="{{ field.id_for_label }}" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">
+                                {{ field.label }}
+                                {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+                            <div class="col-sm-8">
+                                {{ field }} 
+                                {% if field.help_text %}
+                                    <small class="form-text text-muted d-block mt-1">{{ field.help_text }}</small>
+                                {% endif %}
+                                {% for error in field.errors %}
+                                    <div class="invalid-feedback d-block">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Bekor Qilish</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div> 

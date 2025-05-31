@@ -1,8 +1,11 @@
 from django import forms
 from .models import Acquisition, Ticket
+from .validators import TicketValidator, AcquisitionValidator
+from .services import AcquisitionService
 from apps.contacts.models import Supplier
 from apps.accounting.models import FinancialAccount
 from django.utils import timezone
+from django.core.exceptions import ValidationError
 
 class AcquisitionForm(forms.ModelForm):
     # Fields for creating a new Ticket
@@ -83,69 +86,76 @@ class AcquisitionForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Dynamically add ticket fields to the form's fields dictionary
-        # These are not part of the model form's meta fields directly
-        self.fields['ticket_type'] = forms.ChoiceField(
-            choices=Ticket.TicketType.choices,
-            widget=forms.Select(attrs={'class': 'form-select form-select-sm', 'id': 'id_ticket_type_modal'}),
-            label="Chipta Turi"
-        )
-        self.fields['ticket_description'] = forms.CharField(
-            widget=forms.TextInput(attrs={'class': 'form-control form-control-sm'}),
-            label="Manzil/Tur Nomi" 
-        )
-        self.fields['ticket_departure_date_time'] = forms.DateTimeField(
-            widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control form-control-sm'}),
-            label="Uchish Vaqti",
-            initial=timezone.now().strftime('%Y-%m-%dT%H:%M')
-        )
-        self.fields['ticket_arrival_date_time'] = forms.DateTimeField(
-            required=False, 
-            widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control form-control-sm'}),
-            label="Qo'nish vaqti"
-        )
         
         # Reorder fields to put ticket fields first, then acquisition fields
         ordered_fields = [
             'ticket_type', 'ticket_description', 'ticket_departure_date_time', 'ticket_arrival_date_time',
+            'supplier', 'acquisition_date', 'initial_quantity', 
+            'transaction_currency', 'unit_price_uzs', 'unit_price_usd', 
+            'paid_from_account', 'notes'
         ]
-        # Add existing model fields (from Meta.fields) after the custom ticket fields
-        for f_name in list(self.fields.keys()): # Iterate over a copy of keys
-            if f_name not in ordered_fields:
-                ordered_fields.append(f_name)
         
         self.order_fields(ordered_fields)
 
-    def save(self, commit=True):
-        # Create the Ticket instance first
-        new_ticket = Ticket.objects.create(
-            ticket_type=self.cleaned_data.get('ticket_type'),
-            description=self.cleaned_data.get('ticket_description'),
-            departure_date_time=self.cleaned_data.get('ticket_departure_date_time'),
-            arrival_date_time=self.cleaned_data.get('ticket_arrival_date_time')
-        )
+    def clean(self):
+        """Use centralized validation"""
+        cleaned_data = super().clean()
         
-        acquisition = super().save(commit=False)
-        acquisition.ticket = new_ticket
-        
-        if commit:
-            acquisition.save()
-            # self.save_m2m() # Not needed for Acquisition model as per its definition
-        return acquisition
+        # Validate ticket data
+        try:
+            ticket_data = TicketValidator.validate_ticket_data(
+                ticket_type=cleaned_data.get('ticket_type'),
+                description=cleaned_data.get('ticket_description'),
+                departure_date_time=cleaned_data.get('ticket_departure_date_time'),
+                arrival_date_time=cleaned_data.get('ticket_arrival_date_time')
+            )
+        except ValidationError as e:
+            self.add_error('ticket_description', str(e))
+            return cleaned_data
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # The model's clean method handles ensuring only one price field is set.
-        # JavaScript will be used client-side for better UX.
+        # Validate acquisition data
+        try:
+            acquisition_data = AcquisitionValidator.validate_acquisition_data(
+                supplier=cleaned_data.get('supplier'),
+                acquisition_date=cleaned_data.get('acquisition_date'),
+                initial_quantity=cleaned_data.get('initial_quantity'),
+                transaction_currency=cleaned_data.get('transaction_currency'),
+                unit_price_uzs=cleaned_data.get('unit_price_uzs'),
+                unit_price_usd=cleaned_data.get('unit_price_usd'),
+                paid_from_account=cleaned_data.get('paid_from_account')
+            )
+            
+            # Update cleaned_data with validated values
+            cleaned_data.update(acquisition_data)
+            cleaned_data['ticket_data'] = ticket_data
+            
+        except ValidationError as e:
+            self.add_error(None, str(e))
+
+        return cleaned_data
+
+    def save(self, commit=True):
+        """Use service to create acquisition with ticket"""
+        if not commit:
+            return super().save(commit=False)
         
-        # Example: If you want to filter 'paid_from_account' based on an initial currency
-        # This is more complex if currency can change dynamically on the form
-        # For now, model validation handles currency mismatch on save.
-        # if self.instance and self.instance.transaction_currency:
-        #     self.fields['paid_from_account'].queryset = FinancialAccount.objects.filter(currency=self.instance.transaction_currency)
-        # elif 'transaction_currency' in self.data: # if form is bound
-        #     try:
-        #         currency = self.data.get('transaction_currency')
-        #         self.fields['paid_from_account'].queryset = FinancialAccount.objects.filter(currency=currency)
-        #     except (ValueError, TypeError):
-        #         pass # invalid currency, don't filter 
+        try:
+            # Extract ticket and acquisition data
+            ticket_data = self.cleaned_data.pop('ticket_data')
+            acquisition_data = {
+                field: self.cleaned_data[field] 
+                for field in self.Meta.fields 
+                if field in self.cleaned_data
+            }
+            
+            # Add notes if present
+            if 'notes' in self.cleaned_data:
+                acquisition_data['notes'] = self.cleaned_data['notes']
+            
+            # Use service to create acquisition
+            acquisition = AcquisitionService.create_acquisition(acquisition_data, ticket_data)
+            return acquisition
+            
+        except Exception as e:
+            self.add_error(None, f"Xaridni yaratishda xatolik: {e}")
+            return None

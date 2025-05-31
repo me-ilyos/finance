@@ -1,0 +1,48 @@
+{% load core_filters %}
+
+<!-- Accounts Panel -->
+<div class="glass-card panel">
+    <div class="panel-header">
+        <h3 class="panel-title">
+            <i class="fas fa-building-columns"></i>
+            Financial Accounts
+        </h3>
+    </div>
+    
+    {% if accounts %}
+        {% for account in accounts %}
+        <div class="account-item {% if selected_account and selected_account.id == account.id %}active{% endif %}" 
+             data-account-url="{% url 'core:dashboard' %}?account_id={{ account.id }}"
+             role="button"
+             tabindex="0">
+            <div class="account-header">
+                <div class="account-icon {{ account.account_type|lower }}">
+                    <i class="{{ account.account_type|account_icon_class }}"></i>
+                </div>
+                <h4 class="account-name">{{ account.name }}</h4>
+            </div>
+            
+            <div class="account-meta">
+                <span class="meta-badge">
+                    <i class="fas fa-tag"></i>
+                    {{ account.get_account_type_display }}
+                </span>
+                <span class="meta-badge">
+                    <i class="fas fa-coins"></i>
+                    {{ account.currency }}
+                </span>
+            </div>
+            
+            <div class="balance-value {{ account.current_balance|balance_class }}">
+                <i class="fas fa-wallet me-2"></i>
+                {{ account.current_balance|format_currency:account.currency }} {{ account.currency }}
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="p-4 text-center text-muted">
+            <i class="fas fa-building-columns fa-3x mb-3 opacity-50"></i>
+            <p class="mb-0">No accounts available</p>
+        </div>
+    {% endif %}
+</div> 

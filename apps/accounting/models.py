@@ -2,52 +2,7 @@ from django.db import models
 from django.utils import timezone
 from decimal import Decimal
 from django.core.exceptions import ValidationError
-from django.db import transaction
 from apps.core.constants import CurrencyChoices, AccountTypeChoices
-
-
-class FinancialAccountService:
-    """Service class to handle financial account balance operations"""
-    
-    @staticmethod
-    def update_balance_for_expenditure(account_id, amount, operation='deduct'):
-        """Update account balance for expenditure operations"""
-        with transaction.atomic():
-            account = FinancialAccount.objects.select_for_update().get(pk=account_id)
-            if operation == 'deduct':
-                account.current_balance -= amount
-            elif operation == 'add_back':
-                account.current_balance += amount
-            account.save()
-            return account
-    
-    @staticmethod
-    def handle_expenditure_update(expenditure, original_expenditure):
-        """Handle balance updates when expenditure is modified"""
-        with transaction.atomic():
-            # If account changed, add back to old account
-            if original_expenditure.paid_from_account_id != expenditure.paid_from_account_id:
-                FinancialAccountService.update_balance_for_expenditure(
-                    original_expenditure.paid_from_account_id, 
-                    original_expenditure.amount, 
-                    'add_back'
-                )
-                # Deduct from new account
-                FinancialAccountService.update_balance_for_expenditure(
-                    expenditure.paid_from_account_id, 
-                    expenditure.amount, 
-                    'deduct'
-                )
-            else:
-                # Same account, handle amount difference
-                amount_difference = expenditure.amount - original_expenditure.amount
-                if amount_difference != 0:
-                    operation = 'deduct' if amount_difference > 0 else 'add_back'
-                    FinancialAccountService.update_balance_for_expenditure(
-                        expenditure.paid_from_account_id, 
-                        abs(amount_difference), 
-                        operation
-                    )
 
 
 class FinancialAccount(models.Model):
@@ -125,30 +80,9 @@ class Expenditure(models.Model):
                 })
 
     def save(self, *args, **kwargs):
-        """Save expenditure and update account balance"""
+        """Save expenditure - business logic handled by service layer"""
         self.full_clean()
-        
-        is_new = self.pk is None
-        original_expenditure = None
-        
-        if not is_new:
-            try:
-                original_expenditure = Expenditure.objects.get(pk=self.pk)
-            except Expenditure.DoesNotExist:
-                is_new = True
-        
-        # Save the expenditure first
         super().save(*args, **kwargs)
-        
-        # Update account balances
-        if is_new:
-            FinancialAccountService.update_balance_for_expenditure(
-                self.paid_from_account_id, 
-                self.amount, 
-                'deduct'
-            )
-        else:
-            FinancialAccountService.handle_expenditure_update(self, original_expenditure)
 
     def __str__(self):
         return f"{self.description} - {self.amount} {self.currency} on {self.expenditure_date.strftime('%Y-%m-%d')}"

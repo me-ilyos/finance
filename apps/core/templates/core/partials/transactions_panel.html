@@ -1,0 +1,48 @@
+{% load core_filters %}
+
+<!-- Transactions Panel -->
+<div class="glass-card panel">
+    <div class="panel-header">
+        <h3 class="panel-title">
+            <i class="fas fa-exchange-alt"></i>
+            Recent Transactions
+            {% if selected_account %}
+                <span class="badge bg-primary ms-2">{{ transactions|length }}</span>
+            {% endif %}
+        </h3>
+    </div>
+    
+    {% if selected_account %}
+        {% if transactions %}
+            {% for transaction in transactions %}
+            <div class="transaction-item">
+                <div class="transaction-details">
+                    <h5>{{ transaction.description|truncatewords:5 }}</h5>
+                    <div class="transaction-meta">
+                        <span class="transaction-type">{{ transaction.type }}</span>
+                        <span class="ms-2">
+                            <i class="fas fa-calendar me-1"></i>
+                            {{ transaction.date|date:"M d, Y H:i" }}
+                        </span>
+                    </div>
+                </div>
+                <div class="transaction-amount">
+                    <div class="amount-value {{ transaction.balance_effect|transaction_amount_class }}">
+                        {% if transaction.balance_effect == 'expense' %}-{% endif %}{{ transaction.amount|format_currency:transaction.currency }} {{ transaction.currency }}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="p-4 text-center text-muted">
+                <i class="fas fa-receipt fa-3x mb-3 opacity-50"></i>
+                <p class="mb-0">No transactions for this account</p>
+            </div>
+        {% endif %}
+    {% else %}
+        <div class="p-4 text-center text-muted">
+            <i class="fas fa-hand-pointer fa-3x mb-3 opacity-50"></i>
+            <p class="mb-0">Select an account to view transactions</p>
+        </div>
+    {% endif %}
+</div> 

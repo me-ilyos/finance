@@ -1,0 +1,42 @@
+/* Sales App Styles */
+
+/* Totals row styling */
+.totals-row td {
+    background-color: #CCFFCC !important;
+    font-weight: bold;
+}
+
+/* Price column styling */
+.table .price-col {
+    min-width: 180px;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.price-col .col {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.875em;
+    line-height: 1.3;
+}
+
+th.price-col > div:first-of-type {
+    margin-bottom: 0.25rem;
+}
+
+/* Standout columns (Unit Price, Total Sum, Profit) */
+.standout-col {
+    background-color: #f8f9fa !important;
+}
+
+/* Payment status styling */
+.initial-payment {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.profit-value {
+    color: #20c997;
+    font-weight: bold;
+} 

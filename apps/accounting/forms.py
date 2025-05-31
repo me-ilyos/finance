@@ -1,6 +1,7 @@
 from django import forms
 from django.core.exceptions import ValidationError
 from .models import Expenditure, FinancialAccount
+from .validators import ExpenditureValidator
 from django.utils import timezone
 from apps.core.constants import CurrencyChoices
 
@@ -45,26 +46,29 @@ class ExpenditureForm(forms.ModelForm):
         self.fields['paid_from_account'].empty_label = "Hisobni tanlang"
 
     def clean(self):
+        """Use centralized validation"""
         cleaned_data = super().clean()
-        paid_from_account = cleaned_data.get('paid_from_account')
-        currency = cleaned_data.get('currency')
-        amount = cleaned_data.get('amount')
-
-        if paid_from_account and currency:
-            if paid_from_account.currency != currency:
-                self.add_error('paid_from_account', 
-                               f"Tanlangan hisob valyutasi ({paid_from_account.currency}) "
-                               f"xarajat valyutasi ({currency}) bilan mos kelmadi.")
         
-        if amount is not None and amount <= 0:
-            self.add_error('amount', "Xarajat miqdori musbat son bo'lishi kerak.")
+        expenditure_date = cleaned_data.get('expenditure_date')
+        description = cleaned_data.get('description')
+        amount = cleaned_data.get('amount')
+        currency = cleaned_data.get('currency')
+        paid_from_account = cleaned_data.get('paid_from_account')
 
-        # Check balance availability (this duplicates model validation but provides better UX)
-        if amount and paid_from_account:
-            if not paid_from_account.has_sufficient_balance(amount):
-                self.add_error('amount', 
-                               f"Hisobda yetarli mablag' yo'q. "
-                               f"Mavjud: {paid_from_account.formatted_balance()}")
+        try:
+            validated_data = ExpenditureValidator.validate_expenditure(
+                expenditure_date=expenditure_date,
+                description=description,
+                amount=amount,
+                currency=currency,
+                paid_from_account=paid_from_account,
+                expenditure_instance=self.instance
+            )
+            cleaned_data.update(validated_data)
+        except ValidationError as e:
+            if hasattr(e, 'message'):
+                raise ValidationError(e.message)
+            raise
 
         return cleaned_data
 

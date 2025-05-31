@@ -1,0 +1,38 @@
+<!-- Add Acquisition Modal -->
+<div class="modal fade" id="addAcquisitionModal" tabindex="-1" aria-labelledby="addAcquisitionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="post" action="{% url 'inventory:acquisition-list' %}" id="acquisitionModalForm">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addAcquisitionModalLabel">Yangi Xarid Qo'shish</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {% for field in acquisition_form %}
+                        <div class="mb-3 row {% if field.name == 'unit_price_uzs' or field.name == 'unit_price_usd' %}price-field-wrapper initially-hidden{% endif %}" 
+                             id="wrapper_{{ field.id_for_label }}">
+                            <label for="{{ field.id_for_label }}" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">{{ field.label }}</label>
+                            <div class="col-sm-8">
+                                {{ field }}
+                                {% if field.help_text %}
+                                    <small class="form-text text-muted">{{ field.help_text }}</small>
+                                {% endif %}
+                                {% for error in field.errors %}
+                                    <div class="invalid-feedback d-block">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                    {% for error in acquisition_form.non_field_errors %}
+                        <div class="alert alert-danger">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Bekor Qilish</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div> 

@@ -1,132 +1,21 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Aviachiptalarni Boshqarish{% endblock %}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet"> <!-- Font Awesome for icons -->
-    <style>
-        body {
-            overflow-x: hidden; /* Prevent horizontal scroll */
-        }
-
-        #sidebar-wrapper {
-            min-height: 100vh;
-            margin-left: -15rem; /* Hidden by default */
-            transition: margin 0.25s ease-out;
-            background-color: #343a40; /* Dark background for sidebar */
-            color: #adb5bd;
-        }
-
-        #sidebar-wrapper .sidebar-heading {
-            padding: 0.875rem 1.25rem;
-            font-size: 1.2rem;
-            color: #fff;
-            border-bottom: 1px solid #495057;
-        }
-
-        #sidebar-wrapper .list-group-item {
-            background-color: #343a40;
-            color: #adb5bd;
-            border: none;
-            padding: 0.75rem 1.25rem;
-        }
-
-        #sidebar-wrapper .list-group-item:hover,
-        #sidebar-wrapper .list-group-item.active {
-            background-color: #495057;
-            color: #fff;
-            text-decoration: none;
-        }
-         #sidebar-wrapper .list-group-item a {
-            color: inherit;
-            text-decoration: none;
-        }
-
-        #sidebar-wrapper .sidebar-footer {
-            position: absolute;
-            bottom: 0;
-            /* width: 100%; */
-            padding: 1rem 0;
-            border-top: 1px solid #495057;
-        }
-
-        #page-content-wrapper {
-            min-width: 100vw;
-        }
-
-        #wrapper.toggled #sidebar-wrapper {
-            margin-left: 0;
-        }
-
-        #wrapper.toggled #page-content-wrapper {
-            min-width: 0;
-            width: 100%;
-        }
-
-        .navbar { /* Ensure navbar is above sidebar */
-            z-index: 1030; 
-        }
-
-        @media (min-width: 768px) { /* On larger screens */
-            #sidebar-wrapper {
-                margin-left: 0; /* Sidebar visible by default */
-            }
-
-            #page-content-wrapper {
-                min-width: 0;
-                width: 100%;
-            }
-
-            #wrapper.toggled #sidebar-wrapper {
-                margin-left: -15rem; /* Hide sidebar when toggled */
-            }
-        }
-
-        /* Custom styles for matching the image */
-        #sidebar-wrapper {
-            background-color: #3A4D8F; /* Dark blue from image */
-             width: 15rem; /* Approx width from image */
-        }
-        #sidebar-wrapper .sidebar-heading {
-             border-bottom: 1px solid #5265A7; /* Slightly lighter blue for border */
-        }
-        #sidebar-wrapper .list-group-item {
-            background-color: #3A4D8F;
-            color: #E0E0E0; /* Light grey text */
-        }
-         #sidebar-wrapper .list-group-item i {
-            margin-right: 0.75rem;
-        }
-        #sidebar-wrapper .list-group-item:hover,
-        #sidebar-wrapper .list-group-item.active {
-            background-color: #2C3A75; /* Darker blue for active/hover */
-            color: #fff;
-        }
-        #sidebar-wrapper .sidebar-footer a {
-            color: #E0E0E0;
-        }
-         #sidebar-wrapper .sidebar-footer a:hover {
-            color: #fff;
-        }
-
-        .main-content-area {
-            padding-top: 1rem; /* Adjust as needed below navbar */
-        }
-        .navbar-toggler-custom {
-            color: rgba(255,255,255,.55);
-            border-color: rgba(255,255,255,.1);
-        }
-         .navbar-toggler-custom:focus {
-            box-shadow: 0 0 0 0.25rem rgba(255,255,255,.25);
-        }
-
-        .initially-hidden {
-            display: none !important; /* For initial hiding, JS will override */
-        }
-
-    </style>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Base Styles -->
+    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+    
+    {% block extra_css %}{% endblock %}
 </head>
 <body>
     <div class="d-flex" id="wrapper">
@@ -158,17 +47,16 @@
                 </a>
             </div>
         </aside>
-        <!-- /#sidebar-wrapper -->
 
         <!-- Page Content -->
         <div id="page-content-wrapper">
             <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom">
                 <div class="container-fluid">
                     <button class="btn btn-primary navbar-toggler-custom" id="sidebarToggle">
-                        <i class="fas fa-bars"></i> <!-- Hamburger icon -->
+                        <i class="fas fa-bars"></i>
                     </button>
                     
-                    <!-- Breadcrumb or page title area -->
+                    <!-- Breadcrumb -->
                     <nav aria-label="breadcrumb" class="ms-2">
                         <ol class="breadcrumb mb-0">
                             <li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}">Bosh Sahifa</a></li>
@@ -199,7 +87,7 @@
                                     <a class="nav-link" href="{% url 'core:login' %}">Kirish</a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#">Ro'yxatdan o'tish</a> <!-- Placeholder for signup_url -->
+                                    <a class="nav-link" href="#">Ro'yxatdan o'tish</a>
                                 </li>
                             {% endif %}
                         </ul>
@@ -209,7 +97,6 @@
 
             <main class="container-fluid main-content-area">
                  {% block content %}
-                    <!-- Default content, like a welcome message -->
                     <div class="alert alert-success alert-dismissible fade show" role="alert">
                       Xush kelibsiz, admin!
                       <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
@@ -218,45 +105,15 @@
                     <p>Bu yerga sahifaga xos kontent joylashtiriladi.</p>
                 {% endblock %}
             </main>
-
         </div>
-        <!-- /#page-content-wrapper -->
     </div>
-    <!-- /#wrapper -->
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        /*!
-         * Start Bootstrap - Simple Sidebar v6.0.5 (https://startbootstrap.com/template/simple-sidebar)
-         * Copyright 2013-2022 Start Bootstrap
-         * Licensed under MIT (https://github.com/StartBootstrap/startbootstrap-simple-sidebar/blob/master/LICENSE)
-         */
-        window.addEventListener('DOMContentLoaded', event => {
-            const sidebarToggle = document.body.querySelector('#sidebarToggle');
-            if (sidebarToggle) {
-                // Use Bootstrap's collapse functionality for basic toggling if preferred,
-                // or manage a class on the wrapper.
-                // For this example, we'll toggle a class on the main wrapper.
-
-                // Check for a saved sidebar state in localStorage (optional)
-                if (localStorage.getItem('sidebarToggled') === 'true') {
-                    document.body.querySelector('#wrapper').classList.add('toggled');
-                }
-
-                sidebarToggle.addEventListener('click', event => {
-                    event.preventDefault();
-                    document.body.querySelector('#wrapper').classList.toggle('toggled');
-                    
-                    // Save the state to localStorage (optional)
-                    if (document.body.querySelector('#wrapper').classList.contains('toggled')) {
-                        localStorage.setItem('sidebarToggled', 'true');
-                    } else {
-                        localStorage.setItem('sidebarToggled', 'false');
-                    }
-                });
-            }
-        });
-    </script>
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Base JavaScript -->
+    <script src="{% static 'js/base.js' %}"></script>
+    
     {% block extra_js %}{% endblock %}
 </body>
 </html> 
