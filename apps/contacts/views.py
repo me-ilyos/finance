@@ -77,10 +77,33 @@ class SupplierDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         # Use service to get supplier acquisitions
         from django.apps import apps
+        from django.db.models import Sum, Count, Q
+        
         Acquisition = apps.get_model('inventory', 'Acquisition')
-        context['supplier_acquisitions'] = Acquisition.objects.filter(
+        
+        # Get all acquisitions for this supplier
+        acquisitions = Acquisition.objects.filter(
             supplier=self.object
-        ).select_related('ticket').order_by('-acquisition_date')[:10]
+        ).select_related('ticket').order_by('-acquisition_date')
+        
+        context['supplier_acquisitions'] = acquisitions
+        
+        # Add summary statistics - calculate totals by currency
+        total_acquisitions = acquisitions.count()
+        total_cost_uzs = acquisitions.filter(
+            transaction_currency='UZS'
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
+        
+        total_cost_usd = acquisitions.filter(
+            transaction_currency='USD'
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
+        
+        context['acquisition_stats'] = {
+            'total_acquisitions': total_acquisitions,
+            'total_cost_uzs': total_cost_uzs,
+            'total_cost_usd': total_cost_usd,
+        }
+        
         return context
 
 

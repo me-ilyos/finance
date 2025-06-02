@@ -1,9 +1,14 @@
 {% extends 'base.html' %}
 {% load humanize %}
+{% load static %}
 
 {% block title %}Ta'minotchilar Ro'yxati{% endblock %}
 
 {% block page_title %}Ta'minotchilar Ro'yxati{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" type="text/css" href="{% static 'contacts/css/contact_list.css' %}">
+{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -30,21 +35,45 @@
                         <tr class="border-bottom border-2">
                             <th class="py-3 px-3 fw-semibold">Nomi</th>
                             <th class="py-3 px-3 fw-semibold">Telefon Raqami</th>
+                            <th class="py-3 px-3 fw-semibold text-end">Balans UZS</th>
+                            <th class="py-3 px-3 fw-semibold text-end">Balans USD</th>
                             <th class="py-3 px-3 fw-semibold">Izohlar</th>
                             <th class="py-3 px-3 fw-semibold">Yaratilgan Vaqti</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for supplier in suppliers %}
-                        <tr>
-                            <td class="py-2 px-3">{{ supplier.name }}</td>
+                        <tr class="cursor-pointer">
+                            <td class="py-2 px-3">
+                                <a href="{% url 'contacts:supplier-detail' supplier.pk %}" class="text-decoration-none">
+                                    <strong class="text-primary">{{ supplier.name }}</strong>
+                                </a>
+                            </td>
                             <td class="py-2 px-3">{{ supplier.phone_number|default:"-" }}</td>
+                            <td class="py-2 px-3 text-end">
+                                {% if supplier.current_balance_uzs == 0 %}
+                                    <span class="text-muted">0.00</span>
+                                {% elif supplier.current_balance_uzs > 0 %}
+                                    <span class="text-success fw-semibold">+{{ supplier.current_balance_uzs|floatformat:2|intcomma }}</span>
+                                {% else %}
+                                    <span class="text-danger fw-semibold">{{ supplier.current_balance_uzs|floatformat:2|intcomma }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-2 px-3 text-end">
+                                {% if supplier.current_balance_usd == 0 %}
+                                    <span class="text-muted">0.00</span>
+                                {% elif supplier.current_balance_usd > 0 %}
+                                    <span class="text-success fw-semibold">+{{ supplier.current_balance_usd|floatformat:2|intcomma }}</span>
+                                {% else %}
+                                    <span class="text-danger fw-semibold">{{ supplier.current_balance_usd|floatformat:2|intcomma }}</span>
+                                {% endif %}
+                            </td>
                             <td class="py-2 px-3">{{ supplier.notes|default:"-"|truncatewords:15 }}</td>
                             <td class="py-2 px-3">{{ supplier.created_at|date:"d.m.Y H:i" }}</td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="4" class="text-center py-3 px-3">Hozircha ta'minotchilar mavjud emas.</td>
+                            <td colspan="6" class="text-center py-3 px-3">Hozircha ta'minotchilar mavjud emas.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -110,7 +139,7 @@
 
 <!-- Add Supplier Modal -->
 <div class="modal fade" id="addSupplierModal" tabindex="-1" aria-labelledby="addSupplierModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <form method="post" action="{% url 'contacts:supplier-list' %}" id="supplierModalForm">
                 {% csrf_token %}
@@ -119,20 +148,55 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    {% for field in supplier_form %}
-                        <div class="mb-3 row">
-                            <label for="{{ field.id_for_label }}" class="col-sm-3 col-form-label col-form-label-sm text-sm-end">{{ field.label }}</label>
-                            <div class="col-sm-9">
-                                {{ field }}
-                                {% if field.help_text %}
-                                    <small class="form-text text-muted">{{ field.help_text }}</small>
+                    <div class="row">
+                        <!-- Basic Information -->
+                        <div class="col-md-6">
+                            <h6 class="modal-section-header text-primary">Asosiy Ma'lumotlar</h6>
+                            {% for field in supplier_form %}
+                                {% if field.name in 'name,phone_number,notes' %}
+                                    <div class="mb-3">
+                                        <label for="{{ field.id_for_label }}" class="form-label form-label-sm">{{ field.label }}</label>
+                                        {{ field }}
+                                        {% if field.help_text %}
+                                            <small class="form-text text-muted">{{ field.help_text }}</small>
+                                        {% endif %}
+                                        {% for error in field.errors %}
+                                            <div class="invalid-feedback d-block">{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
                                 {% endif %}
-                                {% for error in field.errors %}
-                                    <div class="invalid-feedback d-block">{{ error }}</div>
-                                {% endfor %}
-                            </div>
+                            {% endfor %}
                         </div>
-                    {% endfor %}
+                        
+                        <!-- Balance Information -->
+                        <div class="col-md-6 modal-balance-section">
+                            <h6 class="modal-section-header text-success">Joriy Balans (Excel Ko'chirish Uchun)</h6>
+                            <div class="alert alert-info">
+                                <small><i class="fas fa-info-circle me-1"></i>
+                                Bu maydonlar Exceldan ma'lumotlarni ko'chirishda ishlatiladi. Musbat, manfiy yoki nol qiymat kiritishingiz mumkin.</small>
+                            </div>
+                            {% for field in supplier_form %}
+                                {% if field.name in 'current_balance_uzs,current_balance_usd' %}
+                                    <div class="mb-3">
+                                        <label for="{{ field.id_for_label }}" class="form-label form-label-sm">{{ field.label }}</label>
+                                        <div class="input-group input-group-sm">
+                                            {{ field }}
+                                            <span class="input-group-text">
+                                                {% if field.name == 'current_balance_uzs' %}UZS{% else %}USD{% endif %}
+                                            </span>
+                                        </div>
+                                        {% if field.help_text %}
+                                            <small class="form-text text-muted">{{ field.help_text }}</small>
+                                        {% endif %}
+                                        {% for error in field.errors %}
+                                            <div class="invalid-feedback d-block">{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
                     {% for error in supplier_form.non_field_errors %}
                         <div class="alert alert-danger">{{ error }}</div>
                     {% endfor %}

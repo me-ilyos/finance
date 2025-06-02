@@ -235,11 +235,19 @@ class ContactFormService:
 
     @staticmethod
     def create_agent(validated_data):
-        """Create a new agent"""
+        """Create a new agent with optional initial balance"""
         from .models import Agent
         try:
             agent = Agent.objects.create(**validated_data)
-            logger.info(f"Created new agent: {agent.name}")
+            
+            # Log balance information if provided
+            if validated_data.get('outstanding_balance_uzs', 0) != 0 or validated_data.get('outstanding_balance_usd', 0) != 0:
+                logger.info(f"Created new agent with initial balance: {agent.name} - "
+                           f"UZS: {validated_data.get('outstanding_balance_uzs', 0)}, "
+                           f"USD: {validated_data.get('outstanding_balance_usd', 0)}")
+            else:
+                logger.info(f"Created new agent: {agent.name}")
+                
             return agent
         except Exception as e:
             logger.error(f"Error creating agent: {e}")
@@ -247,12 +255,39 @@ class ContactFormService:
 
     @staticmethod
     def create_supplier(validated_data):
-        """Create a new supplier"""
+        """Create a new supplier with optional initial balance"""
         from .models import Supplier
         try:
             supplier = Supplier.objects.create(**validated_data)
-            logger.info(f"Created new supplier: {supplier.name}")
+            
+            # Log balance information if provided
+            if validated_data.get('current_balance_uzs', 0) != 0 or validated_data.get('current_balance_usd', 0) != 0:
+                logger.info(f"Created new supplier with initial balance: {supplier.name} - "
+                           f"UZS: {validated_data.get('current_balance_uzs', 0)}, "
+                           f"USD: {validated_data.get('current_balance_usd', 0)}")
+            else:
+                logger.info(f"Created new supplier: {supplier.name}")
+                
             return supplier
         except Exception as e:
             logger.error(f"Error creating supplier: {e}")
-            raise 
+            raise
+
+    @staticmethod
+    def validate_balance_fields(balance_uzs, balance_usd, entity_type="agent"):
+        """Validate balance fields for agents or suppliers"""
+        errors = {}
+        
+        if balance_uzs is not None and balance_uzs < -999999999.99:
+            errors['balance_uzs'] = f"{entity_type.title()} balans UZS juda katta manfiy qiymat"
+            
+        if balance_usd is not None and balance_usd < -999999999.99:
+            errors['balance_usd'] = f"{entity_type.title()} balans USD juda katta manfiy qiymat"
+            
+        if balance_uzs is not None and balance_uzs > 999999999.99:
+            errors['balance_uzs'] = f"{entity_type.title()} balans UZS juda katta musbat qiymat"
+            
+        if balance_usd is not None and balance_usd > 999999999.99:
+            errors['balance_usd'] = f"{entity_type.title()} balans USD juda katta musbat qiymat"
+            
+        return errors 

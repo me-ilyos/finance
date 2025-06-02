@@ -6,16 +6,16 @@ class AgentAdmin(admin.ModelAdmin):
     list_display = ('name', 'phone_number', 'outstanding_balance_uzs', 'outstanding_balance_usd', 'created_at', 'updated_at')
     list_filter = ('created_at', 'updated_at')
     search_fields = ('name', 'phone_number', 'email')
-    readonly_fields = ('outstanding_balance_uzs', 'outstanding_balance_usd', 'created_at', 'updated_at')
+    readonly_fields = ('created_at', 'updated_at')
     ordering = ('-created_at',)
     
     fieldsets = (
         ('Basic Information', {
             'fields': ('name', 'contact_person', 'phone_number', 'email')
         }),
-        ('Balance Information', {
+        ('Balance Information (Excel Migration)', {
             'fields': ('outstanding_balance_uzs', 'outstanding_balance_usd'),
-            'classes': ('collapse',)
+            'description': 'Bu maydonlar Exceldan ma\'lumotlarni ko\'chirishda ishlatiladi. Musbat qiymat qarzni, manfiy qiymat to\'lovni bildiradi.',
         }),
         ('Additional Information', {
             'fields': ('notes',)
@@ -28,7 +28,7 @@ class AgentAdmin(admin.ModelAdmin):
 
 @admin.register(Supplier)
 class SupplierAdmin(admin.ModelAdmin):
-    list_display = ('name', 'contact_person', 'phone_number', 'email', 'created_at')
+    list_display = ('name', 'contact_person', 'phone_number', 'current_balance_uzs', 'current_balance_usd', 'created_at')
     list_filter = ('created_at', 'updated_at')
     search_fields = ('name', 'contact_person', 'phone_number', 'email')
     readonly_fields = ('created_at', 'updated_at')
@@ -37,6 +37,10 @@ class SupplierAdmin(admin.ModelAdmin):
     fieldsets = (
         ('Basic Information', {
             'fields': ('name', 'contact_person', 'phone_number', 'email')
+        }),
+        ('Balance Information (Migration)', {
+            'fields': ('current_balance_uzs', 'current_balance_usd'),
+            'description': 'Bu maydonlar Exceldan ma\'lumotlarni ko\'chirishda ishlatiladi. Musbat, manfiy yoki nol qiymat kiritishingiz mumkin.',
         }),
         ('Additional Information', {
             'fields': ('notes',)

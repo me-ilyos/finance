@@ -18,6 +18,23 @@ class Supplier(models.Model):
     phone_number = models.CharField(max_length=20, blank=True, null=True, verbose_name="Telefon Raqami")
     email = models.EmailField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True, verbose_name="Izohlar")
+    
+    # Balance fields for migration from Excel
+    current_balance_uzs = models.DecimalField(
+        max_digits=20, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name="Joriy Balans UZS",
+        help_text="Exceldan ko'chirishda joriy balansni kiriting (musbat, manfiy yoki nol bo'lishi mumkin)"
+    )
+    current_balance_usd = models.DecimalField(
+        max_digits=20, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name="Joriy Balans USD",
+        help_text="Exceldan ko'chirishda joriy balansni kiriting (musbat, manfiy yoki nol bo'lishi mumkin)"
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

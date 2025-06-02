@@ -44,6 +44,35 @@
                             <p><strong>Email:</strong> {{ supplier.email }}</p>
                         {% endif %}
                         <p><strong>Qo'shilgan sana:</strong> {{ supplier.created_at|date:"d.m.Y H:i" }}</p>
+                        
+                        <!-- Balance Information -->
+                        <div class="row mt-3 mb-3">
+                            <div class="col-6">
+                                <div class="bg-light p-2 rounded">
+                                    <small class="text-muted d-block">Balans UZS</small>
+                                    {% if supplier.current_balance_uzs == 0 %}
+                                        <span class="fw-bold text-muted">0.00 UZS</span>
+                                    {% elif supplier.current_balance_uzs > 0 %}
+                                        <span class="fw-bold text-success">+{{ supplier.current_balance_uzs|floatformat:2|intcomma }} UZS</span>
+                                    {% else %}
+                                        <span class="fw-bold text-danger">{{ supplier.current_balance_uzs|floatformat:2|intcomma }} UZS</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="bg-light p-2 rounded">
+                                    <small class="text-muted d-block">Balans USD</small>
+                                    {% if supplier.current_balance_usd == 0 %}
+                                        <span class="fw-bold text-muted">$0.00</span>
+                                    {% elif supplier.current_balance_usd > 0 %}
+                                        <span class="fw-bold text-success">+${{ supplier.current_balance_usd|floatformat:2|intcomma }}</span>
+                                    {% else %}
+                                        <span class="fw-bold text-danger">${{ supplier.current_balance_usd|floatformat:2|intcomma }}</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
                         {% if supplier.notes %}
                             <div class="mt-3">
                                 <strong>Izohlar:</strong>
@@ -53,9 +82,9 @@
                     </div>
                     
                     <div class="mt-3">
-                        <a href="{% url 'contacts:supplier-edit' supplier.pk %}" class="btn btn-primary btn-sm">
+                        <!-- <a href="{% url 'contacts:supplier-edit' supplier.pk %}" class="btn btn-primary btn-sm">
                             <i class="fas fa-edit me-1"></i>Tahrirlash
-                        </a>
+                        </a> -->
                         <a href="{% url 'contacts:supplier-list' %}" class="btn btn-secondary btn-sm">
                             <i class="fas fa-arrow-left me-1"></i>Ortga
                         </a>
@@ -67,54 +96,60 @@
         <!-- Recent Acquisitions -->
         <div class="col-lg-8 mb-4">
             <div class="card shadow">
-                <div class="card-header py-3">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
                     <h6 class="m-0 text-primary">
-                        <i class="fas fa-shopping-cart me-2"></i>So'nggi xaridlar ({{ supplier_acquisitions|length }})
+                        <i class="fas fa-shopping-cart me-2"></i>Xaridlar ({{ acquisition_stats.total_acquisitions }})
                     </h6>
+                    {% if acquisition_stats.total_acquisitions > 0 %}
+                        <div class="text-sm">
+                            <span class="badge bg-success me-1">{{ acquisition_stats.total_cost_uzs|floatformat:0|intcomma }} UZS</span>
+                            <span class="badge bg-info">{{ acquisition_stats.total_cost_usd|floatformat:2|intcomma }} USD</span>
+                        </div>
+                    {% endif %}
                 </div>
                 <div class="card-body">
                     {% if supplier_acquisitions %}
                         <div class="table-responsive">
                             <table class="table table-striped table-hover">
-                                <thead>
+                                <thead class="table-light">
                                     <tr>
                                         <th>ID</th>
                                         <th>Sana</th>
                                         <th>Chipta</th>
-                                        <th>Miqdor</th>
-                                        <th>Narx</th>
-                                        <th>Jami</th>
-                                        <th>Valyuta</th>
+                                        <th class="text-end">Miqdor</th>
+                                        <th class="text-end">Narx</th>
+                                        <th class="text-end">Jami</th>
+                                        <th class="text-center">Valyuta</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for acquisition in supplier_acquisitions %}
                                     <tr>
-                                        <td>{{ acquisition.id }}</td>
+                                        <td><span class="badge bg-secondary">#{{ acquisition.id }}</span></td>
                                         <td>{{ acquisition.acquisition_date|date:"d.m.Y" }}</td>
                                         <td>
                                             {% if acquisition.ticket %}
-                                                {{ acquisition.ticket.description|truncatewords:3 }}
+                                                <span class="text-muted small">{{ acquisition.ticket.description|truncatewords:4 }}</span>
                                             {% else %}
-                                                N/A
+                                                <span class="text-muted">N/A</span>
                                             {% endif %}
                                         </td>
-                                        <td>{{ acquisition.quantity|intcomma }}</td>
-                                        <td>
+                                        <td class="text-end fw-semibold">{{ acquisition.initial_quantity|intcomma }}</td>
+                                        <td class="text-end">
                                             {% if acquisition.transaction_currency == 'UZS' %}
                                                 {{ acquisition.unit_price_uzs|floatformat:0|intcomma }}
                                             {% else %}
                                                 ${{ acquisition.unit_price_usd|floatformat:2|intcomma }}
                                             {% endif %}
                                         </td>
-                                        <td>
+                                        <td class="text-end fw-bold">
                                             {% if acquisition.transaction_currency == 'UZS' %}
-                                                {{ acquisition.total_cost_uzs|floatformat:0|intcomma }}
+                                                {{ acquisition.total_amount|floatformat:0|intcomma }}
                                             {% else %}
-                                                ${{ acquisition.total_cost_usd|floatformat:2|intcomma }}
+                                                ${{ acquisition.total_amount|floatformat:2|intcomma }}
                                             {% endif %}
                                         </td>
-                                        <td>
+                                        <td class="text-center">
                                             <span class="badge bg-{% if acquisition.transaction_currency == 'UZS' %}success{% else %}info{% endif %}">
                                                 {{ acquisition.transaction_currency }}
                                             </span>
@@ -125,16 +160,17 @@
                             </table>
                         </div>
                         
-                        <div class="text-center mt-3">
-                            <a href="{% url 'inventory:acquisition-list' %}?supplier={{ supplier.id }}" class="btn btn-outline-primary">
-                                <i class="fas fa-list me-1"></i>Barcha xaridlarni ko'rish
-                            </a>
+                        {% if acquisition_stats.total_acquisitions > 10 %}
+                        <div class="alert alert-info mt-3">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Jami {{ acquisition_stats.total_acquisitions }} ta xarid ko'rsatilgan
                         </div>
+                        {% endif %}
                     {% else %}
                         <div class="text-center py-4">
                             <i class="fas fa-inbox fa-3x text-gray-400 mb-3"></i>
                             <p class="text-muted">Hozircha bu yetkazib beruvchidan xaridlar mavjud emas.</p>
-                            <a href="{% url 'inventory:acquisition-create' %}?supplier={{ supplier.id }}" class="btn btn-primary">
+                            <a href="{% url 'inventory:acquisition-list' %}" class="btn btn-primary">
                                 <i class="fas fa-plus me-1"></i>Birinchi xaridni qo'shish
                             </a>
                         </div>

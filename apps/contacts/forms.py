@@ -9,31 +9,63 @@ from decimal import Decimal
 class AgentForm(forms.ModelForm):
     class Meta:
         model = Agent
-        fields = ['name', 'phone_number', 'notes']
+        fields = ['name', 'phone_number', 'notes', 'outstanding_balance_uzs', 'outstanding_balance_usd']
         labels = {
             'name': "Nomi",
             'phone_number': "Telefon Raqami",
             'notes': "Izohlar",
+            'outstanding_balance_uzs': "Balans UZS",
+            'outstanding_balance_usd': "Balans USD",
         }
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control form-control-sm'}),
             'phone_number': forms.TextInput(attrs={'class': 'form-control form-control-sm'}),
             'notes': forms.Textarea(attrs={'class': 'form-control form-control-sm', 'rows': 3}),
+            'outstanding_balance_uzs': forms.NumberInput(attrs={
+                'class': 'form-control form-control-sm', 
+                'step': '0.01',
+                'placeholder': '0.00'
+            }),
+            'outstanding_balance_usd': forms.NumberInput(attrs={
+                'class': 'form-control form-control-sm', 
+                'step': '0.01',
+                'placeholder': '0.00'
+            }),
+        }
+        help_texts = {
+            'outstanding_balance_uzs': "Musbat: Agent sizga qarzdor | Manfiy: Siz agentga qarzdorsiz",
+            'outstanding_balance_usd': "Musbat: Agent sizga qarzdor | Manfiy: Siz agentga qarzdorsiz",
         }
 
 class SupplierForm(forms.ModelForm):
     class Meta:
         model = Supplier
-        fields = ['name', 'phone_number', 'notes']
+        fields = ['name', 'phone_number', 'notes', 'current_balance_uzs', 'current_balance_usd']
         labels = {
             'name': "Nomi",
             'phone_number': "Telefon Raqami",
             'notes': "Izohlar",
+            'current_balance_uzs': "Joriy Balans UZS",
+            'current_balance_usd': "Joriy Balans USD",
         }
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control form-control-sm'}),
             'phone_number': forms.TextInput(attrs={'class': 'form-control form-control-sm'}),
             'notes': forms.Textarea(attrs={'class': 'form-control form-control-sm', 'rows': 3}),
+            'current_balance_uzs': forms.NumberInput(attrs={
+                'class': 'form-control form-control-sm', 
+                'step': '0.01',
+                'placeholder': '0.00'
+            }),
+            'current_balance_usd': forms.NumberInput(attrs={
+                'class': 'form-control form-control-sm', 
+                'step': '0.01',
+                'placeholder': '0.00'
+            }),
+        }
+        help_texts = {
+            'current_balance_uzs': "Exceldan ko'chirishda joriy balansni kiriting (musbat, manfiy yoki nol)",
+            'current_balance_usd': "Exceldan ko'chirishda joriy balansni kiriting (musbat, manfiy yoki nol)",
         }
 
 class AgentPaymentForm(forms.ModelForm):
