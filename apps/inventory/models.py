@@ -2,7 +2,11 @@ from django.db import models
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from decimal import Decimal
+from django.db import transaction
 from apps.accounting.models import FinancialAccount
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Ticket(models.Model):
@@ -72,9 +76,44 @@ class Acquisition(models.Model):
                 raise ValidationError({'unit_price_usd': 'Unit price in USD must be provided if transaction currency is USD.'})
 
     def save(self, *args, **kwargs):
-        """Save acquisition - business logic handled by service layer"""
+        """Save acquisition and update related records"""
         self.full_clean()
+        is_new = self.pk is None
+        
+        # Calculate total amount
+        if self.transaction_currency == self.Currency.UZS and self.unit_price_uzs:
+            self.total_amount = self.unit_price_uzs * self.initial_quantity
+        elif self.transaction_currency == self.Currency.USD and self.unit_price_usd:
+            self.total_amount = self.unit_price_usd * self.initial_quantity
+        
+        # Set available quantity to initial quantity for new acquisitions
+        if is_new:
+            self.available_quantity = self.initial_quantity
+        
         super().save(*args, **kwargs)
+        
+        # Update related records for new acquisitions
+        if is_new:
+            self._update_related_records()
+
+    def _update_related_records(self):
+        """Update supplier balance and financial account for new acquisition"""
+        try:
+            with transaction.atomic():
+                # If payment account is specified, this is a paid acquisition (no debt created)
+                if self.paid_from_account:
+                    # Only update financial account - no debt to supplier since it's paid
+                    self.paid_from_account.current_balance -= self.total_amount
+                    self.paid_from_account.save(update_fields=['current_balance', 'updated_at'])
+                    logger.info(f"Paid acquisition {self.id}: Updated financial account {self.paid_from_account.id}, no debt created")
+                else:
+                    # No payment made - create debt with supplier
+                    self.supplier.update_balance_on_acquisition(self.total_amount, self.transaction_currency)
+                    logger.info(f"Unpaid acquisition {self.id}: Created debt of {self.total_amount} {self.transaction_currency} with supplier {self.supplier.id}")
+                
+        except Exception as e:
+            logger.error(f"Error updating related records for acquisition {self.pk}: {e}")
+            raise
 
     def __str__(self):
         return f"{self.supplier.name} - {self.ticket.description} ({self.available_quantity}/{self.initial_quantity})"

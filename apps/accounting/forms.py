@@ -77,6 +77,12 @@ class FinancialAccountForm(forms.ModelForm):
 
 
 class ExpenditureForm(forms.ModelForm):
+    expenditure_type = forms.ChoiceField(
+        label="Xarajat Turi",
+        choices=Expenditure.ExpenditureType.choices,
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm', 'id': 'id_expenditure_type'}),
+        initial=Expenditure.ExpenditureType.GENERAL
+    )
     expenditure_date = forms.DateTimeField(
         label="Xarajat Sanasi",
         widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control form-control-sm'}),
@@ -94,13 +100,20 @@ class ExpenditureForm(forms.ModelForm):
     currency = forms.ChoiceField(
         label="Valyuta",
         choices=CurrencyChoices.choices,
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm', 'id': 'id_currency'})
     )
     paid_from_account = forms.ModelChoiceField(
         label="To'lov Hisobi",
         queryset=FinancialAccount.objects.filter(is_active=True),
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm', 'id': 'id_paid_from_account'}),
         help_text="Xarajat qaysi hisobdan to'lanishini tanlang."
+    )
+    supplier = forms.ModelChoiceField(
+        label="Ta'minotchi",
+        queryset=None,  # Will be set in __init__
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm', 'id': 'id_supplier'}),
+        required=False,
+        help_text="Ta'minotchiga to'lov qilish uchun tanlang"
     )
     notes = forms.CharField(
         label="Qo'shimcha Izohlar",
@@ -110,43 +123,53 @@ class ExpenditureForm(forms.ModelForm):
 
     class Meta:
         model = Expenditure
-        fields = ['expenditure_date', 'description', 'amount', 'currency', 'paid_from_account', 'notes']
+        fields = ['expenditure_type', 'expenditure_date', 'description', 'amount', 'currency', 'paid_from_account', 'supplier', 'notes']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        
+        # Import here to avoid circular imports
+        from apps.contacts.models import Supplier
+        
         self.fields['paid_from_account'].empty_label = "Hisobni tanlang"
+        self.fields['supplier'].queryset = Supplier.objects.filter().order_by('name')
+        self.fields['supplier'].empty_label = "Ta'minotchini tanlang"
 
     def clean(self):
-        """Use centralized validation"""
+        """Validate form data"""
         cleaned_data = super().clean()
         
-        expenditure_date = cleaned_data.get('expenditure_date')
-        description = cleaned_data.get('description')
-        amount = cleaned_data.get('amount')
+        expenditure_type = cleaned_data.get('expenditure_type')
+        supplier = cleaned_data.get('supplier')
         currency = cleaned_data.get('currency')
         paid_from_account = cleaned_data.get('paid_from_account')
-
-        try:
-            validated_data = ExpenditureValidator.validate_expenditure(
-                expenditure_date=expenditure_date,
-                description=description,
-                amount=amount,
-                currency=currency,
-                paid_from_account=paid_from_account,
-                expenditure_instance=self.instance
-            )
-            cleaned_data.update(validated_data)
-        except ValidationError as e:
-            if hasattr(e, 'message'):
-                raise ValidationError(e.message)
-            raise
+        
+        # Validate expenditure type and supplier relationship
+        if expenditure_type == Expenditure.ExpenditureType.SUPPLIER_PAYMENT and not supplier:
+            self.add_error('supplier', "Ta'minotchiga to'lov qilish uchun ta'minotchi tanlanishi kerak.")
+        
+        if supplier and expenditure_type != Expenditure.ExpenditureType.SUPPLIER_PAYMENT:
+            self.add_error('expenditure_type', "Ta'minotchi tanlangan bo'lsa, xarajat turi 'Ta'minotchiga to'lov' bo'lishi kerak.")
+        
+        # Validate currency match with account
+        if paid_from_account and currency and paid_from_account.currency != currency:
+            self.add_error('paid_from_account', f"Valyuta mos kelmaydi: hisob {paid_from_account.currency} ishlatadi, xarajat {currency} ishlatadi.")
 
         return cleaned_data
 
     def save(self, commit=True):
         """Override save to handle validation errors gracefully"""
         try:
-            return super().save(commit=commit)
+            expenditure = super().save(commit=False)
+            
+            # Set description for supplier payments
+            if (expenditure.expenditure_type == Expenditure.ExpenditureType.SUPPLIER_PAYMENT and 
+                expenditure.supplier and not expenditure.description):
+                expenditure.description = f"Payment to {expenditure.supplier.name}"
+            
+            if commit:
+                expenditure.save()
+            return expenditure
         except ValidationError as e:
             # Convert model validation errors to form errors
             if hasattr(e, 'error_dict'):
@@ -155,4 +178,76 @@ class ExpenditureForm(forms.ModelForm):
                         self.add_error(field, error.message)
             else:
                 self.add_error(None, str(e))
-            return None 
+            return None
+
+
+class SupplierPaymentForm(forms.ModelForm):
+    """Simplified form specifically for supplier payments"""
+    
+    expenditure_date = forms.DateTimeField(
+        label="To'lov Sanasi",
+        widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control form-control-sm'}),
+        initial=timezone.now
+    )
+    amount = forms.DecimalField(
+        label="To'lov Miqdori",
+        widget=forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'placeholder': '0.00', 'step': '0.01'}),
+        min_value=0.01
+    )
+    currency = forms.ChoiceField(
+        label="Valyuta",
+        choices=CurrencyChoices.choices,
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+    )
+    paid_from_account = forms.ModelChoiceField(
+        label="To'lov Hisobi",
+        queryset=FinancialAccount.objects.filter(is_active=True),
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
+        help_text="To'lov qaysi hisobdan amalga oshiriladi"
+    )
+    notes = forms.CharField(
+        label="Izohlar",
+        widget=forms.Textarea(attrs={'class': 'form-control form-control-sm', 'rows': 3}),
+        required=False
+    )
+
+    class Meta:
+        model = Expenditure
+        fields = ['expenditure_date', 'amount', 'currency', 'paid_from_account', 'notes']
+
+    def __init__(self, *args, **kwargs):
+        self.supplier = kwargs.pop('supplier', None)
+        super().__init__(*args, **kwargs)
+        
+        self.fields['paid_from_account'].empty_label = "Hisobni tanlang"
+        
+        # Filter accounts by currency if we have a currency preference
+        if self.supplier:
+            # Set default description
+            self.initial['description'] = f"Payment to {self.supplier.name}"
+
+    def clean(self):
+        """Validate form data"""
+        cleaned_data = super().clean()
+        
+        currency = cleaned_data.get('currency')
+        paid_from_account = cleaned_data.get('paid_from_account')
+        
+        # Validate currency match with account
+        if paid_from_account and currency and paid_from_account.currency != currency:
+            self.add_error('paid_from_account', f"Valyuta mos kelmaydi: hisob {paid_from_account.currency} ishlatadi, to'lov {currency} ishlatadi.")
+
+        return cleaned_data
+
+    def save(self, commit=True):
+        """Save supplier payment"""
+        expenditure = super().save(commit=False)
+        
+        # Set expenditure type and supplier
+        expenditure.expenditure_type = Expenditure.ExpenditureType.SUPPLIER_PAYMENT
+        expenditure.supplier = self.supplier
+        expenditure.description = f"Payment to {self.supplier.name}"
+        
+        if commit:
+            expenditure.save()
+        return expenditure 

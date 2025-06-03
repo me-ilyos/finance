@@ -73,14 +73,40 @@ class SupplierDetailView(DetailView):
     model = Supplier
     template_name = 'contacts/supplier_detail.html'
 
+    def get_queryset(self):
+        return Supplier.objects.prefetch_related(
+            'acquisitions_from_supplier__ticket',
+            'payments_received'
+        )
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        supplier = self.object
         
         # Get acquisitions using the correct related name
-        acquisitions = self.object.acquisitions_from_supplier.select_related('ticket').order_by('-acquisition_date')
+        acquisitions = supplier.acquisitions_from_supplier.select_related('ticket').order_by('-acquisition_date')
         context['supplier_acquisitions'] = acquisitions
         
-        # Simple statistics calculation
+        # Get supplier payments (expenditures to this supplier)
+        from apps.accounting.models import Expenditure
+        from apps.accounting.forms import SupplierPaymentForm
+        
+        payments = supplier.payments_received.filter(
+            expenditure_type=Expenditure.ExpenditureType.SUPPLIER_PAYMENT
+        ).order_by('-expenditure_date')
+        context['supplier_payments'] = payments
+        
+        # Add payment form for the modal
+        context['payment_form'] = SupplierPaymentForm(supplier=supplier)
+        
+        # Get supplier statistics using manager
+        context['supplier_stats'] = Supplier.objects.get_supplier_stats(supplier)
+        
+        # Get debt information
+        context['supplier_debt'] = supplier.get_total_debt()
+        context['has_debt'] = supplier.has_debt()
+        
+        # Simple acquisition statistics
         context['acquisition_stats'] = {
             'total_acquisitions': acquisitions.count(),
             'total_cost_uzs': sum(a.total_amount for a in acquisitions if a.transaction_currency == 'UZS'),
@@ -157,3 +183,34 @@ def add_agent_payment(request, agent_pk):
                     messages.error(request, f"{field_label}: {error}")
 
     return redirect(reverse('contacts:agent-detail', kwargs={'pk': agent_pk}))
+
+
+def add_supplier_payment(request, supplier_pk):
+    """Simple function-based view for adding supplier payments"""
+    from apps.accounting.forms import SupplierPaymentForm
+    from django.core.exceptions import ValidationError
+    from django.db import transaction
+    
+    supplier = get_object_or_404(Supplier, pk=supplier_pk)
+    
+    if request.method == 'POST':
+        form = SupplierPaymentForm(request.POST, supplier=supplier)
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    payment = form.save()
+                    messages.success(request, f"Ta'minotchi {supplier.name}ga to'lov muvaffaqiyatli amalga oshirildi.")
+                    logger.info(f"Created supplier payment {payment.pk} for supplier {supplier.pk}")
+            except ValidationError as e:
+                messages.error(request, f"To'lovni saqlashda xatolik: {e}")
+                logger.error(f"Validation error creating supplier payment for supplier {supplier.pk}: {e}")
+            except Exception as e:
+                messages.error(request, f"Kutilmagan xatolik: {e}")
+                logger.error(f"Unexpected error creating supplier payment for supplier {supplier.pk}: {e}")
+        else:
+            for field, errors in form.errors.items():
+                field_label = form.fields[field].label if field != '__all__' else 'Forma'
+                for error in errors:
+                    messages.error(request, f"{field_label}: {error}")
+
+    return redirect(reverse('contacts:supplier-detail', kwargs={'pk': supplier_pk}))

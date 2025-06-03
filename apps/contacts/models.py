@@ -10,6 +10,36 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+class SupplierManager(models.Manager):
+    def get_supplier_stats(self, supplier):
+        """Get supplier statistics including acquisitions and payments totals"""
+        from django.apps import apps
+        from django.db.models import Sum
+        
+        Acquisition = apps.get_model('inventory', 'Acquisition')
+        Expenditure = apps.get_model('accounting', 'Expenditure')
+        
+        return {
+            'total_acquisitions_uzs': Acquisition.objects.filter(
+                supplier=supplier, transaction_currency=CurrencyChoices.UZS
+            ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00'),
+            
+            'total_acquisitions_usd': Acquisition.objects.filter(
+                supplier=supplier, transaction_currency=CurrencyChoices.USD
+            ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00'),
+            
+            'total_payments_uzs': supplier.payments_received.filter(
+                currency=CurrencyChoices.UZS,
+                expenditure_type=Expenditure.ExpenditureType.SUPPLIER_PAYMENT
+            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00'),
+            
+            'total_payments_usd': supplier.payments_received.filter(
+                currency=CurrencyChoices.USD,
+                expenditure_type=Expenditure.ExpenditureType.SUPPLIER_PAYMENT
+            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00'),
+        }
+
+
 class Supplier(models.Model):
     name = models.CharField(max_length=255, verbose_name="Ta'minotchi Nomi")
     contact_person = models.CharField(max_length=255, blank=True, null=True, verbose_name="Mas'ul Shaxs")
@@ -17,24 +47,56 @@ class Supplier(models.Model):
     email = models.EmailField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True, verbose_name="Izohlar")
     
-    # Balance fields for migration from Excel
+    # Balance fields - positive means you owe the supplier, negative means they owe you
     current_balance_uzs = models.DecimalField(
         max_digits=20, 
         decimal_places=2, 
         default=0, 
         verbose_name="Joriy Balans UZS",
-        help_text="Exceldan ko'chirishda joriy balansni kiriting (musbat, manfiy yoki nol bo'lishi mumkin)"
+        help_text="Musbat: Siz ta'minotchiga qarzdorsiz | Manfiy: Ta'minotchi sizga qarzdor"
     )
     current_balance_usd = models.DecimalField(
         max_digits=20, 
         decimal_places=2, 
         default=0, 
         verbose_name="Joriy Balans USD",
-        help_text="Exceldan ko'chirishda joriy balansni kiriting (musbat, manfiy yoki nol bo'lishi mumkin)"
+        help_text="Musbat: Siz ta'minotchiga qarzdorsiz | Manfiy: Ta'minotchi sizga qarzdor"
     )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = SupplierManager()
+
+    def update_balance_on_acquisition(self, acquisition_amount, acquisition_currency):
+        """Update supplier balance when acquisition is made (increases debt to supplier)"""
+        if acquisition_currency == CurrencyChoices.UZS:
+            self.current_balance_uzs += acquisition_amount
+        elif acquisition_currency == CurrencyChoices.USD:
+            self.current_balance_usd += acquisition_amount
+        self.save(update_fields=['current_balance_uzs', 'current_balance_usd', 'updated_at'])
+        logger.info(f"Updated supplier {self.id} balance for acquisition: {acquisition_amount} {acquisition_currency}")
+
+    def get_total_debt(self):
+        """Get total debt owed to supplier in both currencies"""
+        return {
+            'uzs': max(self.current_balance_uzs, Decimal('0.00')),
+            'usd': max(self.current_balance_usd, Decimal('0.00'))
+        }
+
+    def has_debt(self):
+        """Check if we owe money to this supplier"""
+        return self.current_balance_uzs > 0 or self.current_balance_usd > 0
+
+    @property
+    def abs_balance_uzs(self):
+        """Get absolute value of UZS balance"""
+        return abs(self.current_balance_uzs)
+
+    @property
+    def abs_balance_usd(self):
+        """Get absolute value of USD balance"""
+        return abs(self.current_balance_usd)
 
     def __str__(self):
         return self.name

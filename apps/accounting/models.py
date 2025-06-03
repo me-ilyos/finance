@@ -2,7 +2,11 @@ from django.db import models
 from django.utils import timezone
 from decimal import Decimal
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from apps.core.constants import CurrencyChoices, AccountTypeChoices
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class FinancialAccount(models.Model):
@@ -37,6 +41,16 @@ class FinancialAccount(models.Model):
 
 
 class Expenditure(models.Model):
+    class ExpenditureType(models.TextChoices):
+        GENERAL = 'GENERAL', 'General Expense'
+        SUPPLIER_PAYMENT = 'SUPPLIER_PAYMENT', 'Supplier Payment'
+    
+    expenditure_type = models.CharField(
+        max_length=20, 
+        choices=ExpenditureType.choices, 
+        default=ExpenditureType.GENERAL,
+        verbose_name="Xarajat Turi"
+    )
     expenditure_date = models.DateTimeField(default=timezone.now)
     description = models.CharField(max_length=255)
     amount = models.DecimalField(max_digits=15, decimal_places=2)
@@ -47,6 +61,18 @@ class Expenditure(models.Model):
         on_delete=models.PROTECT,
         related_name='expenditures_paid'
     )
+    
+    # For supplier payments
+    supplier = models.ForeignKey(
+        'contacts.Supplier',
+        on_delete=models.PROTECT,
+        related_name='payments_received',
+        blank=True,
+        null=True,
+        verbose_name="Ta'minotchi",
+        help_text="Ta'minotchiga to'lov qilish uchun tanlang"
+    )
+    
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -54,6 +80,17 @@ class Expenditure(models.Model):
     def clean(self):
         """Validate expenditure data including currency match and balance"""
         super().clean()
+        
+        # Validate expenditure type and supplier relationship
+        if self.expenditure_type == self.ExpenditureType.SUPPLIER_PAYMENT and not self.supplier:
+            raise ValidationError({
+                'supplier': "Ta'minotchiga to'lov qilish uchun ta'minotchi tanlanishi kerak."
+            })
+        
+        if self.supplier and self.expenditure_type != self.ExpenditureType.SUPPLIER_PAYMENT:
+            raise ValidationError({
+                'expenditure_type': "Ta'minotchi tanlangan bo'lsa, xarajat turi 'Ta'minotchiga to'lov' bo'lishi kerak."
+            })
         
         if self.paid_from_account and self.currency != self.paid_from_account.currency:
             raise ValidationError({
@@ -85,11 +122,108 @@ class Expenditure(models.Model):
                 })
 
     def save(self, *args, **kwargs):
-        """Save expenditure - business logic handled by service layer"""
+        """Save expenditure and update related records"""
         self.full_clean()
+        is_new = self.pk is None
+        
+        # Get original expenditure for updates
+        original_expenditure = None
+        if not is_new:
+            try:
+                original_expenditure = Expenditure.objects.get(pk=self.pk)
+            except Expenditure.DoesNotExist:
+                pass
+        
         super().save(*args, **kwargs)
+        
+        # Update related records
+        if is_new:
+            self._update_related_records_new()
+        else:
+            self._update_related_records_update(original_expenditure)
+
+    def _update_related_records_new(self):
+        """Update related records for new expenditure"""
+        try:
+            with transaction.atomic():
+                # Update financial account balance
+                self.paid_from_account.current_balance -= self.amount
+                self.paid_from_account.save(update_fields=['current_balance', 'updated_at'])
+                
+                # Update supplier balance if this is a supplier payment
+                if self.expenditure_type == self.ExpenditureType.SUPPLIER_PAYMENT and self.supplier:
+                    if self.currency == CurrencyChoices.UZS:
+                        self.supplier.current_balance_uzs -= self.amount
+                    elif self.currency == CurrencyChoices.USD:
+                        self.supplier.current_balance_usd -= self.amount
+                    
+                    self.supplier.save(update_fields=['current_balance_uzs', 'current_balance_usd', 'updated_at'])
+                    logger.info(f"Updated supplier {self.supplier.id} balance for payment {self.id}")
+                
+        except Exception as e:
+            logger.error(f"Error updating related records for expenditure {self.pk}: {e}")
+            raise
+
+    def _update_related_records_update(self, original_expenditure):
+        """Update related records for expenditure update"""
+        if not original_expenditure:
+            return
+            
+        try:
+            with transaction.atomic():
+                # Calculate differences
+                amount_diff = self.amount - original_expenditure.amount
+                
+                # Update financial account
+                if self.paid_from_account_id == original_expenditure.paid_from_account_id:
+                    # Same account, adjust difference
+                    self.paid_from_account.current_balance -= amount_diff
+                else:
+                    # Account changed, revert from old and deduct from new
+                    original_account = FinancialAccount.objects.get(pk=original_expenditure.paid_from_account_id)
+                    original_account.current_balance += original_expenditure.amount
+                    original_account.save(update_fields=['current_balance', 'updated_at'])
+                    
+                    self.paid_from_account.current_balance -= self.amount
+                
+                self.paid_from_account.save(update_fields=['current_balance', 'updated_at'])
+                
+                # Update supplier balances if needed
+                self._update_supplier_balance_on_change(original_expenditure)
+                
+        except Exception as e:
+            logger.error(f"Error updating related records for expenditure update {self.pk}: {e}")
+            raise
+
+    def _update_supplier_balance_on_change(self, original_expenditure):
+        """Update supplier balances when expenditure changes"""
+        # Revert original supplier payment
+        if (original_expenditure.expenditure_type == self.ExpenditureType.SUPPLIER_PAYMENT and 
+            original_expenditure.supplier):
+            
+            supplier = original_expenditure.supplier
+            if original_expenditure.currency == CurrencyChoices.UZS:
+                supplier.current_balance_uzs += original_expenditure.amount
+            elif original_expenditure.currency == CurrencyChoices.USD:
+                supplier.current_balance_usd += original_expenditure.amount
+            supplier.save(update_fields=['current_balance_uzs', 'current_balance_usd', 'updated_at'])
+        
+        # Apply new supplier payment
+        if (self.expenditure_type == self.ExpenditureType.SUPPLIER_PAYMENT and self.supplier):
+            if self.currency == CurrencyChoices.UZS:
+                self.supplier.current_balance_uzs -= self.amount
+            elif self.currency == CurrencyChoices.USD:
+                self.supplier.current_balance_usd -= self.amount
+            self.supplier.save(update_fields=['current_balance_uzs', 'current_balance_usd', 'updated_at'])
+
+    @property
+    def is_supplier_payment(self):
+        """Check if this expenditure is a supplier payment"""
+        return self.expenditure_type == self.ExpenditureType.SUPPLIER_PAYMENT
 
     def __str__(self):
+        if self.is_supplier_payment and self.supplier:
+            return f"Payment to {self.supplier.name} - {self.amount} {self.currency} on {self.expenditure_date.strftime('%Y-%m-%d')}"
         return f"{self.description} - {self.amount} {self.currency} on {self.expenditure_date.strftime('%Y-%m-%d')}"
 
     class Meta:
