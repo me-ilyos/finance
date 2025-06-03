@@ -10,8 +10,7 @@
                 </div>
                 <div class="modal-body">
                     {% for field in acquisition_form %}
-                        <div class="mb-3 row {% if field.name == 'unit_price_uzs' or field.name == 'unit_price_usd' %}price-field-wrapper initially-hidden{% endif %}" 
-                             id="wrapper_{{ field.id_for_label }}">
+                        <div class="mb-3 row" id="wrapper_{{ field.id_for_label }}">
                             <label for="{{ field.id_for_label }}" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">{{ field.label }}</label>
                             <div class="col-sm-8">
                                 {{ field }}

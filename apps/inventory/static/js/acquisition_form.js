@@ -1,102 +1,57 @@
 /**
  * Acquisition Form JavaScript
- * Handles currency field visibility and form interactions
+ * Handles form interactions for simplified acquisition form
  */
 
 document.addEventListener('DOMContentLoaded', function () {
     const AcquisitionForm = {
         // DOM element references
-        currencySelect: document.getElementById('id_transaction_currency_modal'),
-        priceUzsWrapper: document.getElementById('wrapper_id_unit_price_uzs'),
-        priceUsdWrapper: document.getElementById('wrapper_id_unit_price_usd'),
-        priceUzsField: document.getElementById('id_unit_price_uzs'),
-        priceUsdField: document.getElementById('id_unit_price_usd'),
+        currencySelect: document.getElementById('id_currency'),
+        paidFromAccountSelect: document.getElementById('id_paid_from_account'),
         modal: document.getElementById('addAcquisitionModal'),
-
-        // Configuration
-        config: {
-            currencies: {
-                UZS: 'UZS',
-                USD: 'USD'
-            }
-        },
 
         init: function() {
             this.bindEvents();
-            this.togglePriceFields(); // Initial state
+            this.filterAccountsByCurrency(); // Initial state
         },
 
         bindEvents: function() {
             if (this.currencySelect) {
-                this.currencySelect.addEventListener('change', () => this.togglePriceFields());
+                this.currencySelect.addEventListener('change', () => this.filterAccountsByCurrency());
             }
 
             if (this.modal) {
-                this.modal.addEventListener('shown.bs.modal', () => this.togglePriceFields());
+                this.modal.addEventListener('shown.bs.modal', () => this.filterAccountsByCurrency());
             }
         },
 
-        togglePriceFields: function() {
-            if (!this.validateElements()) {
+        filterAccountsByCurrency: function() {
+            if (!this.currencySelect || !this.paidFromAccountSelect) {
                 return;
             }
 
             const selectedCurrency = this.currencySelect.value;
+            const options = this.paidFromAccountSelect.querySelectorAll('option');
 
-            // Hide all price fields first
-            this.hideAllPriceFields();
+            // Show/hide options based on currency
+            options.forEach(option => {
+                if (option.value === '') {
+                    // Keep empty option visible
+                    option.style.display = '';
+                    return;
+                }
 
-            // Show relevant field based on currency
-            if (selectedCurrency === this.config.currencies.UZS) {
-                this.showUzsField();
-            } else if (selectedCurrency === this.config.currencies.USD) {
-                this.showUsdField();
-            }
-        },
+                // Get currency from option text or data attribute
+                const optionText = option.textContent;
+                const isMatchingCurrency = optionText.includes(`(${selectedCurrency})`);
+                
+                option.style.display = isMatchingCurrency ? '' : 'none';
+            });
 
-        validateElements: function() {
-            const requiredElements = [
-                this.currencySelect,
-                this.priceUzsWrapper,
-                this.priceUsdWrapper,
-                this.priceUzsField,
-                this.priceUsdField
-            ];
-
-            return requiredElements.every(element => element !== null);
-        },
-
-        hideAllPriceFields: function() {
-            // Hide UZS field
-            this.priceUzsWrapper.classList.add('initially-hidden');
-            this.priceUzsWrapper.style.setProperty('display', 'none', 'important');
-            this.priceUzsField.required = false;
-
-            // Hide USD field
-            this.priceUsdWrapper.classList.add('initially-hidden');
-            this.priceUsdWrapper.style.setProperty('display', 'none', 'important');
-            this.priceUsdField.required = false;
-        },
-
-        showUzsField: function() {
-            this.priceUzsWrapper.classList.remove('initially-hidden');
-            this.priceUzsWrapper.style.setProperty('display', 'flex', 'important');
-            this.priceUzsField.required = true;
-            
-            // Clear USD field
-            if (this.priceUsdField) {
-                this.priceUsdField.value = '';
-            }
-        },
-
-        showUsdField: function() {
-            this.priceUsdWrapper.classList.remove('initially-hidden');
-            this.priceUsdWrapper.style.setProperty('display', 'flex', 'important');
-            this.priceUsdField.required = true;
-            
-            // Clear UZS field
-            if (this.priceUzsField) {
-                this.priceUzsField.value = '';
+            // Reset selection if current selection is not compatible
+            const currentOption = this.paidFromAccountSelect.querySelector('option:checked');
+            if (currentOption && currentOption.value !== '' && currentOption.style.display === 'none') {
+                this.paidFromAccountSelect.value = '';
             }
         }
     };

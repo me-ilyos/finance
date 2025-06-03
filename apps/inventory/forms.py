@@ -1,17 +1,16 @@
 from django import forms
 from .models import Acquisition, Ticket
-from .validators import TicketValidator, AcquisitionValidator
-from .services import AcquisitionService
 from apps.contacts.models import Supplier
 from apps.accounting.models import FinancialAccount
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 
+
 class AcquisitionForm(forms.ModelForm):
-    # Fields for creating a new Ticket
+    # Ticket creation fields
     ticket_type = forms.ChoiceField(
         choices=Ticket.TicketType.choices,
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm', 'id': 'id_ticket_type_modal'}),
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
         label="Chipta Turi"
     )
     ticket_description = forms.CharField(
@@ -29,133 +28,72 @@ class AcquisitionForm(forms.ModelForm):
         label="Qo'nish vaqti"
     )
 
-    # Acquisition specific fields
-    supplier = forms.ModelChoiceField(
-        queryset=Supplier.objects.all(),
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
-        label="Ta'minotchi"
-    )
-    acquisition_date = forms.DateField(
-        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control form-control-sm'}),
-        label="Xarid Sanasi",
-        initial=timezone.localdate
-    )
-    initial_quantity = forms.IntegerField(
-        min_value=1,
-        widget=forms.NumberInput(attrs={'class': 'form-control form-control-sm'}),
-        label="Miqdori"
-    )
-    transaction_currency = forms.ChoiceField(
-        choices=Acquisition.Currency.choices,
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm', 'id': 'id_transaction_currency_modal'}),
-        label="Valyuta",
-        initial=Acquisition.Currency.UZS
-    )
-    unit_price_uzs = forms.DecimalField(
-        required=False, 
-        max_digits=15, decimal_places=2,
-        widget=forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'step': '0.01'}),
-        label="Narx (UZS)"
-    )
-    unit_price_usd = forms.DecimalField(
-        required=False, 
-        max_digits=15, decimal_places=2,
-        widget=forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'step': '0.01'}),
-        label="Narx (USD)"
-    )
-    paid_from_account = forms.ModelChoiceField(
-        queryset=FinancialAccount.objects.all(), 
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
-        label="To'lov"
-    )
-    notes = forms.CharField(
-        required=False,
-        widget=forms.Textarea(attrs={'class': 'form-control form-control-sm', 'rows': 3}),
-        label="Izohlar"
-    )
-
     class Meta:
         model = Acquisition
-        fields = [
-            'supplier', 'acquisition_date', 'initial_quantity', 
-            'transaction_currency', 'unit_price_uzs', 'unit_price_usd', 
-            'paid_from_account', 'notes'
-        ]
-        exclude = ('ticket',)
+        fields = ['supplier', 'acquisition_date', 'initial_quantity', 'unit_price', 'currency', 'paid_from_account', 'notes']
+        widgets = {
+            'supplier': forms.Select(attrs={'class': 'form-select form-select-sm'}),
+            'acquisition_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control form-control-sm'}),
+            'initial_quantity': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'min': '1'}),
+            'unit_price': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'step': '0.01'}),
+            'currency': forms.Select(attrs={'class': 'form-select form-select-sm'}),
+            'paid_from_account': forms.Select(attrs={'class': 'form-select form-select-sm'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control form-control-sm', 'rows': 3}),
+        }
+        labels = {
+            'supplier': "Ta'minotchi",
+            'acquisition_date': "Xarid Sanasi",
+            'initial_quantity': "Miqdori",
+            'unit_price': "Narx",
+            'currency': "Valyuta",
+            'paid_from_account': "To'lov Hisobi",
+            'notes': "Izohlar",
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['acquisition_date'].initial = timezone.localdate()
         
-        # Reorder fields to put ticket fields first, then acquisition fields
-        ordered_fields = [
-            'ticket_type', 'ticket_description', 'ticket_departure_date_time', 'ticket_arrival_date_time',
-            'supplier', 'acquisition_date', 'initial_quantity', 
-            'transaction_currency', 'unit_price_uzs', 'unit_price_usd', 
-            'paid_from_account', 'notes'
-        ]
-        
-        self.order_fields(ordered_fields)
+        # Filter accounts by currency when editing
+        if self.instance.pk and self.instance.currency:
+            self.fields['paid_from_account'].queryset = FinancialAccount.objects.filter(
+                currency=self.instance.currency, is_active=True
+            )
 
     def clean(self):
-        """Use centralized validation"""
+        """Basic validation - let model handle the rest"""
         cleaned_data = super().clean()
         
-        # Validate ticket data
-        try:
-            ticket_data = TicketValidator.validate_ticket_data(
-                ticket_type=cleaned_data.get('ticket_type'),
-                description=cleaned_data.get('ticket_description'),
-                departure_date_time=cleaned_data.get('ticket_departure_date_time'),
-                arrival_date_time=cleaned_data.get('ticket_arrival_date_time')
+        # Basic currency matching validation
+        paid_from_account = cleaned_data.get('paid_from_account')
+        currency = cleaned_data.get('currency')
+        
+        if paid_from_account and currency and paid_from_account.currency != currency:
+            raise ValidationError(
+                f"Payment account currency ({paid_from_account.currency}) "
+                f"must match acquisition currency ({currency})"
             )
-        except ValidationError as e:
-            self.add_error('ticket_description', str(e))
-            return cleaned_data
-
-        # Validate acquisition data
-        try:
-            acquisition_data = AcquisitionValidator.validate_acquisition_data(
-                supplier=cleaned_data.get('supplier'),
-                acquisition_date=cleaned_data.get('acquisition_date'),
-                initial_quantity=cleaned_data.get('initial_quantity'),
-                transaction_currency=cleaned_data.get('transaction_currency'),
-                unit_price_uzs=cleaned_data.get('unit_price_uzs'),
-                unit_price_usd=cleaned_data.get('unit_price_usd'),
-                paid_from_account=cleaned_data.get('paid_from_account')
-            )
-            
-            # Update cleaned_data with validated values
-            cleaned_data.update(acquisition_data)
-            cleaned_data['ticket_data'] = ticket_data
-            
-        except ValidationError as e:
-            self.add_error(None, str(e))
-
+        
         return cleaned_data
 
     def save(self, commit=True):
-        """Use service to create acquisition with ticket"""
+        """Create ticket and acquisition"""
         if not commit:
             return super().save(commit=False)
         
-        try:
-            # Extract ticket and acquisition data
-            ticket_data = self.cleaned_data.pop('ticket_data')
-            acquisition_data = {
-                field: self.cleaned_data[field] 
-                for field in self.Meta.fields 
-                if field in self.cleaned_data
-            }
-            
-            # Add notes if present
-            if 'notes' in self.cleaned_data:
-                acquisition_data['notes'] = self.cleaned_data['notes']
-            
-            # Use service to create acquisition
-            acquisition = AcquisitionService.create_acquisition(acquisition_data, ticket_data)
-            return acquisition
-            
-        except Exception as e:
-            self.add_error(None, f"Xaridni yaratishda xatolik: {e}")
-            return None
+        # Create ticket first
+        ticket = Ticket.objects.create(
+            ticket_type=self.cleaned_data['ticket_type'],
+            description=self.cleaned_data['ticket_description'],
+            departure_date_time=self.cleaned_data['ticket_departure_date_time'],
+            arrival_date_time=self.cleaned_data.get('ticket_arrival_date_time')
+        )
+        
+        # Create acquisition
+        acquisition = super().save(commit=False)
+        acquisition.ticket = ticket
+        
+        if commit:
+            acquisition.save()
+        
+        return acquisition
