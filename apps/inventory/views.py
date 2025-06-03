@@ -94,9 +94,16 @@ class AcquisitionListView(ListView):
             except Exception as e:
                 logger.error(f"Error creating acquisition: {e}")
                 messages.error(request, "Xaridni yaratishda kutilmagan xatolik yuz berdi.")
+                # Re-render the page with the form and errors
+                self.object_list = self.get_queryset()
+                context = self.get_context_data(acquisition_form=form, object_list=self.object_list)
+                return self.render_to_response(context)
         else:
             # If form is invalid, re-render the page with the form and errors
             self.object_list = self.get_queryset()
             context = self.get_context_data(acquisition_form=form, object_list=self.object_list)
             messages.error(request, "Xaridni qo'shishda xatolik. Iltimos, ma'lumotlarni tekshiring.")
             return self.render_to_response(context)
+        
+        # Fallback return (shouldn't reach here normally)
+        return redirect(reverse_lazy('inventory:acquisition-list'))

@@ -96,6 +96,73 @@ class SupplierDetailView(DetailView):
         ).order_by('-expenditure_date')
         context['supplier_payments'] = payments
         
+        # Create combined transactions list for the new table format
+        combined_transactions = []
+        
+        # Add acquisitions to combined list
+        for acquisition in acquisitions:
+            combined_transactions.append({
+                'date': acquisition.acquisition_date,
+                'type': 'acquisition',
+                'amount': acquisition.total_amount,
+                'currency': acquisition.transaction_currency,
+                'id': acquisition.id,
+                'ticket_description': acquisition.ticket.description if acquisition.ticket else None,
+                'notes': acquisition.notes,
+            })
+        
+        # Add payments to combined list
+        for payment in payments:
+            combined_transactions.append({
+                'date': payment.expenditure_date,
+                'type': 'payment',
+                'amount': payment.amount,
+                'currency': payment.currency,
+                'id': payment.id,
+                'ticket_description': None,
+                'notes': payment.notes,
+            })
+        
+        # Sort by date descending (newest first)
+        combined_transactions.sort(key=lambda x: x['date'], reverse=True)
+        context['combined_transactions'] = combined_transactions
+        
+        # Calculate totals for summary - only unpaid acquisitions create debt
+        unpaid_acquisitions_uzs = sum(a.total_amount for a in acquisitions if a.transaction_currency == 'UZS' and not a.paid_from_account)
+        unpaid_acquisitions_usd = sum(a.total_amount for a in acquisitions if a.transaction_currency == 'USD' and not a.paid_from_account)
+        
+        # Only count manual payments (not automatic expenditures from paid acquisitions) as debt-reducing
+        manual_payments_uzs = sum(p.amount for p in payments if p.currency == 'UZS' and not (p.notes and p.notes.startswith('Automatic expenditure')))
+        manual_payments_usd = sum(p.amount for p in payments if p.currency == 'USD' and not (p.notes and p.notes.startswith('Automatic expenditure')))
+        
+        # Total payments includes all payments for display purposes
+        total_payments_uzs = sum(p.amount for p in payments if p.currency == 'UZS')
+        total_payments_usd = sum(p.amount for p in payments if p.currency == 'USD')
+        
+        # Use database current balance as the accurate current debt (includes initial balance)
+        current_balance_uzs = supplier.current_balance_uzs
+        current_balance_usd = supplier.current_balance_usd
+        
+        # Calculate opening balance: Current Balance - Unpaid Acquisitions + Manual Payments
+        # This shows what the initial balance was before transactions
+        opening_balance_uzs = current_balance_uzs - unpaid_acquisitions_uzs + manual_payments_uzs
+        opening_balance_usd = current_balance_usd - unpaid_acquisitions_usd + manual_payments_usd
+        
+        context['transaction_summary'] = {
+            'opening_balance_uzs': opening_balance_uzs,
+            'opening_balance_usd': opening_balance_usd,
+            'total_acquisitions_uzs': sum(a.total_amount for a in acquisitions if a.transaction_currency == 'UZS'),
+            'total_acquisitions_usd': sum(a.total_amount for a in acquisitions if a.transaction_currency == 'USD'),
+            'unpaid_acquisitions_uzs': unpaid_acquisitions_uzs,
+            'unpaid_acquisitions_usd': unpaid_acquisitions_usd,
+            'total_payments_uzs': total_payments_uzs,
+            'total_payments_usd': total_payments_usd,
+            'manual_payments_uzs': manual_payments_uzs,
+            'manual_payments_usd': manual_payments_usd,
+            'current_balance_uzs': current_balance_uzs,
+            'current_balance_usd': current_balance_usd,
+        }
+        
         # Add payment form for the modal
         context['payment_form'] = SupplierPaymentForm(supplier=supplier)
         
@@ -137,6 +204,53 @@ class AgentDetailView(DetailView):
         context['agent_sales'] = agent.agent_sales.all().order_by('-sale_date')
         context['agent_payments'] = agent.payments.all().order_by('-payment_date')
         context['payment_form'] = AgentPaymentForm(initial={'agent': agent.pk}, agent=agent)
+        
+        # Create combined transactions list for the new table format
+        combined_transactions = []
+        
+        # Add sales to combined list
+        for sale in context['agent_sales']:
+            combined_transactions.append({
+                'date': sale.sale_date,
+                'type': 'sale',
+                'amount': sale.total_sale_amount,
+                'currency': sale.sale_currency,
+                'id': sale.id,
+                'ticket_description': sale.related_acquisition.ticket.description if sale.related_acquisition and sale.related_acquisition.ticket else None,
+                'notes': sale.notes,
+            })
+        
+        # Add payments to combined list
+        for payment in context['agent_payments']:
+            payment_amount = payment.amount_paid_uzs if payment.amount_paid_uzs > 0 else payment.amount_paid_usd
+            payment_currency = 'UZS' if payment.amount_paid_uzs > 0 else 'USD'
+            combined_transactions.append({
+                'date': payment.payment_date,
+                'type': 'payment',
+                'amount': payment_amount,
+                'currency': payment_currency,
+                'id': payment.id,
+                'ticket_description': None,
+                'notes': payment.notes,
+            })
+        
+        # Sort by date descending (newest first)
+        combined_transactions.sort(key=lambda x: x['date'], reverse=True)
+        context['combined_transactions'] = combined_transactions
+        
+        # Calculate transaction summary
+        total_sales_uzs = sum(s.total_sale_amount for s in context['agent_sales'] if s.sale_currency == 'UZS')
+        total_sales_usd = sum(s.total_sale_amount for s in context['agent_sales'] if s.sale_currency == 'USD')
+        total_payments_uzs = sum(p.amount_paid_uzs for p in context['agent_payments'])
+        total_payments_usd = sum(p.amount_paid_usd for p in context['agent_payments'])
+        
+        context['transaction_summary'] = {
+            'total_sales_uzs': total_sales_uzs,
+            'total_sales_usd': total_sales_usd,
+            'total_payments_uzs': total_payments_uzs,
+            'total_payments_usd': total_payments_usd,
+        }
+        
         return context
 
 

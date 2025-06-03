@@ -102,10 +102,19 @@ class Acquisition(models.Model):
             with transaction.atomic():
                 # If payment account is specified, this is a paid acquisition (no debt created)
                 if self.paid_from_account:
-                    # Only update financial account - no debt to supplier since it's paid
+                    # Validate currency match
+                    if self.transaction_currency != self.paid_from_account.currency:
+                        raise ValidationError(f"Currency mismatch: acquisition uses {self.transaction_currency}, account uses {self.paid_from_account.currency}")
+                    
+                    # Check sufficient balance
+                    if self.paid_from_account.current_balance < self.total_amount:
+                        raise ValidationError(f"Insufficient balance. Available: {self.paid_from_account.current_balance:,.2f} {self.paid_from_account.currency}, Required: {self.total_amount:,.2f} {self.transaction_currency}")
+                    
+                    # Only update financial account directly - no expenditure needed for paid acquisitions
                     self.paid_from_account.current_balance -= self.total_amount
                     self.paid_from_account.save(update_fields=['current_balance', 'updated_at'])
-                    logger.info(f"Paid acquisition {self.id}: Updated financial account {self.paid_from_account.id}, no debt created")
+                    
+                    logger.info(f"Paid acquisition {self.id}: Updated financial account {self.paid_from_account.id} - no supplier balance change")
                 else:
                     # No payment made - create debt with supplier
                     self.supplier.update_balance_on_acquisition(self.total_amount, self.transaction_currency)
