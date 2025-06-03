@@ -1,0 +1,239 @@
+{% extends 'base.html' %}
+{% load humanize static %}
+
+{% block title %}Moliyaviy Hisoblar{% endblock %}
+
+{% block page_title %}Moliyaviy Hisoblar{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/expenditure_list.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    
+    {% comment %} Display Django Messages {% endcomment %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">Barcha Moliyaviy Hisoblar</h6>
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addAccountModal">
+                <i class="fas fa-plus-circle me-1"></i> Yangi Hisob
+            </button>
+        </div>
+        <div class="card-body">
+
+            <!-- Summary Card -->
+            <div class="row mb-4">
+                <div class="col-lg-6 mx-auto">
+                    <div class="card border-primary">
+                        <div class="card-header bg-primary text-white">
+                            <h6 class="mb-0">Umumiy Balanslar</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <h5 class="text-primary">{{ totals.total_balance_uzs|default:0|floatformat:0|intcomma }}</h5>
+                                    <small class="text-muted">UZS</small>
+                                </div>
+                                <div class="col-6">
+                                    <h5 class="text-success">${{ totals.total_balance_usd|default:0|floatformat:2|intcomma }}</h5>
+                                    <small class="text-muted">USD</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle" id="accountsTable" width="100%" cellspacing="0">
+                    <thead class="table-light">
+                        <tr class="border-bottom border-2">
+                            <th class="py-3 px-3 fw-semibold">Hisob Nomi</th>
+                            <th class="py-3 px-3 fw-semibold">Turi</th>
+                            <th class="py-3 px-3 fw-semibold">Valyuta</th>
+                            <th class="text-center fw-semibold amount-col standout-col align-middle">
+                                <div>Joriy Balans</div>
+                                <div class="container-fluid gx-0"><div class="row gx-0">
+                                    <div class="col text-center small border-end py-1">UZS</div>
+                                    <div class="col text-center small py-1">USD</div>
+                                </div></div>
+                            </th>
+                            <th class="py-3 px-3 fw-semibold">Holati</th>
+                            <th class="py-3 px-3 fw-semibold">Yaratilgan</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for account in accounts %}
+                        <tr class="{% if not account.is_active %}table-secondary{% endif %}">
+                            <td class="py-2 px-3">
+                                <strong>{{ account.name }}</strong>
+                                {% if account.account_details %}
+                                    <br><small class="text-muted">{{ account.account_details|truncatewords:8 }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="py-2 px-3">{{ account.get_account_type_display }}</td>
+                            <td class="py-2 px-3">
+                                <span class="badge bg-{% if account.currency == 'USD' %}success{% else %}primary{% endif %}">
+                                    {{ account.currency }}
+                                </span>
+                            </td>
+                            <td class="amount-col standout-col align-middle">
+                                <div class="container-fluid gx-0"><div class="row gx-0">
+                                    <div class="col text-end small border-end">
+                                        {% if account.currency == 'UZS' %}{{ account.current_balance|floatformat:0|intcomma }}{% else %}-{% endif %}
+                                    </div>
+                                    <div class="col text-end small">
+                                        {% if account.currency == 'USD' %}\${{ account.current_balance|floatformat:2|intcomma }}{% else %}-{% endif %}
+                                    </div>
+                                </div></div>
+                            </td>
+                            <td class="py-2 px-3">
+                                {% if account.is_active %}
+                                    <span class="badge bg-success">Faol</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Nofaol</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-2 px-3">{{ account.created_at|date:"d.m.y H:i" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-3 px-3">Moliyaviy hisoblar mavjud emas.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if is_paginated %}
+            <nav aria-label="Page navigation" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1" aria-label="First">
+                                <span aria-hidden="true">&laquo;&laquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}" aria-label="Previous">
+                                <span aria-hidden="true">&laquo;</span>
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">&laquo;&laquo;</span>
+                        </li>
+                        <li class="page-item disabled">
+                            <span class="page-link">&laquo;</span>
+                        </li>
+                    {% endif %}
+
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <li class="page-item active" aria-current="page"><span class="page-link">{{ num }}</span></li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}" aria-label="Next">
+                                <span aria-hidden="true">&raquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}" aria-label="Last">
+                                <span aria-hidden="true">&raquo;&raquo;</span>
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">&raquo;</span>
+                        </li>
+                        <li class="page-item disabled">
+                            <span class="page-link">&raquo;&raquo;</span>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Add Financial Account Modal -->
+<div class="modal fade" id="addAccountModal" tabindex="-1" aria-labelledby="addAccountModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="post" action="{% url 'accounting:financial-account-create' %}" id="accountModalForm">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addAccountModalLabel">Yangi Moliyaviy Hisob Qo'shish</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {% if account_form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in account_form.non_field_errors %}
+                                <p class="mb-0">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    {% for field in account_form %}
+                        <div class="mb-3 row" id="wrapper_{{ field.id_for_label }}">
+                            <label for="{{ field.id_for_label }}" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">
+                                {{ field.label }}
+                                {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+                            <div class="col-sm-8">
+                                {{ field }} 
+                                {% if field.help_text %}
+                                    <small class="form-text text-muted d-block mt-1">{{ field.help_text }}</small>
+                                {% endif %}
+                                {% for error in field.errors %}
+                                    <div class="invalid-feedback d-block">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                    
+                    <div class="alert alert-info mt-3">
+                        <small>
+                            <i class="fas fa-info-circle me-1"></i>
+                            <strong>Eslatma:</strong> Balans yaratilganda belgilanadi va keyin to'lovlar hamda xarajatlar orqali avtomatik yangilanadi.
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Bekor Qilish</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Yaratish</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Clear form when modal is closed
+document.getElementById('addAccountModal').addEventListener('hidden.bs.modal', function () {
+    document.getElementById('accountModalForm').reset();
+    // Clear any error messages
+    document.querySelectorAll('.invalid-feedback').forEach(el => el.remove());
+    document.querySelectorAll('.alert-danger').forEach(el => el.remove());
+});
+</script>
+{% endblock %} 

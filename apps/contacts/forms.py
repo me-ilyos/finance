@@ -69,23 +69,26 @@ class SupplierForm(forms.ModelForm):
         }
 
 class AgentPaymentForm(forms.ModelForm):
-    related_sale = forms.ModelChoiceField(
-        queryset=None,  # Will be set in __init__
-        required=False,
-        label="To'lov qilinayotgan Sotuv (Qarz)",
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
-        help_text="Agar bu to'lov ma'lum bir sotuv uchun bo'lsa, uni tanlang."
-    )
-
     class Meta:
         model = AgentPayment
-        fields = ['payment_date', 'related_sale', 'amount_paid_uzs', 'amount_paid_usd', 'paid_to_account', 'notes']
+        fields = ['payment_date', 'amount_paid_uzs', 'amount_paid_usd', 'paid_to_account', 'notes']
+        labels = {
+            'payment_date': "To'lov Sanasi",
+            'amount_paid_uzs': "To'lov Miqdori (UZS)",
+            'amount_paid_usd': "To'lov Miqdori (USD)",
+            'paid_to_account': "To'lov Hisobi",
+            'notes': "Izohlar",
+        }
         widgets = {
             'payment_date': forms.DateTimeInput(attrs={'class': 'form-control form-control-sm', 'type': 'datetime-local'}),
-            'amount_paid_uzs': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'step': '0.01'}),
-            'amount_paid_usd': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'step': '0.01'}),
+            'amount_paid_uzs': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'step': '0.01', 'placeholder': '0.00'}),
+            'amount_paid_usd': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'step': '0.01', 'placeholder': '0.00'}),
             'paid_to_account': forms.Select(attrs={'class': 'form-select form-select-sm'}),
             'notes': forms.Textarea(attrs={'class': 'form-control form-control-sm', 'rows': 3}),
+        }
+        help_texts = {
+            'amount_paid_uzs': "Faqat UZS yoki USD da to'lov qiling, ikkalasini ham emas",
+            'amount_paid_usd': "Faqat UZS yoki USD da to'lov qiling, ikkalasini ham emas",
         }
 
     def __init__(self, *args, **kwargs):
@@ -94,21 +97,8 @@ class AgentPaymentForm(forms.ModelForm):
         
         if agent:
             self.instance.agent = agent
-            self._setup_related_sale_queryset(agent)
 
         self._setup_account_queryset()
-
-    def _setup_related_sale_queryset(self, agent):
-        """Setup queryset for related sales"""
-        from django.apps import apps
-        Sale = apps.get_model('sales', 'Sale')
-        
-        self.fields['related_sale'].queryset = Sale.objects.filter(
-            agent=agent,
-            total_sale_amount__gt=models.F('paid_amount_on_this_sale') 
-        ).select_related('related_acquisition__ticket').order_by('-sale_date')
-        
-        self.fields['related_sale'].label_from_instance = self._format_sale_label
 
     def _setup_account_queryset(self):
         """Setup queryset for payment accounts"""
@@ -116,10 +106,6 @@ class AgentPaymentForm(forms.ModelForm):
             is_active=True, 
             currency__in=[CurrencyChoices.UZS, CurrencyChoices.USD]
         ).order_by('currency', 'name')
-
-    def _format_sale_label(self, obj):
-        """Format sale label for display"""
-        return f"Sotuv {obj.id} ({obj.sale_date.strftime('%d-%m-%Y')}) - Balans: {obj.balance_due_on_this_sale} {obj.sale_currency}"
 
     def clean(self):
         """Validate form data using centralized validator"""
@@ -129,7 +115,6 @@ class AgentPaymentForm(forms.ModelForm):
         amount_uzs = cleaned_data.get('amount_paid_uzs') or Decimal('0.00')
         amount_usd = cleaned_data.get('amount_paid_usd') or Decimal('0.00')
         paid_to_account = cleaned_data.get('paid_to_account')
-        related_sale = cleaned_data.get('related_sale')
         
         # Use centralized validation
         try:
@@ -137,9 +122,7 @@ class AgentPaymentForm(forms.ModelForm):
                 agent=self.instance.agent,
                 amount_uzs=amount_uzs,
                 amount_usd=amount_usd,
-                paid_to_account=paid_to_account,
-                related_sale=related_sale,
-                payment_instance=self.instance
+                paid_to_account=paid_to_account
             )
         except forms.ValidationError as e:
             # Add errors to form

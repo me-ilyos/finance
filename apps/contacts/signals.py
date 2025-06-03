@@ -9,21 +9,6 @@ from apps.core.constants import CurrencyChoices
 logger = logging.getLogger(__name__)
 
 
-@receiver(post_save, sender='sales.Sale')
-def handle_sale_created_or_updated(sender, instance, created, **kwargs):
-    """Handle agent balance updates when sales are created or updated"""
-    if instance.agent and created:
-        try:
-            AgentService.update_balance_on_sale(
-                agent=instance.agent,
-                sale_amount=instance.total_sale_amount,
-                sale_currency=instance.sale_currency
-            )
-            logger.info(f"Updated agent {instance.agent.id} balance for new sale {instance.id}")
-        except Exception as e:
-            logger.error(f"Error updating agent balance for sale {instance.id}: {e}")
-
-
 @receiver(post_delete, sender='sales.Sale')
 def handle_sale_deleted(sender, instance, **kwargs):
     """Handle agent balance updates when sales are deleted"""

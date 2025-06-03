@@ -45,7 +45,7 @@ def currency_unit_price_in_column(sale, currency):
 @register.filter
 def has_initial_payment(sale):
     """Check if sale has initial payment"""
-    return sale.agent and sale.paid_amount_on_this_sale > 0
+    return sale.agent and sale.initial_payment_amount and sale.initial_payment_amount > 0
 
 
 @register.filter
@@ -75,10 +75,10 @@ def payment_status_display(sale):
             'text': 'Agent Qarzi'
         }
         
-        if sale.paid_amount_on_this_sale and sale.paid_amount_on_this_sale > 0:
-            badge_info['payment_text'] = f"To'langan: {sale.paid_amount_on_this_sale|floatformat:0} {sale.sale_currency}"
-        elif sale.initial_payment_amount and sale.initial_payment_amount == 0:
-            badge_info['payment_text'] = "To'lov qilinmagan"
+        if sale.initial_payment_amount and sale.initial_payment_amount > 0:
+            badge_info['payment_text'] = f"Boshlang'ich to'lov: {sale.initial_payment_amount|floatformat:0} {sale.sale_currency}"
+        else:
+            badge_info['payment_text'] = "Boshlang'ich to'lov qilinmagan"
         
         return badge_info
     else:

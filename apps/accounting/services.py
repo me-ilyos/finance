@@ -11,6 +11,80 @@ class FinancialAccountService:
     """Service class to handle financial account balance operations"""
     
     @staticmethod
+    def create_financial_account(form_data):
+        """Create a new financial account with proper validation and balance setup"""
+        from .models import FinancialAccount
+        from .validators import FinancialAccountValidator
+        
+        try:
+            with transaction.atomic():
+                # Validate data using validator
+                validated_data = FinancialAccountValidator.validate_financial_account(
+                    name=form_data.get('name'),
+                    account_type=form_data.get('account_type'),
+                    currency=form_data.get('currency'),
+                    current_balance=form_data.get('current_balance'),
+                    account_details=form_data.get('account_details')
+                )
+                
+                # Create the account
+                account = FinancialAccount.objects.create(**validated_data)
+                
+                logger.info(
+                    f"Created financial account {account.id}: {account.name} "
+                    f"with balance {account.formatted_balance()}"
+                )
+                return account
+                
+        except Exception as e:
+            logger.error(f"Error creating financial account: {e}")
+            raise
+
+    @staticmethod
+    def update_financial_account(account, form_data):
+        """Update existing financial account"""
+        from .validators import FinancialAccountValidator
+        
+        try:
+            with transaction.atomic():
+                # Validate data using validator
+                validated_data = FinancialAccountValidator.validate_financial_account(
+                    name=form_data.get('name'),
+                    account_type=form_data.get('account_type'),
+                    currency=form_data.get('currency'),
+                    current_balance=form_data.get('current_balance'),
+                    account_details=form_data.get('account_details'),
+                    account_instance=account
+                )
+                
+                # Update account fields
+                for field, value in validated_data.items():
+                    setattr(account, field, value)
+                
+                account.save()
+                logger.info(f"Updated financial account {account.id}: {account.name}")
+                return account
+                
+        except Exception as e:
+            logger.error(f"Error updating financial account {account.id}: {e}")
+            raise
+
+    @staticmethod
+    def update_balance_for_payment(account_id, amount, operation='add'):
+        """Update account balance for payment operations"""
+        from .models import FinancialAccount
+        
+        with transaction.atomic():
+            account = FinancialAccount.objects.select_for_update().get(pk=account_id)
+            if operation == 'add':
+                account.current_balance += amount
+            elif operation == 'subtract':
+                account.current_balance -= amount
+            account.save(update_fields=['current_balance', 'updated_at'])
+            logger.info(f"Updated account {account_id} balance by {amount} for payment ({operation})")
+            return account
+    
+    @staticmethod
     def update_balance_for_expenditure(account_id, amount, operation='deduct'):
         """Update account balance for expenditure operations"""
         from .models import FinancialAccount

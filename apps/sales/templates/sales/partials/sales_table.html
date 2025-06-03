@@ -68,7 +68,7 @@
                                 {% if uzs_amount %}
                                     {{ uzs_amount|currency_display:"UZS" }}
                                     {% if sale|has_initial_payment %}
-                                        <br><span class="initial-payment">({{ sale.paid_amount_on_this_sale|currency_display:"UZS" }})</span>
+                                        <br><span class="initial-payment">({{ sale.initial_payment_amount|currency_display:"UZS" }})</span>
                                     {% endif %}
                                 {% else %}-{% endif %}
                             {% endwith %}
@@ -78,7 +78,7 @@
                                 {% if usd_amount %}
                                     {{ usd_amount|currency_display:"USD" }}
                                     {% if sale|has_initial_payment %}
-                                        <br><span class="initial-payment">({{ sale.paid_amount_on_this_sale|currency_display:"USD" }})</span>
+                                        <br><span class="initial-payment">({{ sale.initial_payment_amount|currency_display:"USD" }})</span>
                                     {% endif %}
                                 {% else %}-{% endif %}
                             {% endwith %}

@@ -34,7 +34,7 @@ class AgentPaymentService:
 
     @staticmethod
     def create_payment(form, agent):
-        """Create agent payment with proper error handling - Consolidated from views"""
+        """Create agent payment with proper error handling"""
         try:
             with transaction.atomic():
                 payment = form.save(commit=False)
@@ -115,66 +115,8 @@ class AgentPaymentService:
             agent.outstanding_balance_usd -= amount_usd_diff
             agent.save(update_fields=['outstanding_balance_uzs', 'outstanding_balance_usd', 'updated_at'])
             
-            logger.info(f"Updated agent {agent.id} balance: UZS -{amount_uzs_diff}, USD -{amount_usd_diff}")
-            
         except Exception as e:
             logger.error(f"Error updating agent balance for payment {payment.id}: {e}")
-            raise
-
-    @staticmethod
-    def update_related_sale(payment, original_payment=None):
-        """Update related sale's paid amount"""
-        if not payment.related_sale:
-            return
-            
-        try:
-            from apps.sales.models import Sale
-            
-            payment_currency = AgentPaymentService.determine_payment_currency(
-                payment.amount_paid_uzs, payment.amount_paid_usd
-            )
-            payment_amount = AgentPaymentService.get_payment_amount(
-                payment_currency, payment.amount_paid_uzs, payment.amount_paid_usd
-            )
-
-            sale = Sale.objects.get(pk=payment.related_sale.id)
-            
-            # Handle related sale changes
-            if original_payment and original_payment.related_sale_id and original_payment.related_sale_id != payment.related_sale_id:
-                # Related sale changed, revert from old sale
-                old_sale = Sale.objects.get(pk=original_payment.related_sale_id)
-                original_currency = AgentPaymentService.determine_payment_currency(
-                    original_payment.amount_paid_uzs, original_payment.amount_paid_usd
-                )
-                original_amount = AgentPaymentService.get_payment_amount(
-                    original_currency, original_payment.amount_paid_uzs, original_payment.amount_paid_usd
-                )
-                old_sale.paid_amount_on_this_sale -= original_amount
-                old_sale.save(update_fields=['paid_amount_on_this_sale', 'updated_at'])
-
-            # Calculate contribution to current sale
-            current_contribution = payment_amount if sale.sale_currency == payment_currency else Decimal('0.00')
-            previous_contribution = Decimal('0.00')
-            
-            if original_payment and (not original_payment.related_sale_id or original_payment.related_sale_id == payment.related_sale_id):
-                original_currency = AgentPaymentService.determine_payment_currency(
-                    original_payment.amount_paid_uzs, original_payment.amount_paid_usd
-                )
-                if sale.sale_currency == original_currency:
-                    previous_contribution = AgentPaymentService.get_payment_amount(
-                        original_currency, original_payment.amount_paid_uzs, original_payment.amount_paid_usd
-                    )
-
-            # Update sale
-            change_amount = current_contribution - previous_contribution
-            sale.paid_amount_on_this_sale += change_amount
-            sale.paid_amount_on_this_sale = max(Decimal('0.00'), min(sale.paid_amount_on_this_sale, sale.total_sale_amount))
-            sale.save(update_fields=['paid_amount_on_this_sale', 'updated_at'])
-            
-            logger.info(f"Updated sale {sale.id} paid amount by {change_amount}")
-            
-        except Exception as e:
-            logger.error(f"Error updating related sale for payment {payment.id}: {e}")
             raise
 
     @staticmethod
@@ -183,7 +125,6 @@ class AgentPaymentService:
         with transaction.atomic():
             AgentPaymentService.update_financial_account(payment, original_payment)
             AgentPaymentService.update_agent_balance(payment, original_payment)
-            AgentPaymentService.update_related_sale(payment, original_payment)
 
 
 class AgentService:
@@ -207,7 +148,7 @@ class AgentService:
 
     @staticmethod
     def get_agent_totals(agent):
-        """Get all calculated totals for an agent - moved from model"""
+        """Get all calculated totals for an agent"""
         from django.apps import apps
         Sale = apps.get_model('sales', 'Sale')
         
@@ -220,13 +161,13 @@ class AgentService:
                 agent=agent, sale_currency=CurrencyChoices.USD
             ).aggregate(total=Sum('total_sale_amount'))['total'] or Decimal('0.00'),
             
-            'total_payments_uzs': agent.payments.filter(
-                paid_to_account__currency=CurrencyChoices.UZS
-            ).aggregate(total=Sum('amount_paid_uzs'))['total'] or Decimal('0.00'),
+            'total_payments_uzs': agent.payments.aggregate(
+                total=Sum('amount_paid_uzs')
+            )['total'] or Decimal('0.00'),
             
-            'total_payments_usd': agent.payments.filter(
-                paid_to_account__currency=CurrencyChoices.USD
-            ).aggregate(total=Sum('amount_paid_usd'))['total'] or Decimal('0.00'),
+            'total_payments_usd': agent.payments.aggregate(
+                total=Sum('amount_paid_usd')
+            )['total'] or Decimal('0.00'),
         }
 
 

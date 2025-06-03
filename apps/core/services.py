@@ -104,30 +104,45 @@ class DashboardService:
         """Get all transactions for a specific account"""
         from apps.sales.models import Sale
         from apps.accounting.models import Expenditure
+        from apps.contacts.models import AgentPayment
         
         transactions = []
         
-        # Get sales paid to this account
-        sales = Sale.objects.filter(
-            paid_to_account=account
-        ).select_related('agent', 'related_acquisition__ticket')
+        # Get client sales paid directly to this account
+        client_sales = Sale.objects.filter(
+            paid_to_account=account,
+            agent__isnull=True  # Only direct client sales
+        ).select_related('related_acquisition__ticket')
         
-        for sale in sales:
-            buyer_name = sale.agent.name if sale.agent else sale.client_full_name
+        for sale in client_sales:
             ticket_desc = (sale.related_acquisition.ticket.get_ticket_type_display() 
                          if sale.related_acquisition and sale.related_acquisition.ticket 
                          else "Unknown Ticket")
             
-            amount = (sale.paid_amount_on_this_sale 
-                     if sale.agent 
-                     else sale.total_sale_amount)
-            
             transactions.append({
                 'date': sale.sale_date,
-                'type': 'Sotuv',
-                'description': f"{ticket_desc} - {buyer_name}",
-                'amount': amount,
+                'type': 'Sotuv (Mijoz)',
+                'description': f"{ticket_desc} - {sale.client_full_name or 'N/A'}",
+                'amount': sale.total_sale_amount,
                 'currency': sale.sale_currency,
+                'balance_effect': 'income'
+            })
+        
+        # Get agent payments to this account
+        agent_payments = AgentPayment.objects.filter(
+            paid_to_account=account
+        ).select_related('agent')
+        
+        for payment in agent_payments:
+            amount = payment.amount_paid_uzs if payment.amount_paid_uzs > 0 else payment.amount_paid_usd
+            currency = 'UZS' if payment.amount_paid_uzs > 0 else 'USD'
+            
+            transactions.append({
+                'date': payment.payment_date,
+                'type': 'Agent To\'lovi',
+                'description': f"Agent: {payment.agent.name}",
+                'amount': amount,
+                'currency': currency,
                 'balance_effect': 'income'
             })
         

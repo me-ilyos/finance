@@ -1,6 +1,6 @@
 from decimal import Decimal
 from django.core.exceptions import ValidationError
-from apps.core.constants import CurrencyChoices
+from apps.core.constants import CurrencyChoices, AccountTypeChoices
 
 
 class ExpenditureValidator:
@@ -83,20 +83,63 @@ class FinancialAccountValidator:
     """Centralized validation for financial accounts"""
 
     @staticmethod
-    def validate_account_creation(name, account_type, currency, current_balance=None):
-        """Validate financial account creation data"""
+    def validate_name(name, account_instance=None):
+        """Validate account name uniqueness"""
         if not name or not name.strip():
-            raise ValidationError("Account name is required.")
+            raise ValidationError("Hisob nomi kiritilishi shart.")
         
+        name = name.strip()
+        
+        # Check for duplicate names (excluding current instance)
+        from .models import FinancialAccount
+        existing_account = FinancialAccount.objects.filter(name=name)
+        if account_instance and account_instance.pk:
+            existing_account = existing_account.exclude(pk=account_instance.pk)
+        
+        if existing_account.exists():
+            raise ValidationError("Bu nomli hisob allaqachon mavjud.")
+        
+        return name
+
+    @staticmethod
+    def validate_account_type(account_type):
+        """Validate account type"""
+        if account_type not in [choice[0] for choice in AccountTypeChoices.choices]:
+            raise ValidationError(f"Noto'g'ri hisob turi: {account_type}")
+        return account_type
+
+    @staticmethod
+    def validate_currency(currency):
+        """Validate currency"""
         if currency not in [choice[0] for choice in CurrencyChoices.choices]:
-            raise ValidationError(f"Invalid currency: {currency}")
+            raise ValidationError(f"Noto'g'ri valyuta: {currency}")
+        return currency
+
+    @staticmethod
+    def validate_balance(current_balance, account_instance=None):
+        """Validate balance"""
+        if current_balance is None:
+            current_balance = Decimal('0.00')
         
-        if current_balance is not None and current_balance < 0:
-            raise ValidationError("Initial balance cannot be negative.")
+        if current_balance < 0:
+            raise ValidationError("Balans manfiy bo'lishi mumkin emas.")
+        
+        return current_balance
+
+    @staticmethod
+    def validate_financial_account(name, account_type, currency, current_balance=None, account_details=None, account_instance=None):
+        """Main validation method for financial accounts"""
+        
+        # Validate all fields
+        validated_name = FinancialAccountValidator.validate_name(name, account_instance)
+        validated_account_type = FinancialAccountValidator.validate_account_type(account_type)
+        validated_currency = FinancialAccountValidator.validate_currency(currency)
+        validated_balance = FinancialAccountValidator.validate_balance(current_balance, account_instance)
         
         return {
-            'name': name.strip(),
-            'account_type': account_type,
-            'currency': currency,
-            'current_balance': current_balance or Decimal('0.00')
+            'name': validated_name,
+            'account_type': validated_account_type,
+            'currency': validated_currency,
+            'current_balance': validated_balance,
+            'account_details': account_details.strip() if account_details else None
         } 

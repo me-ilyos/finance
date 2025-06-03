@@ -6,19 +6,30 @@ class FinancialAccountAdmin(admin.ModelAdmin):
     list_display = ('name', 'account_type', 'currency', 'current_balance', 'is_active', 'created_at')
     list_filter = ('account_type', 'currency', 'is_active')
     search_fields = ('name', 'account_details')
-    readonly_fields = ('current_balance', 'created_at', 'updated_at')
+    readonly_fields = ('created_at', 'updated_at')
     fieldsets = (
-        (None, {
-            'fields': ('name', 'account_type', 'currency', 'current_balance')
+        ('Asosiy Ma\'lumotlar', {
+            'fields': ('name', 'account_type', 'currency')
         }),
-        ('Details', {
+        ('Moliyaviy Ma\'lumotlar', {
+            'fields': ('current_balance',),
+            'description': 'Balansni faqat yangi hisob yaratishda kiriting yoki ehtiyotkorlik bilan o\'zgartiring. Balans odatda to\'lovlar va xarajatlar orqali avtomatik yangilanadi.'
+        }),
+        ('Qo\'shimcha Ma\'lumotlar', {
             'fields': ('account_details', 'is_active')
         }),
-        ('Timestamps', {
+        ('Vaqt Belgilari', {
             'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
         }),
     )
+    
+    def get_readonly_fields(self, request, obj=None):
+        """Make current_balance readonly after creation unless superuser"""
+        readonly_fields = list(self.readonly_fields)
+        if obj and not request.user.is_superuser:  # editing an existing object and not superuser
+            readonly_fields.append('current_balance')
+        return readonly_fields
 
 @admin.register(Expenditure)
 class ExpenditureAdmin(admin.ModelAdmin):

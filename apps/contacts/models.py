@@ -81,13 +81,6 @@ class AgentPayment(models.Model):
         verbose_name="To'lov Hisobi",
         limit_choices_to={'is_active': True}
     )
-    related_sale = models.ForeignKey(
-        'sales.Sale', 
-        on_delete=models.SET_NULL, 
-        null=True, blank=True, 
-        related_name='agent_payments', 
-        verbose_name="Bog'liq Sotuv (Qarz uchun)"
-    )
     notes = models.TextField(blank=True, null=True, verbose_name="Izohlar")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -120,9 +113,7 @@ class AgentPayment(models.Model):
                 agent=self.agent,
                 amount_uzs=self.amount_paid_uzs,
                 amount_usd=self.amount_paid_usd,
-                paid_to_account=self.paid_to_account,
-                related_sale=self.related_sale,
-                payment_instance=self
+                paid_to_account=self.paid_to_account
             )
         except ValidationError as e:
             if hasattr(e, 'message'):
@@ -137,7 +128,7 @@ class AgentPayment(models.Model):
         if self.pk:
             try:
                 original_payment = AgentPayment.objects.select_related(
-                    'paid_to_account', 'related_sale', 'agent'
+                    'paid_to_account', 'agent'
                 ).get(pk=self.pk)
             except AgentPayment.DoesNotExist:
                 logger.warning(f"Original AgentPayment {self.pk} not found during update")
@@ -157,8 +148,7 @@ class AgentPayment(models.Model):
                 agent=self.agent,
                 amount_paid_uzs=-self.amount_paid_uzs,
                 amount_paid_usd=-self.amount_paid_usd,
-                paid_to_account=self.paid_to_account,
-                related_sale=self.related_sale
+                paid_to_account=self.paid_to_account
             )
             
             try:

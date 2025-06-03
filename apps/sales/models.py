@@ -54,20 +54,13 @@ class Sale(models.Model):
         help_text="Profit from this sale in transaction currency."
     )
 
-    paid_amount_on_this_sale = models.DecimalField(
-        max_digits=15, 
-        decimal_places=2, 
-        default=Decimal('0.00'),
-        help_text="Total amount paid specifically towards this sale."
-    )
-
     paid_to_account = models.ForeignKey(
         FinancialAccount,
         on_delete=models.PROTECT,
         null=True, 
         blank=True, 
         related_name='sale_payments_received',
-        help_text="Account that received the payment."
+        help_text="Account that received the payment for direct sales to clients."
     )
     initial_payment_amount = models.DecimalField(
         max_digits=15, 
@@ -82,16 +75,13 @@ class Sale(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     @property
-    def balance_due_on_this_sale(self):
-        """Calculate remaining balance on this sale"""
-        return self.total_sale_amount - self.paid_amount_on_this_sale
-
-    @property
     def is_fully_paid(self):
         """Check if sale is fully paid"""
         if self.agent:
-            return self.balance_due_on_this_sale <= Decimal('0.00')
+            # For agent sales, payment is tracked in agent's overall balance
+            return False  # Always show as unpaid since it's tracked separately
         else:
+            # For direct client sales, check if payment account is set
             return self.paid_to_account is not None
 
     def clean(self):
@@ -129,7 +119,7 @@ class Sale(models.Model):
                       else f"Acq.ID: {self.related_acquisition_id}")
         sale_date_str = self.sale_date.strftime('%Y-%m-%d') if self.sale_date else 'N/A Date'
         profit_str = str(self.profit) if hasattr(self, 'profit') else "N/A"
-        payment_status = "Paid" if self.paid_to_account else ("Owes" if self.agent else "Unpaid")
+        payment_status = "Paid" if self.paid_to_account else ("Agent Sale" if self.agent else "Unpaid")
         
         return (f"Sale: {self.quantity}x {ticket_info} to {buyer_info} on {sale_date_str} "
                 f"(Profit: {profit_str} {self.sale_currency}) - {payment_status}")

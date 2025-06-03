@@ -112,7 +112,7 @@ class StockManagementService:
 
 
 class AgentDebtService:
-    """Service for managing agent debt and payments"""
+    """Service for managing agent debt"""
     
     @staticmethod
     def update_agent_debt(agent, amount, currency, operation='add'):
@@ -136,46 +136,45 @@ class AgentDebtService:
                         agent.outstanding_balance_usd -= amount
                 
                 agent.save(update_fields=['outstanding_balance_uzs', 'outstanding_balance_usd', 'updated_at'])
-                logger.info(f"Updated agent {agent.id} debt: {operation} {amount} {currency}")
                 
         except Exception as e:
             logger.error(f"Error updating agent debt: {e}")
             raise
     
     @staticmethod
-    def create_or_update_agent_payment(sale_instance):
-        """Create or update automatic agent payment for initial payment"""
-        if not sale_instance.agent or not sale_instance.initial_payment_amount:
+    def create_initial_payment(sale_instance):
+        """Create automatic agent payment for initial payment if provided"""
+        if not sale_instance.agent or not sale_instance.initial_payment_amount or not sale_instance.paid_to_account:
             return None
             
         AgentPaymentModel = apps.get_model('contacts', 'AgentPayment')
         
         try:
-            payment_data = {
-                'agent': sale_instance.agent,
-                'payment_date': sale_instance.sale_date,
-                'paid_to_account': sale_instance.paid_to_account,
-                'notes': f"Avtomatik boshlang'ich to'lov (Sotuv ID: {sale_instance.id})",
-                'is_auto_payment_for_sale': True,
-            }
-            
-            # Set amount based on currency
-            if sale_instance.sale_currency == 'UZS':
-                payment_data['amount_paid_uzs'] = sale_instance.initial_payment_amount
-            else:
-                payment_data['amount_paid_usd'] = sale_instance.initial_payment_amount
-            
-            payment, created = AgentPaymentModel.objects.update_or_create(
-                related_sale_id=sale_instance.id,
-                is_auto_payment_for_sale=True,
-                defaults=payment_data
-            )
-            
-            logger.info(f"{'Created' if created else 'Updated'} agent payment for sale {sale_instance.id}")
-            return payment
-            
+            with transaction.atomic():
+                payment_data = {
+                    'agent': sale_instance.agent,
+                    'payment_date': sale_instance.sale_date,
+                    'paid_to_account': sale_instance.paid_to_account,
+                    'notes': f"Avtomatik boshlang'ich to'lov (Sotuv ID: {sale_instance.id})",
+                    'is_auto_created': True,
+                }
+                
+                # Set amount based on currency
+                if sale_instance.sale_currency == 'UZS':
+                    payment_data['amount_paid_uzs'] = sale_instance.initial_payment_amount
+                    payment_data['amount_paid_usd'] = Decimal('0.00')
+                else:
+                    payment_data['amount_paid_usd'] = sale_instance.initial_payment_amount
+                    payment_data['amount_paid_uzs'] = Decimal('0.00')
+                
+                # Create the payment (this will automatically update agent balance via payment service)
+                payment = AgentPaymentModel.objects.create(**payment_data)
+                
+                logger.info(f"Created initial payment {payment.id} for sale {sale_instance.id}")
+                return payment
+                
         except Exception as e:
-            logger.error(f"Error creating agent payment: {e}")
+            logger.error(f"Error creating initial payment: {e}")
             raise
 
 
@@ -251,14 +250,6 @@ class SaleService:
                 )
                 sale.profit = SaleCalculationService.calculate_profit(sale)
                 
-                # Set initial paid amount
-                if sale.agent:
-                    sale.paid_amount_on_this_sale = Decimal('0.00')
-                elif sale.paid_to_account:
-                    sale.paid_amount_on_this_sale = sale.total_sale_amount
-                else:
-                    sale.paid_amount_on_this_sale = Decimal('0.00')
-                
                 # Save the sale
                 sale.save()
                 
@@ -269,12 +260,27 @@ class SaleService:
                 
                 # Handle agent operations
                 if sale.agent:
+                    # Add debt to agent balance
+                    print(f"[DEBUG] Before adding sale debt - Agent {sale.agent.id} balance: UZS {sale.agent.outstanding_balance_uzs}, USD {sale.agent.outstanding_balance_usd}")
+                    print(f"[DEBUG] Adding sale amount: {sale.total_sale_amount} {sale.sale_currency}")
+                    
                     AgentDebtService.update_agent_debt(
                         sale.agent, sale.total_sale_amount, sale.sale_currency, 'add'
                     )
                     
+                    # Refresh agent to see updated balance
+                    sale.agent.refresh_from_db()
+                    print(f"[DEBUG] After adding sale debt - Agent {sale.agent.id} balance: UZS {sale.agent.outstanding_balance_uzs}, USD {sale.agent.outstanding_balance_usd}")
+                    
+                    # Create initial payment if provided
                     if sale.initial_payment_amount and sale.initial_payment_amount > 0:
-                        AgentDebtService.create_or_update_agent_payment(sale)
+                        print(f"[DEBUG] Creating initial payment: {sale.initial_payment_amount} {sale.sale_currency}")
+                        initial_payment = AgentDebtService.create_initial_payment(sale)
+                        
+                        # Refresh agent to see updated balance after payment
+                        sale.agent.refresh_from_db()
+                        print(f"[DEBUG] After initial payment - Agent {sale.agent.id} balance: UZS {sale.agent.outstanding_balance_uzs}, USD {sale.agent.outstanding_balance_usd}")
+                        print(f"[DEBUG] Initial payment created: {initial_payment.id if initial_payment else 'None'}")
                 
                 # Handle client payment
                 if not sale.agent:
@@ -397,11 +403,8 @@ class SaleService:
                     except FinancialAccount.DoesNotExist:
                         pass
                 
-                sale_id = sale_instance.id
-                sale_instance.delete()
-                
-                logger.info(f"Deleted sale {sale_id} successfully")
+                logger.info(f"Deleted sale {sale_instance.id} successfully")
                 
         except Exception as e:
-            logger.error(f"Error deleting sale: {e}")
+            logger.error(f"Error deleting sale {sale_instance.id}: {e}")
             raise 
