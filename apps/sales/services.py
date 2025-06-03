@@ -263,7 +263,7 @@ class SaleService:
                     # Add debt to agent balance
                     print(f"[DEBUG] Before adding sale debt - Agent {sale.agent.id} balance: UZS {sale.agent.outstanding_balance_uzs}, USD {sale.agent.outstanding_balance_usd}")
                     print(f"[DEBUG] Adding sale amount: {sale.total_sale_amount} {sale.sale_currency}")
-                    
+                        
                     AgentDebtService.update_agent_debt(
                         sale.agent, sale.total_sale_amount, sale.sale_currency, 'add'
                     )

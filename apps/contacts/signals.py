@@ -1,10 +1,6 @@
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import post_delete
 from django.dispatch import receiver
-from django.apps import apps
 import logging
-
-from .services import AgentService
-from apps.core.constants import CurrencyChoices
 
 logger = logging.getLogger(__name__)
 
@@ -14,25 +10,14 @@ def handle_sale_deleted(sender, instance, **kwargs):
     """Handle agent balance updates when sales are deleted"""
     if instance.agent:
         try:
-            # Reverse the balance update by subtracting the sale amount
-            if instance.sale_currency == CurrencyChoices.UZS:
-                instance.agent.outstanding_balance_uzs -= instance.total_sale_amount
-            elif instance.sale_currency == CurrencyChoices.USD:
-                instance.agent.outstanding_balance_usd -= instance.total_sale_amount
-            
-            instance.agent.save(update_fields=['outstanding_balance_uzs', 'outstanding_balance_usd', 'updated_at'])
+            # Use the model method for balance updates
+            sale_amount = -instance.total_sale_amount  # Negative to reverse
+            instance.agent.update_balance_on_sale(sale_amount, instance.sale_currency)
             logger.info(f"Reverted agent {instance.agent.id} balance for deleted sale {instance.id}")
         except Exception as e:
             logger.error(f"Error reverting agent balance for deleted sale {instance.id}: {e}")
 
 
-@receiver(post_save, sender='accounting.FinancialAccount')
-def handle_financial_account_updated(sender, instance, **kwargs):
-    """Log financial account changes for audit purposes"""
-    logger.info(f"Financial account {instance.id} updated: {instance.name} - Balance: {instance.current_balance}")
-
-
-# Signal to ensure proper cleanup on agent deletion
 @receiver(post_delete, sender='contacts.Agent')
 def handle_agent_deleted(sender, instance, **kwargs):
     """Handle cleanup when agent is deleted"""

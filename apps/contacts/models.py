@@ -4,9 +4,7 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from decimal import Decimal
 from django.db import transaction
-from apps.core.constants import CurrencyChoices
-from .validators import PaymentValidator
-from .services import AgentPaymentService
+from apps.core.constants import CurrencyChoices, BusinessLimits
 import logging
 
 logger = logging.getLogger(__name__)
@@ -47,6 +45,33 @@ class Supplier(models.Model):
         ordering = ['name']
 
 
+class AgentManager(models.Manager):
+    def get_agent_stats(self, agent):
+        """Get agent statistics including sales and payments totals"""
+        from django.apps import apps
+        from django.db.models import Sum
+        
+        Sale = apps.get_model('sales', 'Sale')
+        
+        return {
+            'total_sales_uzs': Sale.objects.filter(
+                agent=agent, sale_currency=CurrencyChoices.UZS
+            ).aggregate(total=Sum('total_sale_amount'))['total'] or Decimal('0.00'),
+            
+            'total_sales_usd': Sale.objects.filter(
+                agent=agent, sale_currency=CurrencyChoices.USD
+            ).aggregate(total=Sum('total_sale_amount'))['total'] or Decimal('0.00'),
+            
+            'total_payments_uzs': agent.payments.aggregate(
+                total=Sum('amount_paid_uzs')
+            )['total'] or Decimal('0.00'),
+            
+            'total_payments_usd': agent.payments.aggregate(
+                total=Sum('amount_paid_usd')
+            )['total'] or Decimal('0.00'),
+        }
+
+
 class Agent(models.Model):
     name = models.CharField(max_length=255, verbose_name="Agent Nomi")
     contact_person = models.CharField(max_length=255, blank=True, null=True, verbose_name="Mas'ul Shaxs")
@@ -58,6 +83,16 @@ class Agent(models.Model):
     
     outstanding_balance_uzs = models.DecimalField(max_digits=20, decimal_places=2, default=0, verbose_name="Qarz UZS")
     outstanding_balance_usd = models.DecimalField(max_digits=20, decimal_places=2, default=0, verbose_name="Qarz USD")
+
+    objects = AgentManager()
+
+    def update_balance_on_sale(self, sale_amount, sale_currency):
+        """Update agent balance when sale is created"""
+        if sale_currency == CurrencyChoices.UZS:
+            self.outstanding_balance_uzs += sale_amount
+        elif sale_currency == CurrencyChoices.USD:
+            self.outstanding_balance_usd += sale_amount
+        self.save(update_fields=['outstanding_balance_uzs', 'outstanding_balance_usd', 'updated_at'])
 
     def __str__(self):
         return self.name
@@ -108,56 +143,59 @@ class AgentPayment(models.Model):
     def clean(self):
         """Validate agent payment data"""
         super().clean()
-        try:
-            PaymentValidator.validate_agent_payment(
-                agent=self.agent,
-                amount_uzs=self.amount_paid_uzs,
-                amount_usd=self.amount_paid_usd,
-                paid_to_account=self.paid_to_account
-            )
-        except ValidationError as e:
-            if hasattr(e, 'message'):
-                raise ValidationError({'__all__': e.message})
-            raise
+        
+        # Validate payment amounts
+        if self.amount_paid_uzs < 0 or self.amount_paid_usd < 0:
+            raise ValidationError("Payment amount cannot be negative.")
+
+        if self.amount_paid_uzs == 0 and self.amount_paid_usd == 0:
+            raise ValidationError("Payment amount must be greater than zero.")
+
+        if self.amount_paid_uzs > 0 and self.amount_paid_usd > 0:
+            raise ValidationError("Payment must be in exactly one currency (UZS or USD).")
+
+        # Validate business limits
+        if self.amount_paid_uzs > BusinessLimits.MAX_BALANCE_VALUE:
+            raise ValidationError(f"UZS payment amount cannot exceed {BusinessLimits.MAX_BALANCE_VALUE}")
+        if self.amount_paid_usd > BusinessLimits.MAX_BALANCE_VALUE:
+            raise ValidationError(f"USD payment amount cannot exceed {BusinessLimits.MAX_BALANCE_VALUE}")
+
+        # Validate currency match with account
+        if self.paid_to_account:
+            payment_currency = self.payment_currency
+            if self.paid_to_account.currency != payment_currency:
+                raise ValidationError(
+                    f"Currency mismatch: account uses {self.paid_to_account.currency}, "
+                    f"payment uses {payment_currency}."
+                )
 
     def save(self, *args, **kwargs):
-        """Save agent payment and trigger related updates"""
+        """Save agent payment with validation"""
         self.full_clean()
+        is_new = self.pk is None
         
-        original_payment = None
-        if self.pk:
-            try:
-                original_payment = AgentPayment.objects.select_related(
-                    'paid_to_account', 'agent'
-                ).get(pk=self.pk)
-            except AgentPayment.DoesNotExist:
-                logger.warning(f"Original AgentPayment {self.pk} not found during update")
-
         super().save(*args, **kwargs)
+        
+        # Simple post-save processing
+        if is_new:
+            self._update_related_records()
 
+    def _update_related_records(self):
+        """Update financial account and agent balance"""
         try:
-            AgentPaymentService.process_payment(self, original_payment)
+            with transaction.atomic():
+                # Update financial account
+                self.paid_to_account.current_balance += self.payment_amount
+                self.paid_to_account.save(update_fields=['current_balance', 'updated_at'])
+                
+                # Update agent balance
+                self.agent.outstanding_balance_uzs -= self.amount_paid_uzs
+                self.agent.outstanding_balance_usd -= self.amount_paid_usd
+                self.agent.save(update_fields=['outstanding_balance_uzs', 'outstanding_balance_usd', 'updated_at'])
+                
         except Exception as e:
-            logger.error(f"Error processing payment {self.pk}: {e}")
+            logger.error(f"Error updating related records for payment {self.pk}: {e}")
             raise
-
-    def delete(self, *args, **kwargs):
-        """Handle payment deletion with proper cleanup"""
-        with transaction.atomic():
-            reverse_payment = AgentPayment(
-                agent=self.agent,
-                amount_paid_uzs=-self.amount_paid_uzs,
-                amount_paid_usd=-self.amount_paid_usd,
-                paid_to_account=self.paid_to_account
-            )
-            
-            try:
-                AgentPaymentService.process_payment(reverse_payment, self)
-                super().delete(*args, **kwargs)
-                logger.info(f"Deleted payment {self.pk} and processed cleanup")
-            except Exception as e:
-                logger.error(f"Error deleting payment {self.pk}: {e}")
-                raise
 
     def __str__(self):
         payment_details = []

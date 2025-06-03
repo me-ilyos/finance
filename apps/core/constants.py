@@ -1,4 +1,5 @@
 from django.db import models
+from decimal import Decimal
 
 
 class CurrencyChoices(models.TextChoices):
@@ -27,6 +28,12 @@ class PaymentType:
     """Constants for payment types"""
     AUTO_INITIAL = 'AUTO_INITIAL'
     MANUAL = 'MANUAL'
+
+
+class BusinessLimits:
+    """Business rules and limits"""
+    MAX_BALANCE_VALUE = Decimal('999999999.99')
+    MIN_BALANCE_VALUE = Decimal('-999999999.99')
 
 
 class ValidationMessages:

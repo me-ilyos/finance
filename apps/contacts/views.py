@@ -7,7 +7,7 @@ import logging
 
 from .models import Agent, Supplier, AgentPayment
 from .forms import AgentForm, SupplierForm, AgentPaymentForm
-from .services import ContactFormService, AgentPaymentService
+from .services import create_agent_payment, create_agent, create_supplier
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ class AgentListView(CreateView):
 
     def form_valid(self, form):
         try:
-            ContactFormService.create_agent(form.cleaned_data)
+            create_agent(form.cleaned_data)
             messages.success(self.request, "Agent muvaffaqiyatli qo'shildi.")
         except Exception as e:
             logger.error(f"Error creating agent: {e}")
@@ -56,7 +56,7 @@ class SupplierListView(CreateView):
 
     def form_valid(self, form):
         try:
-            ContactFormService.create_supplier(form.cleaned_data)
+            create_supplier(form.cleaned_data)
             messages.success(self.request, "Yetkazib beruvchi muvaffaqiyatli qo'shildi.")
         except Exception as e:
             logger.error(f"Error creating supplier: {e}")
@@ -75,33 +75,16 @@ class SupplierDetailView(DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Use service to get supplier acquisitions
-        from django.apps import apps
-        from django.db.models import Sum, Count, Q
         
-        Acquisition = apps.get_model('inventory', 'Acquisition')
-        
-        # Get all acquisitions for this supplier
-        acquisitions = Acquisition.objects.filter(
-            supplier=self.object
-        ).select_related('ticket').order_by('-acquisition_date')
-        
+        # Get acquisitions using the correct related name
+        acquisitions = self.object.acquisitions_from_supplier.select_related('ticket').order_by('-acquisition_date')
         context['supplier_acquisitions'] = acquisitions
         
-        # Add summary statistics - calculate totals by currency
-        total_acquisitions = acquisitions.count()
-        total_cost_uzs = acquisitions.filter(
-            transaction_currency='UZS'
-        ).aggregate(total=Sum('total_amount'))['total'] or 0
-        
-        total_cost_usd = acquisitions.filter(
-            transaction_currency='USD'
-        ).aggregate(total=Sum('total_amount'))['total'] or 0
-        
+        # Simple statistics calculation
         context['acquisition_stats'] = {
-            'total_acquisitions': total_acquisitions,
-            'total_cost_uzs': total_cost_uzs,
-            'total_cost_usd': total_cost_usd,
+            'total_acquisitions': acquisitions.count(),
+            'total_cost_uzs': sum(a.total_amount for a in acquisitions if a.transaction_currency == 'UZS'),
+            'total_cost_usd': sum(a.total_amount for a in acquisitions if a.transaction_currency == 'USD'),
         }
         
         return context
@@ -122,6 +105,9 @@ class AgentDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         agent = self.object
+        
+        # Use model manager for statistics
+        context['agent_stats'] = Agent.objects.get_agent_stats(agent)
         context['agent_sales'] = agent.agent_sales.all().order_by('-sale_date')
         context['agent_payments'] = agent.payments.all().order_by('-payment_date')
         context['payment_form'] = AgentPaymentForm(initial={'agent': agent.pk}, agent=agent)
@@ -159,7 +145,7 @@ def add_agent_payment(request, agent_pk):
     if request.method == 'POST':
         form = AgentPaymentForm(request.POST, agent=agent)
         if form.is_valid():
-            payment, error = AgentPaymentService.create_payment(form, agent)
+            payment, error = create_agent_payment(form, agent)
             if payment:
                 messages.success(request, "Agent to'lovi muvaffaqiyatli qo'shildi.")
             else:
