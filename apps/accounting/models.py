@@ -153,11 +153,11 @@ class Expenditure(models.Model):
                 # Update supplier balance if this is a supplier payment
                 if self.expenditure_type == self.ExpenditureType.SUPPLIER_PAYMENT and self.supplier:
                     if self.currency == CurrencyChoices.UZS:
-                        self.supplier.current_balance_uzs -= self.amount
+                        self.supplier.balance_uzs -= self.amount
                     elif self.currency == CurrencyChoices.USD:
-                        self.supplier.current_balance_usd -= self.amount
+                        self.supplier.balance_usd -= self.amount
                     
-                    self.supplier.save(update_fields=['current_balance_uzs', 'current_balance_usd', 'updated_at'])
+                    self.supplier.save(update_fields=['balance_uzs', 'balance_usd', 'updated_at'])
                     logger.info(f"Updated supplier {self.supplier.id} balance for payment {self.id}")
                 
         except Exception as e:
@@ -203,18 +203,18 @@ class Expenditure(models.Model):
             
             supplier = original_expenditure.supplier
             if original_expenditure.currency == CurrencyChoices.UZS:
-                supplier.current_balance_uzs += original_expenditure.amount
+                supplier.balance_uzs += original_expenditure.amount
             elif original_expenditure.currency == CurrencyChoices.USD:
-                supplier.current_balance_usd += original_expenditure.amount
-            supplier.save(update_fields=['current_balance_uzs', 'current_balance_usd', 'updated_at'])
+                supplier.balance_usd += original_expenditure.amount
+            supplier.save(update_fields=['balance_uzs', 'balance_usd', 'updated_at'])
         
         # Apply new supplier payment
         if (self.expenditure_type == self.ExpenditureType.SUPPLIER_PAYMENT and self.supplier):
             if self.currency == CurrencyChoices.UZS:
-                self.supplier.current_balance_uzs -= self.amount
+                self.supplier.balance_uzs -= self.amount
             elif self.currency == CurrencyChoices.USD:
-                self.supplier.current_balance_usd -= self.amount
-            self.supplier.save(update_fields=['current_balance_uzs', 'current_balance_usd', 'updated_at'])
+                self.supplier.balance_usd -= self.amount
+            self.supplier.save(update_fields=['balance_uzs', 'balance_usd', 'updated_at'])
 
     @property
     def is_supplier_payment(self):

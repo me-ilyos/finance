@@ -1,100 +1,44 @@
-// Agent Detail Page JavaScript
+// Agent Detail Page JavaScript - Simplified
 document.addEventListener('DOMContentLoaded', function() {
-    const paymentForm = document.getElementById('paymentForm');
-    const relatedSaleSelect = document.getElementById('id_related_sale');
-    const amountUzsInput = document.getElementById('id_amount_paid_uzs');
-    const amountUsdInput = document.getElementById('id_amount_paid_usd');
-    const paidToAccountSelect = document.getElementById('id_paid_to_account');
+    const currencySelect = document.getElementById('id_currency');
+    const accountSelect = document.getElementById('id_paid_to_account');
 
-    if (!paymentForm || !relatedSaleSelect || !amountUzsInput || !amountUsdInput || !paidToAccountSelect) {
+    if (!currencySelect || !accountSelect) {
         console.warn('Payment form elements not found');
         return;
     }
 
-    // Event listeners
-    relatedSaleSelect.addEventListener('change', updatePaymentFormForSale);
-    amountUzsInput.addEventListener('input', handleAmountChange);
-    amountUsdInput.addEventListener('input', handleAmountChange);
-
-    function updatePaymentFormForSale() {
-        // Reset amounts
-        amountUzsInput.value = '0';
-        amountUsdInput.value = '0';
-        amountUzsInput.disabled = true;
-        amountUsdInput.disabled = true;
-        paidToAccountSelect.disabled = false;
-
-        const selectedOption = relatedSaleSelect.options[relatedSaleSelect.selectedIndex];
-        if (!selectedOption || !selectedOption.value) {
-            filterAccountOptionsByCurrency(null);
-            return;
-        }
-
-        const saleText = selectedOption.text;
-        const balanceMatch = saleText.match(/Balans: ([\d,\.]+) (UZS|USD)/);
+    // Filter accounts by currency when currency changes
+    currencySelect.addEventListener('change', function() {
+        const selectedCurrency = this.value;
+        const options = accountSelect.querySelectorAll('option');
         
-        if (!balanceMatch) {
-            filterAccountOptionsByCurrency(null);
-            return;
-        }
-
-        const balance = parseFloat(balanceMatch[1].replace(/,/g, ''));
-        const currency = balanceMatch[2];
-
-        if (currency === 'UZS') {
-            amountUzsInput.value = balance.toFixed(0);
-            amountUzsInput.max = balance.toFixed(0);
-            amountUzsInput.disabled = false;
-            amountUsdInput.value = '';
-            amountUsdInput.disabled = true;
-        } else if (currency === 'USD') {
-            amountUsdInput.value = balance.toFixed(2);
-            amountUsdInput.max = balance.toFixed(2);
-            amountUsdInput.disabled = false;
-            amountUzsInput.value = '';
-            amountUzsInput.disabled = true;
-        }
-        
-        filterAccountOptionsByCurrency(currency);
-    }
-
-    function handleAmountChange(event) {
-        const changedInput = event.target;
-        const otherInput = changedInput === amountUzsInput ? amountUsdInput : amountUzsInput;
-        const currency = changedInput === amountUzsInput ? 'UZS' : 'USD';
-
-        if (parseFloat(changedInput.value) > 0) {
-            otherInput.value = '0';
-            otherInput.disabled = true;
-            filterAccountOptionsByCurrency(currency);
-        } else {
-            otherInput.disabled = false;
-            filterAccountOptionsByCurrency(null);
-        }
-    }
-
-    function filterAccountOptionsByCurrency(currency) {
-        const options = paidToAccountSelect.options;
-        
-        for (let i = 0; i < options.length; i++) {
-            const option = options[i];
+        options.forEach(option => {
             if (option.value === '') {
-                option.style.display = '';
-                continue;
+                option.style.display = 'block';
+                return;
             }
-
-            const optionText = option.text;
-            const isCurrencyMatch = currency ? optionText.includes(`(${currency})`) : true;
-            option.style.display = isCurrencyMatch ? '' : 'none';
+            
+            const optionText = option.textContent;
+            if (optionText.includes(`(${selectedCurrency})`)) {
+                option.style.display = 'block';
+            } else {
+                option.style.display = 'none';
+            }
+        });
+        
+        // Reset account selection if current selection doesn't match currency
+        const currentSelection = accountSelect.value;
+        if (currentSelection) {
+            const currentOption = accountSelect.querySelector(`option[value="${currentSelection}"]`);
+            if (currentOption && currentOption.style.display === 'none') {
+                accountSelect.value = '';
+            }
         }
-
-        // Reset selection if current selection is hidden
-        if (paidToAccountSelect.selectedOptions[0] && 
-            paidToAccountSelect.selectedOptions[0].style.display === 'none') {
-            paidToAccountSelect.value = '';
-        }
-    }
+    });
 
     // Initialize form state
-    updatePaymentFormForSale();
+    if (currencySelect.value) {
+        currencySelect.dispatchEvent(new Event('change'));
+    }
 }); 

@@ -1,5 +1,4 @@
 from django.db import models
-from django.conf import settings
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from decimal import Decimal
@@ -10,93 +9,68 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class SupplierManager(models.Manager):
-    def get_supplier_stats(self, supplier):
-        """Get supplier statistics including acquisitions and payments totals"""
-        from django.apps import apps
-        from django.db.models import Sum
-        
-        Acquisition = apps.get_model('inventory', 'Acquisition')
-        Expenditure = apps.get_model('accounting', 'Expenditure')
-        
-        return {
-            'total_acquisitions_uzs': Acquisition.objects.filter(
-                supplier=supplier, transaction_currency=CurrencyChoices.UZS
-            ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00'),
-            
-            'total_acquisitions_usd': Acquisition.objects.filter(
-                supplier=supplier, transaction_currency=CurrencyChoices.USD
-            ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00'),
-            
-            'total_payments_uzs': supplier.payments_received.filter(
-                currency=CurrencyChoices.UZS,
-                expenditure_type=Expenditure.ExpenditureType.SUPPLIER_PAYMENT
-            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00'),
-            
-            'total_payments_usd': supplier.payments_received.filter(
-                currency=CurrencyChoices.USD,
-                expenditure_type=Expenditure.ExpenditureType.SUPPLIER_PAYMENT
-            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00'),
-        }
-
-
 class Supplier(models.Model):
     name = models.CharField(max_length=255, verbose_name="Ta'minotchi Nomi")
-    contact_person = models.CharField(max_length=255, blank=True, null=True, verbose_name="Mas'ul Shaxs")
     phone_number = models.CharField(max_length=20, blank=True, null=True, verbose_name="Telefon Raqami")
-    email = models.EmailField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True, verbose_name="Izohlar")
     
-    # Balance fields - positive means you owe the supplier, negative means they owe you
-    current_balance_uzs = models.DecimalField(
+    # Initial balance when supplier is created - never changes after creation
+    initial_balance_uzs = models.DecimalField(
+        max_digits=20, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name="Boshlang'ich Balans UZS",
+        help_text="Musbat: Siz qarzdorsiz | Manfiy: Ta'minotchi qarzdor"
+    )
+    initial_balance_usd = models.DecimalField(
+        max_digits=20, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name="Boshlang'ich Balans USD",  
+        help_text="Musbat: Siz qarzdorsiz | Manfiy: Ta'minotchi qarzdor"
+    )
+    
+    # Current running balance - gets updated with transactions
+    balance_uzs = models.DecimalField(
         max_digits=20, 
         decimal_places=2, 
         default=0, 
         verbose_name="Joriy Balans UZS",
-        help_text="Musbat: Siz ta'minotchiga qarzdorsiz | Manfiy: Ta'minotchi sizga qarzdor"
+        help_text="Musbat: Siz qarzdorsiz | Manfiy: Ta'minotchi qarzdor"
     )
-    current_balance_usd = models.DecimalField(
+    balance_usd = models.DecimalField(
         max_digits=20, 
         decimal_places=2, 
         default=0, 
         verbose_name="Joriy Balans USD",
-        help_text="Musbat: Siz ta'minotchiga qarzdorsiz | Manfiy: Ta'minotchi sizga qarzdor"
+        help_text="Musbat: Siz qarzdorsiz | Manfiy: Ta'minotchi qarzdor"
     )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    objects = SupplierManager()
+    def save(self, *args, **kwargs):
+        """Set initial balance equal to current balance when creating new supplier"""
+        if not self.pk:  # New supplier being created
+            self.initial_balance_uzs = self.balance_uzs
+            self.initial_balance_usd = self.balance_usd
+        super().save(*args, **kwargs)
 
-    def update_balance_on_acquisition(self, acquisition_amount, acquisition_currency):
-        """Update supplier balance when acquisition is made (increases debt to supplier)"""
-        if acquisition_currency == CurrencyChoices.UZS:
-            self.current_balance_uzs += acquisition_amount
-        elif acquisition_currency == CurrencyChoices.USD:
-            self.current_balance_usd += acquisition_amount
-        self.save(update_fields=['current_balance_uzs', 'current_balance_usd', 'updated_at'])
-        logger.info(f"Updated supplier {self.id} balance for acquisition: {acquisition_amount} {acquisition_currency}")
+    def add_debt(self, amount, currency):
+        """Add debt when acquisition is made without payment"""
+        if currency == CurrencyChoices.UZS:
+            self.balance_uzs += amount
+        elif currency == CurrencyChoices.USD:
+            self.balance_usd += amount
+        self.save(update_fields=['balance_uzs', 'balance_usd', 'updated_at'])
 
-    def get_total_debt(self):
-        """Get total debt owed to supplier in both currencies"""
-        return {
-            'uzs': max(self.current_balance_uzs, Decimal('0.00')),
-            'usd': max(self.current_balance_usd, Decimal('0.00'))
-        }
-
-    def has_debt(self):
-        """Check if we owe money to this supplier"""
-        return self.current_balance_uzs > 0 or self.current_balance_usd > 0
-
-    @property
-    def abs_balance_uzs(self):
-        """Get absolute value of UZS balance"""
-        return abs(self.current_balance_uzs)
-
-    @property
-    def abs_balance_usd(self):
-        """Get absolute value of USD balance"""
-        return abs(self.current_balance_usd)
+    def reduce_debt(self, amount, currency):
+        """Reduce debt when payment is made"""
+        if currency == CurrencyChoices.UZS:
+            self.balance_uzs -= amount
+        elif currency == CurrencyChoices.USD:
+            self.balance_usd -= amount
+        self.save(update_fields=['balance_uzs', 'balance_usd', 'updated_at'])
 
     def __str__(self):
         return self.name
@@ -107,54 +81,115 @@ class Supplier(models.Model):
         ordering = ['name']
 
 
-class AgentManager(models.Manager):
-    def get_agent_stats(self, agent):
-        """Get agent statistics including sales and payments totals"""
-        from django.apps import apps
-        from django.db.models import Sum
+class SupplierPayment(models.Model):
+    supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name='payments', verbose_name="Ta'minotchi")
+    payment_date = models.DateTimeField(default=timezone.now, verbose_name="To'lov Sanasi")
+    amount = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Miqdor")
+    currency = models.CharField(max_length=3, choices=CurrencyChoices.choices, verbose_name="Valyuta")
+    paid_from_account = models.ForeignKey(
+        'accounting.FinancialAccount', 
+        on_delete=models.PROTECT, 
+        verbose_name="To'lov Hisobi"
+    )
+    notes = models.TextField(blank=True, null=True, verbose_name="Izohlar")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        """Validate payment data"""
+        super().clean()
         
-        Sale = apps.get_model('sales', 'Sale')
+        if self.amount <= 0:
+            raise ValidationError("To'lov miqdori musbat bo'lishi kerak.")
         
-        return {
-            'total_sales_uzs': Sale.objects.filter(
-                agent=agent, sale_currency=CurrencyChoices.UZS
-            ).aggregate(total=Sum('total_sale_amount'))['total'] or Decimal('0.00'),
-            
-            'total_sales_usd': Sale.objects.filter(
-                agent=agent, sale_currency=CurrencyChoices.USD
-            ).aggregate(total=Sum('total_sale_amount'))['total'] or Decimal('0.00'),
-            
-            'total_payments_uzs': agent.payments.aggregate(
-                total=Sum('amount_paid_uzs')
-            )['total'] or Decimal('0.00'),
-            
-            'total_payments_usd': agent.payments.aggregate(
-                total=Sum('amount_paid_usd')
-            )['total'] or Decimal('0.00'),
-        }
+        if self.paid_from_account and self.paid_from_account.currency != self.currency:
+            raise ValidationError(
+                f"Hisob valyutasi ({self.paid_from_account.currency}) "
+                f"to'lov valyutasi ({self.currency}) bilan mos kelmaydi."
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        is_new = self.pk is None
+        super().save(*args, **kwargs)
+        
+        if is_new:
+            # Update supplier balance (reduce debt)
+            self.supplier.reduce_debt(self.amount, self.currency)
+            # Update financial account (reduce balance for payment)
+            self.paid_from_account.current_balance -= self.amount
+            self.paid_from_account.save(update_fields=['current_balance', 'updated_at'])
+
+    def __str__(self):
+        return f"{self.supplier.name} - {self.amount:,.2f} {self.currency} - {self.payment_date.strftime('%d-%m-%Y')}"
+
+    class Meta:
+        verbose_name = "Ta'minotchi To'lovi"
+        verbose_name_plural = "Ta'minotchi To'lovlari"
+        ordering = ['-payment_date']
 
 
 class Agent(models.Model):
     name = models.CharField(max_length=255, verbose_name="Agent Nomi")
-    contact_person = models.CharField(max_length=255, blank=True, null=True, verbose_name="Mas'ul Shaxs")
     phone_number = models.CharField(max_length=20, blank=True, null=True, verbose_name="Telefon Raqami")
-    email = models.EmailField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True, verbose_name="Izohlar")
+    
+    # Initial balance when agent is created - never changes after creation
+    initial_balance_uzs = models.DecimalField(
+        max_digits=20, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name="Boshlang'ich Balans UZS",
+        help_text="Musbat: Agent qarzdor | Manfiy: Siz qarzdorsiz"
+    )
+    initial_balance_usd = models.DecimalField(
+        max_digits=20, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name="Boshlang'ich Balans USD",
+        help_text="Musbat: Agent qarzdor | Manfiy: Siz qarzdorsiz"
+    )
+    
+    # Current running balance - gets updated with transactions
+    balance_uzs = models.DecimalField(
+        max_digits=20, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name="Joriy Balans UZS",
+        help_text="Musbat: Agent qarzdor | Manfiy: Siz qarzdorsiz"
+    )
+    balance_usd = models.DecimalField(
+        max_digits=20, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name="Joriy Balans USD",
+        help_text="Musbat: Agent qarzdor | Manfiy: Siz qarzdorsiz"
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
-    outstanding_balance_uzs = models.DecimalField(max_digits=20, decimal_places=2, default=0, verbose_name="Qarz UZS")
-    outstanding_balance_usd = models.DecimalField(max_digits=20, decimal_places=2, default=0, verbose_name="Qarz USD")
 
-    objects = AgentManager()
+    def save(self, *args, **kwargs):
+        """Set initial balance equal to current balance when creating new agent"""
+        if not self.pk:  # New agent being created
+            self.initial_balance_uzs = self.balance_uzs
+            self.initial_balance_usd = self.balance_usd
+        super().save(*args, **kwargs)
 
-    def update_balance_on_sale(self, sale_amount, sale_currency):
-        """Update agent balance when sale is created"""
-        if sale_currency == CurrencyChoices.UZS:
-            self.outstanding_balance_uzs += sale_amount
-        elif sale_currency == CurrencyChoices.USD:
-            self.outstanding_balance_usd += sale_amount
-        self.save(update_fields=['outstanding_balance_uzs', 'outstanding_balance_usd', 'updated_at'])
+    def add_debt(self, amount, currency):
+        """Add debt when sale is made to agent"""
+        if currency == CurrencyChoices.UZS:
+            self.balance_uzs += amount
+        elif currency == CurrencyChoices.USD:
+            self.balance_usd += amount
+        self.save(update_fields=['balance_uzs', 'balance_usd', 'updated_at'])
+
+    def reduce_debt(self, amount, currency):
+        """Reduce debt when agent makes payment"""
+        if currency == CurrencyChoices.UZS:
+            self.balance_uzs -= amount
+        elif currency == CurrencyChoices.USD:
+            self.balance_usd -= amount
+        self.save(update_fields=['balance_uzs', 'balance_usd', 'updated_at'])
 
     def __str__(self):
         return self.name
@@ -168,108 +203,45 @@ class Agent(models.Model):
 class AgentPayment(models.Model):
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='payments', verbose_name="Agent")
     payment_date = models.DateTimeField(default=timezone.now, verbose_name="To'lov Sanasi")
-    
-    amount_paid_uzs = models.DecimalField(max_digits=20, decimal_places=2, default=0, verbose_name="To'langan Miqdor (UZS)")
-    amount_paid_usd = models.DecimalField(max_digits=20, decimal_places=2, default=0, verbose_name="To'langan Miqdor (USD)")
-    
+    amount = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Miqdor")
+    currency = models.CharField(max_length=3, choices=CurrencyChoices.choices, verbose_name="Valyuta")
     paid_to_account = models.ForeignKey(
         'accounting.FinancialAccount', 
         on_delete=models.PROTECT, 
-        verbose_name="To'lov Hisobi",
-        limit_choices_to={'is_active': True}
+        verbose_name="To'lov Hisobi"
     )
     notes = models.TextField(blank=True, null=True, verbose_name="Izohlar")
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    is_auto_created = models.BooleanField(default=False, help_text="Bu tolov sotuvdagi boshlang'ich tolovdan avtomatik yaratilganmi?")
-
-    @property
-    def payment_currency(self):
-        """Get the currency of this payment"""
-        if self.amount_paid_uzs > 0:
-            return CurrencyChoices.UZS
-        elif self.amount_paid_usd > 0:
-            return CurrencyChoices.USD
-        return None
-
-    @property
-    def payment_amount(self):
-        """Get the amount of this payment"""
-        if self.amount_paid_uzs > 0:
-            return self.amount_paid_uzs
-        elif self.amount_paid_usd > 0:
-            return self.amount_paid_usd
-        return Decimal('0.00')
 
     def clean(self):
-        """Validate agent payment data"""
+        """Validate payment data"""
         super().clean()
         
-        # Validate payment amounts
-        if self.amount_paid_uzs < 0 or self.amount_paid_usd < 0:
-            raise ValidationError("Payment amount cannot be negative.")
-
-        if self.amount_paid_uzs == 0 and self.amount_paid_usd == 0:
-            raise ValidationError("Payment amount must be greater than zero.")
-
-        if self.amount_paid_uzs > 0 and self.amount_paid_usd > 0:
-            raise ValidationError("Payment must be in exactly one currency (UZS or USD).")
-
-        # Validate business limits
-        if self.amount_paid_uzs > BusinessLimits.MAX_BALANCE_VALUE:
-            raise ValidationError(f"UZS payment amount cannot exceed {BusinessLimits.MAX_BALANCE_VALUE}")
-        if self.amount_paid_usd > BusinessLimits.MAX_BALANCE_VALUE:
-            raise ValidationError(f"USD payment amount cannot exceed {BusinessLimits.MAX_BALANCE_VALUE}")
-
-        # Validate currency match with account
-        if self.paid_to_account:
-            payment_currency = self.payment_currency
-            if self.paid_to_account.currency != payment_currency:
-                raise ValidationError(
-                    f"Currency mismatch: account uses {self.paid_to_account.currency}, "
-                    f"payment uses {payment_currency}."
-                )
+        if self.amount <= 0:
+            raise ValidationError("To'lov miqdori musbat bo'lishi kerak.")
+        
+        if self.paid_to_account and self.paid_to_account.currency != self.currency:
+            raise ValidationError(
+                f"Hisob valyutasi ({self.paid_to_account.currency}) "
+                f"to'lov valyutasi ({self.currency}) bilan mos kelmaydi."
+            )
 
     def save(self, *args, **kwargs):
-        """Save agent payment with validation"""
         self.full_clean()
         is_new = self.pk is None
-        
         super().save(*args, **kwargs)
         
-        # Simple post-save processing
         if is_new:
-            self._update_related_records()
-
-    def _update_related_records(self):
-        """Update financial account and agent balance"""
-        try:
-            with transaction.atomic():
-                # Update financial account
-                self.paid_to_account.current_balance += self.payment_amount
-                self.paid_to_account.save(update_fields=['current_balance', 'updated_at'])
-                
-                # Update agent balance
-                self.agent.outstanding_balance_uzs -= self.amount_paid_uzs
-                self.agent.outstanding_balance_usd -= self.amount_paid_usd
-                self.agent.save(update_fields=['outstanding_balance_uzs', 'outstanding_balance_usd', 'updated_at'])
-                
-        except Exception as e:
-            logger.error(f"Error updating related records for payment {self.pk}: {e}")
-            raise
+            # Update agent balance
+            self.agent.reduce_debt(self.amount, self.currency)
+            # Update financial account
+            self.paid_to_account.current_balance += self.amount
+            self.paid_to_account.save(update_fields=['current_balance', 'updated_at'])
 
     def __str__(self):
-        payment_details = []
-        if self.amount_paid_uzs > 0:
-            payment_details.append(f"{self.amount_paid_uzs:,.0f} UZS")
-        if self.amount_paid_usd > 0:
-            payment_details.append(f"{self.amount_paid_usd:,.2f} USD")
-        payment_str = " va ".join(payment_details)
-        
-        return f"Agent: {self.agent.name} - {payment_str} - {self.payment_date.strftime('%d-%m-%Y')}"
+        return f"{self.agent.name} - {self.amount:,.2f} {self.currency} - {self.payment_date.strftime('%d-%m-%Y')}"
 
     class Meta:
         verbose_name = "Agent To'lovi"
         verbose_name_plural = "Agent To'lovlari"
-        ordering = ['-payment_date', '-created_at']
+        ordering = ['-payment_date']

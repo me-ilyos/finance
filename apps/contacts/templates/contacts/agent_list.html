@@ -35,8 +35,8 @@
                         <tr class="border-bottom border-2">
                             <th class="py-3 px-3 fw-semibold">Nomi</th>
                             <th class="py-3 px-3 fw-semibold">Telefon Raqami</th>
-                            <th class="py-3 px-3 fw-semibold text-end">Balans UZS</th>
-                            <th class="py-3 px-3 fw-semibold text-end">Balans USD</th>
+                            <th class="py-3 px-3 fw-semibold text-end">Joriy Balans UZS</th>
+                            <th class="py-3 px-3 fw-semibold text-end">Joriy Balans USD</th>
                             <th class="py-3 px-3 fw-semibold">Izohlar</th>
                             <th class="py-3 px-3 fw-semibold">Yaratilgan Vaqti</th>
                         </tr>
@@ -51,17 +51,25 @@
                             </td>
                             <td class="py-2 px-3">{{ agent.phone_number|default:"-" }}</td>
                             <td class="py-2 px-3 text-end">
-                                {% if agent.outstanding_balance_uzs == 0 %}
+                                {% if agent.balance_uzs == 0 %}
                                     <span>0.00</span>
+                                {% elif agent.balance_uzs > 0 %}
+                                    <span class="text-success">+{{ agent.balance_uzs|floatformat:2|intcomma }}</span>
+                                    <small class="text-muted d-block">Agent qarzdor</small>
                                 {% else %}
-                                    <span>{{ agent.outstanding_balance_uzs|floatformat:2|intcomma }}</span>
+                                    <span class="text-danger">{{ agent.balance_uzs|floatformat:2|intcomma }}</span>
+                                    <small class="text-muted d-block">Siz qarzdorsiz</small>
                                 {% endif %}
                             </td>
                             <td class="py-2 px-3 text-end">
-                                {% if agent.outstanding_balance_usd == 0 %}
+                                {% if agent.balance_usd == 0 %}
                                     <span>0.00</span>
+                                {% elif agent.balance_usd > 0 %}
+                                    <span class="text-success">+{{ agent.balance_usd|floatformat:2|intcomma }}</span>
+                                    <small class="text-muted d-block">Agent qarzdor</small>
                                 {% else %}
-                                    <span>{{ agent.outstanding_balance_usd|floatformat:2|intcomma }}</span>
+                                    <span class="text-danger">{{ agent.balance_usd|floatformat:2|intcomma }}</span>
+                                    <small class="text-muted d-block">Siz qarzdorsiz</small>
                                 {% endif %}
                             </td>
                             <td class="py-2 px-3">{{ agent.notes|default:"-"|truncatewords:15 }}</td>
@@ -135,7 +143,7 @@
 
 <!-- Add Agent Modal -->
 <div class="modal fade" id="addAgentModal" tabindex="-1" aria-labelledby="addAgentModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <form method="post" action="{% url 'contacts:agent-list' %}" id="agentModalForm">
                 {% csrf_token %}
@@ -147,11 +155,11 @@
                     <div class="row">
                         <!-- Basic Information -->
                         <div class="col-md-6">
-                            <h6 class="modal-section-header text-primary">Asosiy Ma'lumotlar</h6>
-                            {% for field in agent_form %}
+                            <h6 class="text-primary mb-3">Asosiy Ma'lumotlar</h6>
+                            {% for field in form %}
                                 {% if field.name in 'name,phone_number,notes' %}
                                     <div class="mb-3">
-                                        <label for="{{ field.id_for_label }}" class="form-label form-label-sm">{{ field.label }}</label>
+                                        <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
                                         {{ field }}
                                         {% if field.help_text %}
                                             <small class="form-text text-muted">{{ field.help_text }}</small>
@@ -165,20 +173,20 @@
                         </div>
                         
                         <!-- Balance Information -->
-                        <div class="col-md-6 modal-balance-section">
-                            <h6 class="modal-section-header text-warning">Boshlang'ich Balans (Excel Ko'chirish Uchun)</h6>
-                            <div class="alert alert-warning">
-                                <small><i class="fas fa-exclamation-triangle me-1"></i>
-                                Bu maydonlar Exceldan ma'lumotlarni ko'chirishda ishlatiladi. Musbat qiymat agent sizga qarzdorligini, manfiy qiymat siz agentga qarzdorligingizni bildiradi.</small>
+                        <div class="col-md-6">
+                            <h6 class="text-warning mb-3">Boshlang'ich Balans</h6>
+                            <div class="alert alert-info">
+                                <small><i class="fas fa-info-circle me-1"></i>
+                                Musbat: Agent qarzdor | Manfiy: Siz qarzdorsiz</small>
                             </div>
-                            {% for field in agent_form %}
-                                {% if field.name in 'outstanding_balance_uzs,outstanding_balance_usd' %}
+                            {% for field in form %}
+                                {% if field.name in 'balance_uzs,balance_usd' %}
                                     <div class="mb-3">
-                                        <label for="{{ field.id_for_label }}" class="form-label form-label-sm">{{ field.label }}</label>
-                                        <div class="input-group input-group-sm">
+                                        <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                                        <div class="input-group">
                                             {{ field }}
                                             <span class="input-group-text">
-                                                {% if field.name == 'outstanding_balance_uzs' %}UZS{% else %}USD{% endif %}
+                                                {% if field.name == 'balance_uzs' %}UZS{% else %}USD{% endif %}
                                             </span>
                                         </div>
                                         {% if field.help_text %}
@@ -193,13 +201,13 @@
                         </div>
                     </div>
                     
-                    {% for error in agent_form.non_field_errors %}
+                    {% for error in form.non_field_errors %}
                         <div class="alert alert-danger">{{ error }}</div>
                     {% endfor %}
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Bekor Qilish</button>
-                    <button type="submit" class="btn btn-primary btn-sm">Saqlash</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Bekor Qilish</button>
+                    <button type="submit" class="btn btn-primary">Saqlash</button>
                 </div>
             </form>
         </div>
@@ -210,8 +218,7 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    // If there are form errors, and the modal is for adding an agent, show the modal.
-    // This is useful if the page reloads due to a form submission error.
+    // Show modal if there are form errors
     const agentFormErrors = document.querySelector('#agentModalForm .invalid-feedback, #agentModalForm .alert-danger');
     const addAgentModalElement = document.getElementById('addAgentModal');
 

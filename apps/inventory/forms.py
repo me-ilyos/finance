@@ -33,7 +33,7 @@ class AcquisitionForm(forms.ModelForm):
         fields = ['supplier', 'acquisition_date', 'initial_quantity', 'unit_price', 'currency', 'paid_from_account', 'notes']
         widgets = {
             'supplier': forms.Select(attrs={'class': 'form-select form-select-sm'}),
-            'acquisition_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control form-control-sm'}),
+            'acquisition_date': forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control form-control-sm'}),
             'initial_quantity': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'min': '1'}),
             'unit_price': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'step': '0.01'}),
             'currency': forms.Select(attrs={'class': 'form-select form-select-sm'}),
@@ -42,7 +42,7 @@ class AcquisitionForm(forms.ModelForm):
         }
         labels = {
             'supplier': "Ta'minotchi",
-            'acquisition_date': "Xarid Sanasi",
+            'acquisition_date': "Xarid Sanasi va Vaqti",
             'initial_quantity': "Miqdori",
             'unit_price': "Narx",
             'currency': "Valyuta",
@@ -52,7 +52,7 @@ class AcquisitionForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['acquisition_date'].initial = timezone.localdate()
+        self.fields['acquisition_date'].initial = timezone.now().strftime('%Y-%m-%dT%H:%M')
         
         # Filter accounts by currency when editing
         if self.instance.pk and self.instance.currency:

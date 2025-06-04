@@ -10,9 +10,8 @@ def handle_sale_deleted(sender, instance, **kwargs):
     """Handle agent balance updates when sales are deleted"""
     if instance.agent:
         try:
-            # Use the model method for balance updates
-            sale_amount = -instance.total_sale_amount  # Negative to reverse
-            instance.agent.update_balance_on_sale(sale_amount, instance.sale_currency)
+            # Reduce the debt (reverse the sale) 
+            instance.agent.reduce_debt(instance.total_sale_amount, instance.sale_currency)
             logger.info(f"Reverted agent {instance.agent.id} balance for deleted sale {instance.id}")
         except Exception as e:
             logger.error(f"Error reverting agent balance for deleted sale {instance.id}: {e}")
