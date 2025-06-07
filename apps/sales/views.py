@@ -2,18 +2,21 @@ from django.shortcuts import render, redirect
 from django.urls import reverse_lazy
 from django.views.generic import ListView
 from django.contrib import messages
+from django.http import JsonResponse, HttpResponse
 from .models import Sale
 from .forms import SaleForm
 from .services import SaleService
 from django.utils import timezone
 from datetime import timedelta, date
 from decimal import Decimal
-from django.http import JsonResponse
 from apps.inventory.models import Acquisition
 from apps.accounting.models import FinancialAccount
 from django.db.models import Sum, Case, When, Value, DecimalField
 from django.core.exceptions import ValidationError
 from apps.core.services import DateFilterService
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill
+from openpyxl.utils import get_column_letter
 import logging
 
 logger = logging.getLogger(__name__)
@@ -144,3 +147,172 @@ def get_accounts_for_acquisition_currency(request, acquisition_id):
     except Exception as e:
         logger.error(f"Error in get_accounts_for_acquisition_currency: {e}")
         return JsonResponse({'error': str(e)}, status=500)
+
+
+def export_sales_excel(request):
+    """Export sales data to Excel (XLSX) format"""
+    try:
+        # Get the same queryset as the list view
+        queryset = Sale.objects.select_related(
+            'related_acquisition', 
+            'related_acquisition__ticket',
+            'agent', 
+            'paid_to_account'
+        ).order_by('-sale_date', '-created_at')
+        
+        # Apply the same filtering as the list view
+        filter_period = request.GET.get('filter_period')
+        date_filter = request.GET.get('date_filter')
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
+
+        try:
+            start_date_obj, end_date_obj = DateFilterService.get_date_range(
+                filter_period, date_filter, start_date, end_date
+            )
+            queryset = queryset.filter(sale_date__date__range=[start_date_obj, end_date_obj])
+        except ValueError:
+            # Fall back to today's data on error
+            today = timezone.localdate()
+            queryset = queryset.filter(sale_date__date=today)
+
+        # Create Excel workbook and worksheet
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Sotuvlar Ro'yxati"
+
+        # Define headers (matching the table structure)
+        headers = [
+            'Sana',
+            'Chipta turi',
+            'Chipta manzili', 
+            'Xaridor',
+            'Miqdori',
+            'Birlik narxi',
+            'Jami summa',
+            'Valyuta',
+            'Foyda',
+            'Boshlang\'ich to\'lov',
+            'To\'lov hisobi',
+            'To\'lov holati',
+            'Agent'
+        ]
+
+        # Write headers
+        for col_num, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_num, value=header)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        # Write data rows
+        for row_num, sale in enumerate(queryset, 2):
+            # Format data to match template display
+            sale_date = sale.sale_date.strftime('%d.%m.%Y %H:%M')
+            ticket_type = sale.related_acquisition.ticket.get_ticket_type_display()
+            ticket_description = sale.related_acquisition.ticket.description
+            
+            # Buyer display
+            if sale.agent:
+                buyer = sale.agent.name
+                agent_name = sale.agent.name
+            else:
+                buyer = sale.client_full_name or "N/A"
+                agent_name = ""
+            
+            quantity = sale.quantity
+            
+            # Format prices based on currency
+            currency = sale.sale_currency
+            if currency == 'UZS':
+                unit_price = f"{sale.unit_sale_price:,.0f}"
+                total_amount = f"{sale.total_sale_amount:,.0f}"
+                profit = f"{sale.profit:,.0f}"
+                initial_payment = f"{sale.initial_payment_amount:,.0f}" if sale.initial_payment_amount else ""
+            else:  # USD
+                unit_price = f"{sale.unit_sale_price:,.2f}"
+                total_amount = f"{sale.total_sale_amount:,.2f}"
+                profit = f"{sale.profit:,.2f}"
+                initial_payment = f"{sale.initial_payment_amount:,.2f}" if sale.initial_payment_amount else ""
+            
+            # Payment status
+            if sale.agent:
+                if sale.initial_payment_amount:
+                    payment_status = f"Agent qarzi (boshlang'ich: {initial_payment} {currency})"
+                else:
+                    payment_status = "Agent qarzi"
+                payment_account = ""
+            elif sale.paid_to_account:
+                payment_status = "To'langan"
+                payment_account = sale.paid_to_account.name
+            else:
+                payment_status = "To'lanmagan"
+                payment_account = ""
+
+            # Write row data
+            row_data = [
+                sale_date,
+                ticket_type,
+                ticket_description,
+                buyer,
+                quantity,
+                unit_price,
+                total_amount,
+                currency,
+                profit,
+                initial_payment,
+                payment_account,
+                payment_status,
+                agent_name
+            ]
+
+            for col_num, value in enumerate(row_data, 1):
+                cell = ws.cell(row=row_num, column=col_num, value=value)
+                
+                # Center align numeric and status columns
+                if col_num in [5, 6, 7, 8, 9, 10]:  # quantity, prices, profit columns
+                    cell.alignment = Alignment(horizontal="center")
+                elif col_num in [11, 12]:  # payment account, status columns
+                    cell.alignment = Alignment(horizontal="center")
+
+        # Auto-adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column_letter = get_column_letter(column[0].column)
+            
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            
+            # Set minimum and maximum width limits
+            adjusted_width = min(max(max_length + 2, 12), 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+
+        # Create HTTP response with Excel file
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        
+        # Set filename based on filter
+        if start_date_obj and end_date_obj:
+            if start_date_obj == end_date_obj:
+                filename = f"sotuvlar_{start_date_obj.strftime('%d.%m.%Y')}.xlsx"
+            else:
+                filename = f"sotuvlar_{start_date_obj.strftime('%d.%m.%Y')}_dan_{end_date_obj.strftime('%d.%m.%Y')}_gacha.xlsx"
+        else:
+            filename = f"sotuvlar_{timezone.now().strftime('%d.%m.%Y')}.xlsx"
+            
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        # Save workbook to response
+        wb.save(response)
+        
+        logger.info(f"Exported {queryset.count()} sales to Excel")
+        return response
+
+    except Exception as e:
+        logger.error(f"Error exporting sales to Excel: {e}")
+        return HttpResponse("Excel export xatolik bilan yakunlandi.", status=500)

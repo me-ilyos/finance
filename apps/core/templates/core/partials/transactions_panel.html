@@ -5,44 +5,95 @@
     <div class="panel-header">
         <h3 class="panel-title">
             <i class="fas fa-exchange-alt"></i>
-            Recent Transactions
             {% if selected_account %}
+                So'nggi Tranzaksiyalar
                 <span class="badge bg-primary ms-2">{{ transactions|length }}</span>
+            {% else %}
+                Barcha Tranzaksiyalar
+                <span class="badge bg-info ms-2">{{ transactions|length }}</span>
             {% endif %}
         </h3>
     </div>
     
-    {% if selected_account %}
-        {% if transactions %}
-            {% for transaction in transactions %}
-            <div class="transaction-item">
-                <div class="transaction-details">
-                    <h5>{{ transaction.description|truncatewords:5 }}</h5>
-                    <div class="transaction-meta">
-                        <span class="transaction-type">{{ transaction.type }}</span>
-                        <span class="ms-2">
-                            <i class="fas fa-calendar me-1"></i>
-                            {{ transaction.date|date:"M d, Y H:i" }}
-                        </span>
-                    </div>
-                </div>
-                <div class="transaction-amount">
-                    <div class="amount-value {{ transaction.balance_effect|transaction_amount_class }}">
-                        {% if transaction.balance_effect == 'expense' %}-{% endif %}{{ transaction.amount|format_currency:transaction.currency }} {{ transaction.currency }}
-                    </div>
+    {% if transactions %}
+        {% for transaction in transactions %}
+        <div class="transaction-item">
+            <div class="transaction-details">
+                <h5>{{ transaction.description|truncatewords:5 }}</h5>
+                <div class="transaction-meta">
+                    <span class="transaction-type">{{ transaction.type }}</span>
+                    <span class="ms-2">
+                        <i class="fas fa-calendar me-1"></i>
+                        {{ transaction.date|date:"M d, Y H:i" }}
+                    </span>
                 </div>
             </div>
-            {% endfor %}
+            <div class="transaction-amount">
+                <div class="amount-value {{ transaction.balance_effect|transaction_amount_class }}">
+                    {% if transaction.balance_effect == 'expense' %}-{% endif %}{{ transaction.amount|format_currency:transaction.currency }} {{ transaction.currency }}
+                </div>
+                {% if not selected_account and transaction.account %}
+                    <div class="account-info text-muted small">
+                        <i class="fas fa-building me-1"></i>{{ transaction.account }}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+        
+        <!-- Pagination -->
+        {% if transactions_page_obj and transactions_paginator.num_pages > 1 %}
+        <div class="transactions-pagination mt-3 p-3 border-top">
+            <nav aria-label="Transaction pagination">
+                <ul class="pagination pagination-sm justify-content-center mb-0">
+                    {% if transactions_page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?{% if selected_account %}account_id={{ selected_account.id }}&{% endif %}page={{ transactions_page_obj.previous_page_number }}">
+                                <i class="fas fa-chevron-left"></i>
+                            </a>
+                        </li>
+                    {% endif %}
+                    
+                    {% for num in transactions_paginator.page_range %}
+                        {% if num == transactions_page_obj.number %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                        {% elif num > transactions_page_obj.number|add:'-3' and num < transactions_page_obj.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{% if selected_account %}account_id={{ selected_account.id }}&{% endif %}page={{ num }}">{{ num }}</a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if transactions_page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?{% if selected_account %}account_id={{ selected_account.id }}&{% endif %}page={{ transactions_page_obj.next_page_number }}">
+                                <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            <div class="text-center mt-2">
+                <small class="text-muted">
+                    Sahifa {{ transactions_page_obj.number }} / {{ transactions_paginator.num_pages }}
+                    (Jami {{ transactions_paginator.count }} ta tranzaksiya)
+                </small>
+            </div>
+        </div>
+        {% endif %}
+    {% else %}
+        {% if selected_account %}
+            <div class="p-4 text-center text-muted">
+                <i class="fas fa-receipt fa-3x mb-3 opacity-50"></i>
+                <p class="mb-0">Bu hisob uchun tranzaksiyalar mavjud emas</p>
+            </div>
         {% else %}
             <div class="p-4 text-center text-muted">
                 <i class="fas fa-receipt fa-3x mb-3 opacity-50"></i>
-                <p class="mb-0">No transactions for this account</p>
+                <p class="mb-0">Hech qanday tranzaksiya mavjud emas</p>
             </div>
         {% endif %}
-    {% else %}
-        <div class="p-4 text-center text-muted">
-            <i class="fas fa-hand-pointer fa-3x mb-3 opacity-50"></i>
-            <p class="mb-0">Select an account to view transactions</p>
-        </div>
     {% endif %}
 </div> 

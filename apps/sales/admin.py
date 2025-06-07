@@ -3,13 +3,13 @@ from .models import Sale
 
 class SaleAdmin(admin.ModelAdmin):
     list_display = (
-        'id', 'sale_date', 'display_ticket_identifier', 'quantity', 'related_acquisition',
+        'id', 'sale_date', 'display_ticket_info', 'quantity', 'related_acquisition',
         'buyer_display', 'total_sale_amount', 'sale_currency', 
         'profit', 'paid_to_account'
     )
     list_filter = ('sale_date', 'sale_currency', 'agent', 'paid_to_account')
     search_fields = (
-        'related_acquisition__ticket__identifier', 'agent__name', 'client_full_name',
+        'related_acquisition__ticket__description', 'agent__name', 'client_full_name',
         'related_acquisition__id',
         'paid_to_account__name'
     )
@@ -38,11 +38,11 @@ class SaleAdmin(admin.ModelAdmin):
         return obj.client_full_name or "N/A"
     buyer_display.short_description = "Buyer"
 
-    def display_ticket_identifier(self, obj):
+    def display_ticket_info(self, obj):
         if obj.related_acquisition and obj.related_acquisition.ticket:
-            return obj.related_acquisition.ticket.identifier
+            return str(obj.related_acquisition.ticket)
         return "N/A"
-    display_ticket_identifier.short_description = "Ticket Identifier"
+    display_ticket_info.short_description = "Ticket Info"
 
     def display_ticket_description(self, obj):
         if obj.related_acquisition and obj.related_acquisition.ticket:

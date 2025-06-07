@@ -77,12 +77,6 @@ class FinancialAccountForm(forms.ModelForm):
 
 
 class ExpenditureForm(forms.ModelForm):
-    expenditure_type = forms.ChoiceField(
-        label="Xarajat Turi",
-        choices=Expenditure.ExpenditureType.choices,
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm', 'id': 'id_expenditure_type'}),
-        initial=Expenditure.ExpenditureType.GENERAL
-    )
     expenditure_date = forms.DateTimeField(
         label="Xarajat Sanasi",
         widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control form-control-sm'}),
@@ -108,13 +102,6 @@ class ExpenditureForm(forms.ModelForm):
         widget=forms.Select(attrs={'class': 'form-select form-select-sm', 'id': 'id_paid_from_account'}),
         help_text="Xarajat qaysi hisobdan to'lanishini tanlang."
     )
-    supplier = forms.ModelChoiceField(
-        label="Ta'minotchi",
-        queryset=None,  # Will be set in __init__
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm', 'id': 'id_supplier'}),
-        required=False,
-        help_text="Ta'minotchiga to'lov qilish uchun tanlang"
-    )
     notes = forms.CharField(
         label="Qo'shimcha Izohlar",
         widget=forms.Textarea(attrs={'class': 'form-control form-control-sm', 'rows': 3}),
@@ -123,33 +110,19 @@ class ExpenditureForm(forms.ModelForm):
 
     class Meta:
         model = Expenditure
-        fields = ['expenditure_type', 'expenditure_date', 'description', 'amount', 'currency', 'paid_from_account', 'supplier', 'notes']
+        fields = ['expenditure_date', 'description', 'amount', 'currency', 'paid_from_account', 'notes']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        # Import here to avoid circular imports
-        from apps.contacts.models import Supplier
-        
         self.fields['paid_from_account'].empty_label = "Hisobni tanlang"
-        self.fields['supplier'].queryset = Supplier.objects.filter().order_by('name')
-        self.fields['supplier'].empty_label = "Ta'minotchini tanlang"
 
     def clean(self):
         """Validate form data"""
         cleaned_data = super().clean()
         
-        expenditure_type = cleaned_data.get('expenditure_type')
-        supplier = cleaned_data.get('supplier')
         currency = cleaned_data.get('currency')
         paid_from_account = cleaned_data.get('paid_from_account')
-        
-        # Validate expenditure type and supplier relationship
-        if expenditure_type == Expenditure.ExpenditureType.SUPPLIER_PAYMENT and not supplier:
-            self.add_error('supplier', "Ta'minotchiga to'lov qilish uchun ta'minotchi tanlanishi kerak.")
-        
-        if supplier and expenditure_type != Expenditure.ExpenditureType.SUPPLIER_PAYMENT:
-            self.add_error('expenditure_type', "Ta'minotchi tanlangan bo'lsa, xarajat turi 'Ta'minotchiga to'lov' bo'lishi kerak.")
         
         # Validate currency match with account
         if paid_from_account and currency and paid_from_account.currency != currency:
@@ -162,10 +135,8 @@ class ExpenditureForm(forms.ModelForm):
         try:
             expenditure = super().save(commit=False)
             
-            # Set description for supplier payments
-            if (expenditure.expenditure_type == Expenditure.ExpenditureType.SUPPLIER_PAYMENT and 
-                expenditure.supplier and not expenditure.description):
-                expenditure.description = f"Payment to {expenditure.supplier.name}"
+            # Since we removed expenditure_type from the form, always set it to GENERAL
+            expenditure.expenditure_type = Expenditure.ExpenditureType.GENERAL
             
             if commit:
                 expenditure.save()

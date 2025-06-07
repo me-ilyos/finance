@@ -43,6 +43,15 @@
             </button>
         </div>
 
+        <!-- Excel Export Button -->
+        <div class="col-md-auto">
+            <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
+            <a href="{% url 'inventory:acquisition-export-excel' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" 
+               class="btn btn-success btn-sm">
+                <i class="fas fa-file-excel me-1"></i> Excel
+            </a>
+        </div>
+
         <!-- Clear Filter -->
         <div class="col-md-auto ms-md-auto"> <!-- Push to the right on medium screens and up -->
             <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->

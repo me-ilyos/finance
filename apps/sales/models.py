@@ -114,7 +114,7 @@ class Sale(models.Model):
 
     def __str__(self):
         buyer_info = str(self.agent.name) if self.agent else f"{self.client_full_name or 'N/A Client'}"
-        ticket_info = (self.related_acquisition.ticket.identifier 
+        ticket_info = (str(self.related_acquisition.ticket) 
                       if self.related_acquisition and self.related_acquisition.ticket 
                       else f"Acq.ID: {self.related_acquisition_id}")
         sale_date_str = self.sale_date.strftime('%Y-%m-%d') if self.sale_date else 'N/A Date'

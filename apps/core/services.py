@@ -69,25 +69,38 @@ class DashboardService:
     """Service for dashboard data aggregation and business logic"""
     
     @staticmethod
-    def get_dashboard_data(selected_account=None):
+    def get_dashboard_data(selected_account=None, transactions_page=1, transactions_per_page=10):
         """
         Get all dashboard data including accounts, transactions, and statistics
         
         Args:
             selected_account: FinancialAccount instance or None
+            transactions_page: Page number for transactions
+            transactions_per_page: Number of transactions per page
             
         Returns:
             Dictionary with dashboard context data
         """
         from apps.accounting.models import FinancialAccount
+        from django.core.paginator import Paginator
         
         # Get active accounts
         accounts = FinancialAccount.objects.filter(is_active=True)
         
-        # Get transactions for selected account
+        # Get transactions for selected account with pagination
         transactions = []
+        transactions_paginator = None
+        transactions_page_obj = None
+        
         if selected_account:
-            transactions = DashboardService._get_account_transactions(selected_account)
+            all_transactions = DashboardService._get_account_transactions(selected_account)
+        else:
+            # Show recent transactions from all accounts when no specific account is selected
+            all_transactions = DashboardService._get_recent_all_transactions()
+            
+        transactions_paginator = Paginator(all_transactions, transactions_per_page)
+        transactions_page_obj = transactions_paginator.get_page(transactions_page)
+        transactions = transactions_page_obj.object_list
         
         # Calculate statistics
         stats = DashboardService._calculate_account_statistics(accounts)
@@ -96,6 +109,8 @@ class DashboardService:
             'accounts': accounts,
             'selected_account': selected_account,
             'transactions': transactions,
+            'transactions_paginator': transactions_paginator,
+            'transactions_page_obj': transactions_page_obj,
             'stats': stats
         }
     
@@ -134,29 +149,132 @@ class DashboardService:
         ).select_related('agent')
         
         for payment in agent_payments:
-            amount = payment.amount_paid_uzs if payment.amount_paid_uzs > 0 else payment.amount_paid_usd
-            currency = 'UZS' if payment.amount_paid_uzs > 0 else 'USD'
-            
             transactions.append({
                 'date': payment.payment_date,
                 'type': 'Agent To\'lovi',
                 'description': f"Agent: {payment.agent.name}",
-                'amount': amount,
-                'currency': currency,
+                'amount': payment.amount,
+                'currency': payment.currency,
                 'balance_effect': 'income'
             })
         
-        # Get expenditures from this account
-        expenditures = Expenditure.objects.filter(paid_from_account=account)
+        # Get supplier payments from this account
+        from apps.contacts.models import SupplierPayment
+        supplier_payments = SupplierPayment.objects.filter(
+            paid_from_account=account
+        ).select_related('supplier')
+        
+        for payment in supplier_payments:
+            transactions.append({
+                'date': payment.payment_date,
+                'type': 'Ta\'minotchi To\'lovi',
+                'description': f"Ta'minotchi: {payment.supplier.name}",
+                'amount': payment.amount,
+                'currency': payment.currency,
+                'balance_effect': 'expense'
+            })
+        
+        # Get general expenditures from this account (exclude supplier payments)
+        expenditures = Expenditure.objects.filter(
+            paid_from_account=account,
+            expenditure_type=Expenditure.ExpenditureType.GENERAL
+        )
         
         for exp in expenditures:
             transactions.append({
                 'date': exp.expenditure_date,
-                'type': 'Xarajat',
+                'type': 'Umumiy Xarajat',
                 'description': exp.description,
                 'amount': exp.amount,
                 'currency': exp.currency,
                 'balance_effect': 'expense'
+            })
+        
+        # Sort by date, most recent first
+        transactions.sort(key=lambda t: t['date'], reverse=True)
+        
+        return transactions
+    
+    @staticmethod
+    def _get_recent_all_transactions(limit_days=30):
+        """Get recent transactions from all accounts when no specific account is selected"""
+        from apps.sales.models import Sale
+        from apps.accounting.models import Expenditure
+        from apps.contacts.models import AgentPayment, SupplierPayment
+        from datetime import timedelta
+        
+        # Get date limit
+        date_limit = timezone.now() - timedelta(days=limit_days)
+        transactions = []
+        
+        # Get recent client sales
+        client_sales = Sale.objects.filter(
+            sale_date__gte=date_limit,
+            agent__isnull=True  # Only direct client sales
+        ).select_related('related_acquisition__ticket', 'paid_to_account')
+        
+        for sale in client_sales:
+            ticket_desc = (sale.related_acquisition.ticket.get_ticket_type_display() 
+                         if sale.related_acquisition and sale.related_acquisition.ticket 
+                         else "Unknown Ticket")
+            
+            transactions.append({
+                'date': sale.sale_date,
+                'type': 'Sotuv (Mijoz)',
+                'description': f"{ticket_desc} - {sale.client_full_name or 'N/A'}",
+                'amount': sale.total_sale_amount,
+                'currency': sale.sale_currency,
+                'balance_effect': 'income',
+                'account': sale.paid_to_account.name if sale.paid_to_account else 'N/A'
+            })
+        
+        # Get recent agent payments
+        agent_payments = AgentPayment.objects.filter(
+            payment_date__gte=date_limit
+        ).select_related('agent', 'paid_to_account')
+        
+        for payment in agent_payments:
+            transactions.append({
+                'date': payment.payment_date,
+                'type': 'Agent To\'lovi',
+                'description': f"Agent: {payment.agent.name}",
+                'amount': payment.amount,
+                'currency': payment.currency,
+                'balance_effect': 'income',
+                'account': payment.paid_to_account.name if payment.paid_to_account else 'N/A'
+            })
+        
+        # Get recent supplier payments
+        supplier_payments = SupplierPayment.objects.filter(
+            payment_date__gte=date_limit
+        ).select_related('supplier', 'paid_from_account')
+        
+        for payment in supplier_payments:
+            transactions.append({
+                'date': payment.payment_date,
+                'type': 'Ta\'minotchi To\'lovi',
+                'description': f"Ta'minotchi: {payment.supplier.name}",
+                'amount': payment.amount,
+                'currency': payment.currency,
+                'balance_effect': 'expense',
+                'account': payment.paid_from_account.name if payment.paid_from_account else 'N/A'
+            })
+        
+        # Get recent expenditures
+        expenditures = Expenditure.objects.filter(
+            expenditure_date__gte=date_limit,
+            expenditure_type=Expenditure.ExpenditureType.GENERAL
+        ).select_related('paid_from_account')
+        
+        for exp in expenditures:
+            transactions.append({
+                'date': exp.expenditure_date,
+                'type': 'Umumiy Xarajat',
+                'description': exp.description,
+                'amount': exp.amount,
+                'currency': exp.currency,
+                'balance_effect': 'expense',
+                'account': exp.paid_from_account.name if exp.paid_from_account else 'N/A'
             })
         
         # Sort by date, most recent first

@@ -46,8 +46,16 @@ def dashboard_view(request):
             messages.error(request, "Tanlangan hisob topilmadi.")
             return redirect('core:dashboard')
 
+    # Get pagination parameters
+    transactions_page = request.GET.get('page', 1)
+    transactions_per_page = 10
+
     # Get dashboard data using service
-    dashboard_data = DashboardService.get_dashboard_data(selected_account)
+    dashboard_data = DashboardService.get_dashboard_data(
+        selected_account, 
+        transactions_page, 
+        transactions_per_page
+    )
     
     context = {
         **dashboard_data,
