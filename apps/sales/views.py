@@ -131,7 +131,7 @@ def get_accounts_for_acquisition_currency(request, acquisition_id):
     """AJAX view to get accounts matching acquisition currency"""
     try:
         acquisition = Acquisition.objects.get(pk=acquisition_id)
-        currency = acquisition.transaction_currency
+        currency = acquisition.currency
         accounts = FinancialAccount.objects.filter(
             currency=currency, 
             is_active=True

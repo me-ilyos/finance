@@ -126,7 +126,7 @@ class SupplierDetailView(DetailView):
 
 
 class AgentDetailView(DetailView):
-    """Detail view for agents"""
+    """Detail view for agents with transaction history"""
     model = Agent
     template_name = 'contacts/agent_detail.html'
 
@@ -134,9 +134,53 @@ class AgentDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         agent = self.object
         
-        context['agent_sales'] = agent.agent_sales.select_related('related_acquisition__ticket').order_by('-sale_date')
-        context['agent_payments'] = agent.payments.order_by('-payment_date')
+        sales = agent.agent_sales.select_related('related_acquisition__ticket').order_by('-sale_date')
+        payments = agent.payments.select_related('paid_to_account').order_by('-payment_date')
+        
+        # Combine and sort all transactions by date
+        transactions = []
+        
+        # Add sales
+        for sale in sales:
+            transactions.append({
+                'date': sale.sale_date,
+                'type': 'sale',
+                'sale': sale,
+            })
+        
+        # Add payments
+        for payment in payments:
+            transactions.append({
+                'date': payment.payment_date,
+                'type': 'payment',
+                'payment': payment,
+            })
+        
+        # Sort all transactions by date (newest first)
+        transactions.sort(key=lambda x: x['date'], reverse=True)
+        
+        context['transactions'] = transactions
+        context['sales'] = sales
+        context['payments'] = payments
         context['payment_form'] = AgentPaymentForm()
+        
+        # Calculate UZS and USD totals
+        context['uzs_sales'] = sum(sale.total_sale_amount for sale in sales if sale.sale_currency == 'UZS')
+        context['usd_sales'] = sum(sale.total_sale_amount for sale in sales if sale.sale_currency == 'USD')
+        context['uzs_payments'] = sum(payment.amount for payment in payments if payment.currency == 'UZS')
+        context['usd_payments'] = sum(payment.amount for payment in payments if payment.currency == 'USD')
+        
+        # Calculate differences (sales - payments)
+        context['uzs_difference'] = context['uzs_sales'] - context['uzs_payments']
+        context['usd_difference'] = context['usd_sales'] - context['usd_payments']
+        
+        # Calculate current balances: Initial Balance + Sales - Payments
+        context['uzs_current_balance'] = (agent.initial_balance_uzs or 0) + context['uzs_sales'] - context['uzs_payments']
+        context['usd_current_balance'] = (agent.initial_balance_usd or 0) + context['usd_sales'] - context['usd_payments']
+        
+        # Also provide the running balance from the model for comparison
+        context['uzs_running_balance'] = agent.balance_uzs
+        context['usd_running_balance'] = agent.balance_usd
         
         return context
 

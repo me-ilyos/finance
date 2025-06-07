@@ -115,6 +115,33 @@
                                 {% endif %}
                             {% endfor %}
                         </tbody>
+                        <tfoot>
+                            <tr style="background-color: #3A4D8F; color: white;">
+                                <th colspan="2" class="text-center py-3">
+                                    <strong><i class="fas fa-calculator me-2"></i>Jami</strong>
+                                </th>
+                                <th class="text-end py-3">
+                                    <strong class="text-danger">
+                                        -{{ uzs_acquisitions|floatformat:0|intcomma }}
+                                    </strong>
+                                </th>
+                                <th class="text-end py-3">
+                                    <strong class="text-success">
+                                        {{ uzs_payments|floatformat:0|intcomma }}
+                                    </strong>
+                                </th>
+                                <th class="text-end py-3">
+                                    <strong class="text-danger">
+                                        {% if usd_acquisitions > 0 %}-${{ usd_acquisitions|floatformat:2|intcomma }}{% else %}-{% endif %}
+                                    </strong>
+                                </th>
+                                <th class="text-end py-3">
+                                    <strong class="text-success">
+                                        {% if usd_payments > 0 %} ${{ usd_payments|floatformat:2|intcomma }}{% else %}-{% endif %}
+                                    </strong>
+                                </th>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             {% else %}

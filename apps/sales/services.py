@@ -27,10 +27,10 @@ class SaleCalculationService:
         unit_cost = Decimal('0.00')
         acquisition = sale_instance.related_acquisition
         
-        if acquisition.transaction_currency == 'UZS':
-            unit_cost = acquisition.unit_price_uzs or Decimal('0.00')
-        elif acquisition.transaction_currency == 'USD':
-            unit_cost = acquisition.unit_price_usd or Decimal('0.00')
+        if acquisition.currency == 'UZS':
+            unit_cost = acquisition.unit_price or Decimal('0.00')
+        elif acquisition.currency == 'USD':
+            unit_cost = acquisition.unit_price or Decimal('0.00')
         
         total_cost = sale_instance.quantity * unit_cost
         return sale_instance.total_sale_amount - total_cost
@@ -40,7 +40,7 @@ class SaleCalculationService:
         """Determine sale currency from acquisition"""
         if not related_acquisition:
             raise ValidationError("Related acquisition is required to determine sale currency")
-        return related_acquisition.transaction_currency
+        return related_acquisition.currency
 
 
 class StockManagementService:
@@ -126,16 +126,16 @@ class AgentDebtService:
                 
                 if currency == 'UZS':
                     if operation == 'add':
-                        agent.outstanding_balance_uzs += amount
+                        agent.balance_uzs += amount
                     else:  # subtract
-                        agent.outstanding_balance_uzs -= amount
+                        agent.balance_uzs -= amount
                 elif currency == 'USD':
                     if operation == 'add':
-                        agent.outstanding_balance_usd += amount
+                        agent.balance_usd += amount
                     else:  # subtract
-                        agent.outstanding_balance_usd -= amount
+                        agent.balance_usd -= amount
                 
-                agent.save(update_fields=['outstanding_balance_uzs', 'outstanding_balance_usd', 'updated_at'])
+                agent.save(update_fields=['balance_uzs', 'balance_usd', 'updated_at'])
                 
         except Exception as e:
             logger.error(f"Error updating agent debt: {e}")
@@ -261,7 +261,7 @@ class SaleService:
                 # Handle agent operations
                 if sale.agent:
                     # Add debt to agent balance
-                    print(f"[DEBUG] Before adding sale debt - Agent {sale.agent.id} balance: UZS {sale.agent.outstanding_balance_uzs}, USD {sale.agent.outstanding_balance_usd}")
+                    print(f"[DEBUG] Before adding sale debt - Agent {sale.agent.id} balance: UZS {sale.agent.balance_uzs}, USD {sale.agent.balance_usd}")
                     print(f"[DEBUG] Adding sale amount: {sale.total_sale_amount} {sale.sale_currency}")
                         
                     AgentDebtService.update_agent_debt(
@@ -270,7 +270,7 @@ class SaleService:
                     
                     # Refresh agent to see updated balance
                     sale.agent.refresh_from_db()
-                    print(f"[DEBUG] After adding sale debt - Agent {sale.agent.id} balance: UZS {sale.agent.outstanding_balance_uzs}, USD {sale.agent.outstanding_balance_usd}")
+                    print(f"[DEBUG] After adding sale debt - Agent {sale.agent.id} balance: UZS {sale.agent.balance_uzs}, USD {sale.agent.balance_usd}")
                     
                     # Create initial payment if provided
                     if sale.initial_payment_amount and sale.initial_payment_amount > 0:
@@ -279,7 +279,7 @@ class SaleService:
                         
                         # Refresh agent to see updated balance after payment
                         sale.agent.refresh_from_db()
-                        print(f"[DEBUG] After initial payment - Agent {sale.agent.id} balance: UZS {sale.agent.outstanding_balance_uzs}, USD {sale.agent.outstanding_balance_usd}")
+                        print(f"[DEBUG] After initial payment - Agent {sale.agent.id} balance: UZS {sale.agent.balance_uzs}, USD {sale.agent.balance_usd}")
                         print(f"[DEBUG] Initial payment created: {initial_payment.id if initial_payment else 'None'}")
                 
                 # Handle client payment

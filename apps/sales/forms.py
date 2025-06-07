@@ -10,7 +10,7 @@ from decimal import Decimal
 
 class AcquisitionChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):
-        currency_symbol = "UZS" if obj.transaction_currency == 'UZS' else "$"
+        currency_symbol = "UZS" if obj.currency == 'UZS' else "$"
         return (f"{obj.acquisition_date.strftime('%d.%m.%y')} - "
                 f"{obj.ticket.description[:25]}... ({obj.available_quantity} dona) - "
                 f"{currency_symbol} - {obj.supplier.name[:15]}")

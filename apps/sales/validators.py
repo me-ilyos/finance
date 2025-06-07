@@ -102,7 +102,7 @@ class SaleValidator:
         if not related_acquisition or not paid_to_account:
             return
         
-        sale_currency = related_acquisition.transaction_currency
+        sale_currency = related_acquisition.currency
         
         if paid_to_account.currency != sale_currency:
             raise ValidationError(

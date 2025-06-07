@@ -3,7 +3,7 @@
 
 {% block title %}Agent: {{ agent.name }}{% endblock %}
 
-{% block page_title %}Agent: {{ agent.name }}{% endblock %}
+{% block page_title %}Agent: {{ agent.name }} - Hisob Kitob{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -16,180 +16,248 @@
         {% endfor %}
     {% endif %}
 
-    <div class="row">
-        <!-- Agent Information -->
-        <div class="col-lg-4 mb-4">
-            <div class="card shadow">
-                <div class="card-header py-3">
-                    <h6 class="m-0 text-primary">
-                        <i class="fas fa-user-tie me-2"></i>Agent Ma'lumotlari
-                    </h6>
+    <!-- Transaction History Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h5 class="text-primary mb-0">
+                <i class="fas fa-history me-2"></i>Tranzaksiyalar Tarixi
+            </h5>
+            <small class="text-muted">Jami: {{ sales|length }} sotuv, {{ payments|length }} to'lov</small>
+        </div>
+        <div>
+            <button class="btn btn-success btn-sm me-2" data-bs-toggle="modal" data-bs-target="#paymentModal">
+                <i class="fas fa-plus me-1"></i>To'lov qo'shish
+            </button>
+            <a href="{% url 'contacts:agent-list' %}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left me-1"></i>Ortga
+            </a>
+        </div>
+    </div>
+
+    <!-- Transaction Table -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            {% if sales or payments %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 18%;">Sana va Vaqt</th>
+                                <th style="width: 18%;">Tip</th>
+                                <th style="width: 16%;" class="text-end">Sotuv (UZS)</th>
+                                <th style="width: 16%;" class="text-end">To'lov (UZS)</th>
+                                <th style="width: 16%;" class="text-end">Sotuv (USD)</th>
+                                <th style="width: 16%;" class="text-end">To'lov (USD)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transaction in transactions %}
+                                {% if transaction.type == 'sale' %}
+                                    <tr>
+                                        <td>
+                                            {{ transaction.date|date:"d.m.Y" }}
+                                            <br>
+                                            <small class="text-muted">{{ transaction.date|date:"H:i" }}</small>
+                                        </td>
+                                        <td>
+                                            <i class="fas fa-shopping-cart text-success me-1"></i>
+                                            <strong>Sotuv</strong>
+                                            <br>
+                                            <small class="text-muted">{{ transaction.sale.related_acquisition.ticket.description|truncatewords:3 }}</small>
+                                        </td>
+                                        <td class="text-end">
+                                            {% if transaction.sale.sale_currency == 'UZS' %}
+                                                <span class="text-success">+{{ transaction.sale.total_sale_amount|floatformat:0|intcomma }}</span>
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-end">-</td>
+                                        <td class="text-end">
+                                            {% if transaction.sale.sale_currency == 'USD' %}
+                                                <span class="text-success">+${{ transaction.sale.total_sale_amount|floatformat:2|intcomma }}</span>
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-end">-</td>
+                                    </tr>
+                                {% elif transaction.type == 'payment' %}
+                                    <tr>
+                                        <td>
+                                            {{ transaction.date|date:"d.m.Y" }}
+                                            <br>
+                                            <small class="text-muted">{{ transaction.date|date:"H:i" }}</small>
+                                        </td>
+                                        <td>
+                                            <i class="fas fa-credit-card text-primary me-1"></i>
+                                            <strong>To'lov</strong>
+                                            <br>
+                                            <small class="text-muted">{{ transaction.payment.paid_to_account.name }}</small>
+                                        </td>
+                                        <td class="text-end">-</td>
+                                        <td class="text-end">
+                                            {% if transaction.payment.currency == 'UZS' %}
+                                                <span class="text-primary">{{ transaction.payment.amount|floatformat:0|intcomma }}</span>
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-end">-</td>
+                                        <td class="text-end">
+                                            {% if transaction.payment.currency == 'USD' %}
+                                                <span class="text-primary">${{ transaction.payment.amount|floatformat:2|intcomma }}</span>
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endif %}
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr style="background-color: #3A4D8F; color: white;">
+                                <th colspan="2" class="text-center py-3">
+                                    <strong><i class="fas fa-calculator me-2"></i>Jami</strong>
+                                </th>
+                                <th class="text-end py-3">
+                                    <strong class="text-success">
+                                        +{{ uzs_sales|floatformat:0|intcomma }}
+                                    </strong>
+                                </th>
+                                <th class="text-end py-3">
+                                    <strong class="text-primary">
+                                        {{ uzs_payments|floatformat:0|intcomma }}
+                                    </strong>
+                                </th>
+                                <th class="text-end py-3">
+                                    <strong class="text-success">
+                                        {% if usd_sales > 0 %}+${{ usd_sales|floatformat:2|intcomma }}{% else %}-{% endif %}
+                                    </strong>
+                                </th>
+                                <th class="text-end py-3">
+                                    <strong class="text-primary">
+                                        {% if usd_payments > 0 %} ${{ usd_payments|floatformat:2|intcomma }}{% else %}-{% endif %}
+                                    </strong>
+                                </th>
+                            </tr>
+                        </tfoot>
+                    </table>
                 </div>
-                <div class="card-body">
-                    <div class="d-flex align-items-center mb-3">
-                        <i class="fas fa-user-circle fa-3x text-gray-400 me-3"></i>
-                        <div>
-                            <h4 class="mb-0 font-weight-bold text-gray-800">{{ agent.name }}</h4>
-                            {% if agent.balance_uzs > 0 or agent.balance_usd > 0 %}
-                                <span class="badge bg-success">
-                                    <i class="fas fa-check-circle me-1"></i>Agent Qarzdor
-                                </span>
-                            {% elif agent.balance_uzs < 0 or agent.balance_usd < 0 %}
-                                <span class="badge bg-warning text-dark">
-                                    <i class="fas fa-exclamation-triangle me-1"></i>Siz Qarzdorsiz
-                                </span>
+            {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-inbox fa-2x text-muted mb-3"></i>
+                    <h6 class="text-muted">Hech qanday tranzaksiya mavjud emas</h6>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Summary Section -->
+    <div class="card shadow-sm">
+        <div class="card-header" style="background-color: #3A4D8F;">
+            <h6 class="mb-0 text-white">
+                <i class="fas fa-chart-bar me-2"></i>Jami Ma'lumotlar
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <!-- UZS Column -->
+                <div class="col-md-6">
+                    <h6 class="text-center mb-3 text-primary">UZS Hisobot</h6>
+                    
+                    {% if agent.initial_balance_uzs != 0 %}
+                    <div class="d-flex justify-content-between py-1 border-bottom">
+                        <span>Boshlang'ich Balans:</span>
+                        <strong class="{% if agent.initial_balance_uzs > 0 %}text-success{% else %}text-danger{% endif %}">
+                            {{ agent.initial_balance_uzs|floatformat:0|intcomma }} UZS
+                        </strong>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="d-flex justify-content-between py-1">
+                        <span>Jami Sotuvlar:</span>
+                        <strong class="text-success">{{ uzs_sales|floatformat:0|intcomma }} UZS</strong>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between py-1">
+                        <span>Jami To'lovlar:</span>
+                        <strong class="text-primary">{{ uzs_payments|floatformat:0|intcomma }} UZS</strong>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between py-1 border-bottom">
+                        <span>Farq (Sotuv - To'lov):</span>
+                        <strong class="{% if uzs_difference > 0 %}text-success{% elif uzs_difference < 0 %}text-danger{% else %}text-muted{% endif %}">
+                            {{ uzs_difference|floatformat:0|intcomma }} UZS
+                        </strong>
+                    </div>
+                    
+                    <div class="mt-3 p-2 {% if uzs_running_balance > 0 %}bg-success-subtle{% elif uzs_running_balance < 0 %}bg-danger-subtle{% else %}bg-secondary-subtle{% endif %} rounded">
+                        <div class="d-flex justify-content-between">
+                            <span><strong>Joriy Balans:</strong></span>
+                            <strong class="{% if uzs_running_balance > 0 %}text-success{% elif uzs_running_balance < 0 %}text-danger{% else %}text-muted{% endif %}">
+                                {{ uzs_running_balance|floatformat:0|intcomma }} UZS
+                            </strong>
+                        </div>
+                        <div class="text-center mt-1">
+                            {% if uzs_running_balance > 0 %}
+                                <small class="text-success"><strong>🟢 Agent sizga {{ uzs_running_balance|floatformat:0|intcomma }} UZS qarzdor</strong></small>
+                            {% elif uzs_running_balance < 0 %}
+                                <small class="text-danger"><strong>🔴 Siz agentga {{ uzs_running_balance|floatformat:0|intcomma|cut:"-" }} UZS qarzdorsiz</strong></small>
                             {% else %}
-                                <span class="badge bg-secondary">
-                                    <i class="fas fa-equals me-1"></i>Balans 0
-                                </span>
+                                <small class="text-muted"><strong>⚫ Qarz yo'q</strong></small>
                             {% endif %}
                         </div>
                     </div>
-                    
-                    <div class="agent-details">
-                        {% if agent.phone_number %}
-                            <p><strong>Telefon:</strong> {{ agent.phone_number }}</p>
-                        {% endif %}
-                        <p><strong>Qo'shilgan:</strong> {{ agent.created_at|date:"d.m.Y H:i" }}</p>
-                        
-                        <!-- Balance Status -->
-                        <div class="mt-4 p-3 bg-light rounded">
-                            <h6 class="text-primary mb-3">
-                                <i class="fas fa-balance-scale me-2"></i>Balans
-                            </h6>
-                            <div class="row">
-                                <div class="col-6">
-                                    <div class="text-center">
-                                        <small class="text-muted d-block">UZS</small>
-                                        {% if agent.balance_uzs == 0 %}
-                                            <h5 class="mb-0 text-muted">0</h5>
-                                        {% elif agent.balance_uzs > 0 %}
-                                            <h5 class="mb-0 text-success">+{{ agent.balance_uzs|floatformat:0|intcomma }}</h5>
-                                            <small class="text-muted">Agent qarzdor</small>
-                                        {% else %}
-                                            <h5 class="mb-0 text-warning">{{ agent.balance_uzs|floatformat:0|intcomma }}</h5>
-                                            <small class="text-muted">Siz qarzdorsiz</small>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                                <div class="col-6">
-                                    <div class="text-center">
-                                        <small class="text-muted d-block">USD</small>
-                                        {% if agent.balance_usd == 0 %}
-                                            <h5 class="mb-0 text-muted">$0.00</h5>
-                                        {% elif agent.balance_usd > 0 %}
-                                            <h5 class="mb-0 text-success">+${{ agent.balance_usd|floatformat:2|intcomma }}</h5>
-                                            <small class="text-muted">Agent qarzdor</small>
-                                        {% else %}
-                                            <h5 class="mb-0 text-warning">${{ agent.balance_usd|floatformat:2|intcomma }}</h5>
-                                            <small class="text-muted">Siz qarzdorsiz</small>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="d-grid mt-3">
-                                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#paymentModal">
-                                    <i class="fas fa-money-bill-wave me-2"></i>To'lov Qo'shish
-                                </button>
-                            </div>
-                        </div>
-                        
-                        {% if agent.notes %}
-                            <div class="mt-3">
-                                <strong>Izohlar:</strong>
-                                <p class="text-muted">{{ agent.notes }}</p>
-                            </div>
-                        {% endif %}
-                    </div>
-                    
-                    <div class="mt-3">
-                        <a href="{% url 'contacts:agent-list' %}" class="btn btn-secondary btn-sm">
-                            <i class="fas fa-arrow-left me-1"></i>Ortga
-                        </a>
-                    </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- Transactions -->
-        <div class="col-lg-8 mb-4">
-            <div class="card shadow">
-                <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 text-primary">
-                        <i class="fas fa-history me-2"></i>Tranzaksiyalar
-                    </h6>
-                    <small class="text-muted">
-                        {{ agent_sales|length }} sotuv, {{ agent_payments|length }} to'lov
-                    </small>
-                </div>
-                <div class="card-body">
-                    {% if agent_sales or agent_payments %}
-                        <!-- Sales -->
-                        {% if agent_sales %}
-                            <h6 class="text-success mb-3">Sotuvlar</h6>
-                            <div class="table-responsive mb-4">
-                                <table class="table table-sm table-hover">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th>Sana</th>
-                                            <th>Chipta</th>
-                                            <th>Miqdor</th>
-                                            <th class="text-end">Summa</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for sale in agent_sales %}
-                                            <tr>
-                                                <td>{{ sale.sale_date|date:"d.m.Y" }}</td>
-                                                <td>
-                                                    {% if sale.related_acquisition.ticket %}
-                                                        {{ sale.related_acquisition.ticket.description|truncatewords:3 }}
-                                                    {% else %}
-                                                        Sotuv #{{ sale.id }}
-                                                    {% endif %}
-                                                </td>
-                                                <td>{{ sale.quantity }}</td>
-                                                <td class="text-end">{{ sale.total_sale_amount|floatformat:0|intcomma }} {{ sale.sale_currency }}</td>
-                                            </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        {% endif %}
-
-                        <!-- Payments -->
-                        {% if agent_payments %}
-                            <h6 class="text-primary mb-3">To'lovlar</h6>
-                            <div class="table-responsive">
-                                <table class="table table-sm table-hover">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th>Sana</th>
-                                            <th>Hisob</th>
-                                            <th class="text-end">Miqdor</th>
-                                            <th>Izoh</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for payment in agent_payments %}
-                                            <tr>
-                                                <td>{{ payment.payment_date|date:"d.m.Y" }}</td>
-                                                <td>{{ payment.paid_to_account.name }}</td>
-                                                <td class="text-end">{{ payment.amount|floatformat:0|intcomma }} {{ payment.currency }}</td>
-                                                <td>{{ payment.notes|default:"-"|truncatewords:3 }}</td>
-                                            </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        {% endif %}
-                    {% else %}
-                        <div class="text-center py-4">
-                            <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
-                            <p class="text-muted">Hozircha tranzaksiyalar mavjud emas.</p>
-                        </div>
+                <!-- USD Column -->
+                <div class="col-md-6 border-start">
+                    <h6 class="text-center mb-3 text-primary">USD Hisobot</h6>
+                    
+                    {% if agent.initial_balance_usd != 0 %}
+                    <div class="d-flex justify-content-between py-1 border-bottom">
+                        <span>Boshlang'ich Balans:</span>
+                        <strong class="{% if agent.initial_balance_usd > 0 %}text-success{% else %}text-danger{% endif %}">
+                            ${{ agent.initial_balance_usd|floatformat:2|intcomma }}
+                        </strong>
+                    </div>
                     {% endif %}
+                    
+                    <div class="d-flex justify-content-between py-1">
+                        <span>Jami Sotuvlar:</span>
+                        <strong class="text-success">${{ usd_sales|floatformat:2|intcomma }}</strong>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between py-1">
+                        <span>Jami To'lovlar:</span>
+                        <strong class="text-primary">${{ usd_payments|floatformat:2|intcomma }}</strong>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between py-1 border-bottom">
+                        <span>Farq (Sotuv - To'lov):</span>
+                        <strong class="{% if usd_difference > 0 %}text-success{% elif usd_difference < 0 %}text-danger{% else %}text-muted{% endif %}">
+                            ${{ usd_difference|floatformat:2|intcomma }}
+                        </strong>
+                    </div>
+                    
+                    <div class="mt-3 p-2 {% if usd_running_balance > 0 %}bg-success-subtle{% elif usd_running_balance < 0 %}bg-danger-subtle{% else %}bg-secondary-subtle{% endif %} rounded">
+                        <div class="d-flex justify-content-between">
+                            <span><strong>Joriy Balans:</strong></span>
+                            <strong class="{% if usd_running_balance > 0 %}text-success{% elif usd_running_balance < 0 %}text-danger{% else %}text-muted{% endif %}">
+                                ${{ usd_running_balance|floatformat:2|intcomma }}
+                            </strong>
+                        </div>
+                        <div class="text-center mt-1">
+                            {% if usd_running_balance > 0 %}
+                                <small class="text-success"><strong>🟢 Agent sizga ${{ usd_running_balance|floatformat:2|intcomma }} qarzdor</strong></small>
+                            {% elif usd_running_balance < 0 %}
+                                <small class="text-danger"><strong>🔴 Siz agentga ${{ usd_running_balance|floatformat:2|intcomma|cut:"-" }} qarzdorsiz</strong></small>
+                            {% else %}
+                                <small class="text-muted"><strong>⚫ Qarz yo'q</strong></small>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -203,40 +271,26 @@
             <form method="post" action="{% url 'contacts:agent-add-payment' agent.pk %}">
                 {% csrf_token %}
                 <div class="modal-header">
-                    <h5 class="modal-title" id="paymentModalLabel">{{ agent.name }}ga To'lov Qo'shish</h5>
+                    <h5 class="modal-title" id="paymentModalLabel">To'lov Qabul Qilish - {{ agent.name }}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="{{ payment_form.payment_date.id_for_label }}" class="form-label">{{ payment_form.payment_date.label }}</label>
-                        {{ payment_form.payment_date }}
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="{{ payment_form.amount.id_for_label }}" class="form-label">{{ payment_form.amount.label }}</label>
-                                {{ payment_form.amount }}
-                            </div>
+                    {% for field in payment_form %}
+                        <div class="mb-3">
+                            <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.help_text %}
+                                <small class="form-text text-muted">{{ field.help_text }}</small>
+                            {% endif %}
+                            {% for error in field.errors %}
+                                <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="{{ payment_form.currency.id_for_label }}" class="form-label">{{ payment_form.currency.label }}</label>
-                                {{ payment_form.currency }}
-                            </div>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label for="{{ payment_form.paid_to_account.id_for_label }}" class="form-label">{{ payment_form.paid_to_account.label }}</label>
-                        {{ payment_form.paid_to_account }}
-                    </div>
-                    <div class="mb-3">
-                        <label for="{{ payment_form.notes.id_for_label }}" class="form-label">{{ payment_form.notes.label }}</label>
-                        {{ payment_form.notes }}
-                    </div>
+                    {% endfor %}
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Bekor Qilish</button>
-                    <button type="submit" class="btn btn-primary">Saqlash</button>
+                    <button type="submit" class="btn btn-success">To'lov Qabul Qilish</button>
                 </div>
             </form>
         </div>

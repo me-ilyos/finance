@@ -90,7 +90,7 @@ class Sale(models.Model):
         
         # Basic validation only - detailed validation in validators
         if self.related_acquisition:
-            self.sale_currency = self.related_acquisition.transaction_currency
+            self.sale_currency = self.related_acquisition.currency
         
         # Basic buyer validation
         if self.agent and (self.client_full_name or self.client_id_number):
