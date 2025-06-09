@@ -10,18 +10,18 @@ class CurrencyChoices(models.TextChoices):
 
 class AccountTypeChoices(models.TextChoices):
     """Account type choices for financial accounts"""
-    CASH_UZS = 'CASH_UZS', 'Cash (UZS)'
-    CASH_USD = 'CASH_USD', 'Cash (USD)'
-    CARD_UZS = 'CARD_UZS', 'Card (UZS)'
-    CARD_USD = 'CARD_USD', 'Card (USD)'
-    BANK_UZS = 'BANK_UZS', 'Bank Account (UZS)'
-    BANK_USD = 'BANK_USD', 'Bank Account (USD)'
+    CASH_UZS = 'CASH_UZS', 'Naqd (UZS)'
+    CASH_USD = 'CASH_USD', 'Naqd (USD)'
+    CARD_UZS = 'CARD_UZS', 'Karta (UZS)'
+    CARD_USD = 'CARD_USD', 'Karta (USD)'
+    BANK_UZS = 'BANK_UZS', 'Hisob raqam (UZS)'
+    BANK_USD = 'BANK_USD', 'Hisob raqam (USD)'
 
 
 class TicketTypeChoices(models.TextChoices):
     """Ticket type choices for inventory management"""
-    AIR_TICKET = 'AIR_TICKET', 'Air Ticket'
-    TOUR_TICKET = 'TOUR_TICKET', 'Tour Ticket'
+    AIR_TICKET = 'AIR_TICKET', 'Chipta'
+    TOUR_TICKET = 'TOUR_TICKET', 'Tur paket'
 
 
 class PaymentType:
