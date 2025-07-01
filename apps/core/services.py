@@ -174,16 +174,15 @@ class DashboardService:
                 'balance_effect': 'expense'
             })
         
-        # Get general expenditures from this account (exclude supplier payments)
+        # Get expenditures from this account
         expenditures = Expenditure.objects.filter(
-            paid_from_account=account,
-            expenditure_type=Expenditure.ExpenditureType.GENERAL
+            paid_from_account=account
         )
         
         for exp in expenditures:
             transactions.append({
                 'date': exp.expenditure_date,
-                'type': 'Umumiy Xarajat',
+                'type': 'Xarajat',
                 'description': exp.description,
                 'amount': exp.amount,
                 'currency': exp.currency,
@@ -262,14 +261,13 @@ class DashboardService:
         
         # Get recent expenditures
         expenditures = Expenditure.objects.filter(
-            expenditure_date__gte=date_limit,
-            expenditure_type=Expenditure.ExpenditureType.GENERAL
+            expenditure_date__gte=date_limit
         ).select_related('paid_from_account')
         
         for exp in expenditures:
             transactions.append({
                 'date': exp.expenditure_date,
-                'type': 'Umumiy Xarajat',
+                'type': 'Xarajat',
                 'description': exp.description,
                 'amount': exp.amount,
                 'currency': exp.currency,
