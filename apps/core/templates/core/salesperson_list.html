@@ -1,0 +1,167 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Sotuvchilar Ro'yxati{% endblock %}
+
+{% block page_title %}Sotuvchilar Ro'yxati{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'sales/css/sales.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    
+    {% comment %} Display Django Messages {% endcomment %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <!-- Filter Form -->
+    {% include 'core/partials/salesperson_filter_form.html' %}
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Barcha Sotuvchilar</h6>
+        </div>
+        <div class="card-body">
+            {% include 'core/partials/salesperson_table.html' %}
+
+            {% if is_paginated %}
+            <nav aria-label="Page navigation" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1{% if query_params %}&{{ query_params }}{% endif %}" aria-label="First">
+                                <span aria-hidden="true">&laquo;&laquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if query_params %}&{{ query_params }}{% endif %}" aria-label="Previous">
+                                <span aria-hidden="true">&laquo;</span>
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">&laquo;&laquo;</span>
+                        </li>
+                        <li class="page-item disabled">
+                            <span class="page-link">&laquo;</span>
+                        </li>
+                    {% endif %}
+
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <li class="page-item active" aria-current="page"><span class="page-link">{{ num }}</span></li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item"><a class="page-link" href="?page={{ num }}{% if query_params %}&{{ query_params }}{% endif %}">{{ num }}</a></li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if query_params %}&{{ query_params }}{% endif %}" aria-label="Next">
+                                <span aria-hidden="true">&raquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if query_params %}&{{ query_params }}{% endif %}" aria-label="Last">
+                                <span aria-hidden="true">&raquo;&raquo;</span>
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">&raquo;</span>
+                        </li>
+                        <li class="page-item disabled">
+                            <span class="page-link">&raquo;&raquo;</span>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% include 'core/partials/salesperson_modal.html' %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'sales/js/sale_form.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle edit salesperson button clicks
+    document.querySelectorAll('.edit-salesperson-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const id = this.dataset.id;
+            const username = this.dataset.username;
+            const firstName = this.dataset.firstName;
+            const lastName = this.dataset.lastName;
+            const email = this.dataset.email;
+            const phone = this.dataset.phone;
+            const isActive = this.dataset.isActive === 'true';
+            
+            // Populate edit form
+            document.getElementById('edit_salesperson_id').value = id;
+            document.getElementById('edit_username').value = username;
+            document.getElementById('edit_first_name').value = firstName;
+            document.getElementById('edit_last_name').value = lastName;
+            document.getElementById('edit_email').value = email;
+            document.getElementById('edit_phone_number').value = phone;
+            document.getElementById('edit_is_active').checked = isActive;
+            
+            // Clear password fields for security
+            document.getElementById('edit_password').value = '';
+            document.getElementById('edit_password_confirm').value = '';
+            
+            // Set form action to edit endpoint
+            document.getElementById('editSalespersonForm').action = '{% url "core:salesperson-edit" 0 %}'.replace('0', id);
+            
+            // Show modal
+            new bootstrap.Modal(document.getElementById('editSalespersonModal')).show();
+        });
+    });
+    
+    // Handle toggle status button clicks
+    document.querySelectorAll('.toggle-status-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const id = this.dataset.id;
+            const action = this.dataset.action;
+            const actionText = action === 'activate' ? 'faollashtirish' : 'faolsizlashtirish';
+            
+            if (confirm(`Haqiqatan ham bu sotuvchini ${actionText}ni xohlaysizmi?`)) {
+                // Create and submit form
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '{% url "core:salesperson-toggle-status" 0 %}'.replace('0', id);
+                
+                // Add CSRF token
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = 'csrfmiddlewaretoken';
+                csrfInput.value = csrfToken;
+                form.appendChild(csrfInput);
+                
+                // Add action
+                const actionInput = document.createElement('input');
+                actionInput.type = 'hidden';
+                actionInput.name = 'action';
+                actionInput.value = action;
+                form.appendChild(actionInput);
+                
+                document.body.appendChild(form);
+                form.submit();
+            }
+        });
+    });
+});
+</script>
+{% endblock %} 

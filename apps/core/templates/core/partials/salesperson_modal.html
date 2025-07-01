@@ -1,0 +1,311 @@
+<!-- Salesperson Add Modal -->
+<div class="modal fade" id="salespersonModal" tabindex="-1" aria-labelledby="salespersonModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="salespersonModalLabel">
+                    <i class="fas fa-user-plus"></i> Yangi Sotuvchi Qo'shish
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" id="salespersonForm">
+                <div class="modal-body">
+                    {% csrf_token %}
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ salesperson_form.username.id_for_label }}" class="form-label">
+                                    {{ salesperson_form.username.label }}
+                                    <span class="text-danger">*</span>
+                                </label>
+                                {{ salesperson_form.username }}
+                                {% if salesperson_form.username.help_text %}
+                                    <div class="form-text">{{ salesperson_form.username.help_text }}</div>
+                                {% endif %}
+                                {% if salesperson_form.username.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in salesperson_form.username.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ salesperson_form.email.id_for_label }}" class="form-label">
+                                    {{ salesperson_form.email.label }}
+                                </label>
+                                {{ salesperson_form.email }}
+                                {% if salesperson_form.email.help_text %}
+                                    <div class="form-text">{{ salesperson_form.email.help_text }}</div>
+                                {% endif %}
+                                {% if salesperson_form.email.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in salesperson_form.email.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ salesperson_form.first_name.id_for_label }}" class="form-label">
+                                    {{ salesperson_form.first_name.label }}
+                                    <span class="text-danger">*</span>
+                                </label>
+                                {{ salesperson_form.first_name }}
+                                {% if salesperson_form.first_name.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in salesperson_form.first_name.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ salesperson_form.last_name.id_for_label }}" class="form-label">
+                                    {{ salesperson_form.last_name.label }}
+                                    <span class="text-danger">*</span>
+                                </label>
+                                {{ salesperson_form.last_name }}
+                                {% if salesperson_form.last_name.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in salesperson_form.last_name.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ salesperson_form.password.id_for_label }}" class="form-label">
+                                    {{ salesperson_form.password.label }}
+                                    <span class="text-danger">*</span>
+                                </label>
+                                {{ salesperson_form.password }}
+                                {% if salesperson_form.password.help_text %}
+                                    <div class="form-text">{{ salesperson_form.password.help_text }}</div>
+                                {% endif %}
+                                {% if salesperson_form.password.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in salesperson_form.password.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ salesperson_form.password_confirm.id_for_label }}" class="form-label">
+                                    {{ salesperson_form.password_confirm.label }}
+                                    <span class="text-danger">*</span>
+                                </label>
+                                {{ salesperson_form.password_confirm }}
+                                {% if salesperson_form.password_confirm.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in salesperson_form.password_confirm.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ salesperson_form.phone_number.id_for_label }}" class="form-label">
+                                    {{ salesperson_form.phone_number.label }}
+                                </label>
+                                {{ salesperson_form.phone_number }}
+                                {% if salesperson_form.phone_number.help_text %}
+                                    <div class="form-text">{{ salesperson_form.phone_number.help_text }}</div>
+                                {% endif %}
+                                {% if salesperson_form.phone_number.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in salesperson_form.phone_number.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <div class="form-check mt-4">
+                                    {{ salesperson_form.is_active }}
+                                    <label class="form-check-label" for="{{ salesperson_form.is_active.id_for_label }}">
+                                        {{ salesperson_form.is_active.label }}
+                                    </label>
+                                </div>
+                                {% if salesperson_form.is_active.help_text %}
+                                    <div class="form-text">{{ salesperson_form.is_active.help_text }}</div>
+                                {% endif %}
+                                {% if salesperson_form.is_active.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in salesperson_form.is_active.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Eslatma:</strong> Yangi foydalanuvchi va sotuvchi bir vaqtda yaratiladi.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Bekor qilish
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Saqlash
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Salesperson Edit Modal -->
+<div class="modal fade" id="editSalespersonModal" tabindex="-1" aria-labelledby="editSalespersonModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editSalespersonModalLabel">
+                    <i class="fas fa-user-edit"></i> Sotuvchini Tahrirlash
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" id="editSalespersonForm">
+                <div class="modal-body">
+                    {% csrf_token %}
+                    <input type="hidden" id="edit_salesperson_id" name="salesperson_id">
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_username" class="form-label">
+                                    Foydalanuvchi nomi
+                                    <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" class="form-control form-control-sm" id="edit_username" name="username" required>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_email" class="form-label">
+                                    Email manzil
+                                </label>
+                                <input type="email" class="form-control form-control-sm" id="edit_email" name="email">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_first_name" class="form-label">
+                                    Ism
+                                    <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" class="form-control form-control-sm" id="edit_first_name" name="first_name" required>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_last_name" class="form-label">
+                                    Familiya
+                                    <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" class="form-control form-control-sm" id="edit_last_name" name="last_name" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_phone_number" class="form-label">
+                                    Telefon raqami
+                                </label>
+                                <input type="text" class="form-control form-control-sm" id="edit_phone_number" name="phone_number">
+                                <div class="form-text">Masalan: +998901234567</div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <div class="form-check mt-4">
+                                    <input class="form-check-input" type="checkbox" id="edit_is_active" name="is_active" checked>
+                                    <label class="form-check-label" for="edit_is_active">
+                                        Faol sotuvchi
+                                    </label>
+                                </div>
+                                <div class="form-text">Nofaol sotuvchilar tizimga kira olmaydi</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_password" class="form-label">
+                                    Yangi parol
+                                </label>
+                                <input type="password" class="form-control form-control-sm" id="edit_password" name="password">
+                                <div class="form-text">Bo'sh qoldiring agar parolni o'zgartirmoqchi bo'lmasangiz</div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_password_confirm" class="form-label">
+                                    Parolni tasdiqlang
+                                </label>
+                                <input type="password" class="form-control form-control-sm" id="edit_password_confirm" name="password_confirm">
+                                <div class="form-text">Parolni qayta kiriting</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Eslatma:</strong> Parolni o'zgartirish ixtiyoriy. Bo'sh qoldirsangiz, avvalgi parol saqlanib qoladi.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Bekor qilish
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Yangilash
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div> 

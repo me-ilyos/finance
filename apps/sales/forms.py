@@ -135,6 +135,10 @@ class SaleForm(forms.ModelForm):
                 if field in self.cleaned_data
             }
             
+            # Add salesperson if it exists in cleaned_data
+            if 'salesperson' in self.cleaned_data:
+                sale_data['salesperson'] = self.cleaned_data['salesperson']
+            
             if self.instance.pk:
                 # Update existing sale
                 for field, value in sale_data.items():
