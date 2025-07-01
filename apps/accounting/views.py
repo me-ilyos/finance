@@ -1,14 +1,11 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import redirect
 from django.views.generic import ListView, CreateView
 from django.contrib import messages
 from django.urls import reverse_lazy
-from django.utils import timezone
 from django.db.models import Sum, Q, Value, DecimalField
 from django.db.models.functions import Coalesce
-from datetime import timedelta
 from .models import Expenditure, FinancialAccount
 from .forms import ExpenditureForm, FinancialAccountForm
-from .services import ExpenditureService, FinancialAccountService
 from apps.core.services import DateFilterService
 import logging
 
@@ -28,7 +25,6 @@ class FinancialAccountListView(ListView):
         context = super().get_context_data(**kwargs)
         context['account_form'] = FinancialAccountForm()
         
-        # Calculate totals by currency
         queryset = self.get_queryset()
         totals = queryset.aggregate(
             total_balance_uzs=Coalesce(Sum('current_balance', filter=Q(currency='UZS')), Value(0, output_field=DecimalField())),
@@ -46,7 +42,7 @@ class FinancialAccountCreateView(CreateView):
     
     def form_valid(self, form):
         try:
-            account = FinancialAccountService.create_financial_account(form.cleaned_data)
+            account = form.save()
             messages.success(
                 self.request, 
                 f"Moliyaviy hisob '{account.name}' muvaffaqiyatli yaratildi. "
@@ -72,13 +68,11 @@ class ExpenditureListView(ListView):
     def get_queryset(self):
         queryset = super().get_queryset().select_related('paid_from_account').order_by('-expenditure_date')
         
-        # Store filter parameters for context
         self.filter_period = self.request.GET.get('filter_period')
         self.date_filter = self.request.GET.get('date_filter')
         self.start_date = self.request.GET.get('start_date')
         self.end_date = self.request.GET.get('end_date')
 
-        # Apply date filtering using service
         start_date, end_date = DateFilterService.get_date_range(
             self.filter_period, self.date_filter, self.start_date, self.end_date
         )
@@ -89,13 +83,11 @@ class ExpenditureListView(ListView):
         context = super().get_context_data(**kwargs)
         context['expenditure_form'] = ExpenditureForm()
         
-        # Use the service to get filter context
         filter_context = DateFilterService.get_filter_context(
             self.filter_period, self.date_filter, self.start_date, self.end_date
         )
         context.update(filter_context)
 
-        # Calculate totals for the current filtered queryset
         filtered_queryset = self.get_queryset()
         totals = filtered_queryset.aggregate(
             total_amount_uzs=Coalesce(Sum('amount', filter=Q(currency='UZS')), Value(0, output_field=DecimalField())),
@@ -103,7 +95,6 @@ class ExpenditureListView(ListView):
         )
         context['totals'] = totals
         
-        # Preserve query parameters for pagination
         query_params = self.request.GET.copy()
         if 'page' in query_params:
             del query_params['page']
@@ -119,7 +110,7 @@ class ExpenditureCreateView(CreateView):
     
     def form_valid(self, form):
         try:
-            ExpenditureService.create_expenditure(form.cleaned_data)
+            form.save()
             messages.success(self.request, "Xarajat muvaffaqiyatli qo'shildi.")
             return redirect(self.success_url)
         except Exception as e:
