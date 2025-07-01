@@ -4,6 +4,7 @@ from .validators import SaleValidator
 from .services import SaleService
 from apps.contacts.models import Agent
 from apps.accounting.models import FinancialAccount
+from apps.core.models import Salesperson
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from decimal import Decimal
@@ -59,6 +60,7 @@ class SaleForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        self.current_user = kwargs.pop('current_user', None)
         super().__init__(*args, **kwargs)
 
         original_field = self.fields['related_acquisition']
@@ -97,6 +99,15 @@ class SaleForm(forms.ModelForm):
                 paid_to_account=cleaned_data.get('paid_to_account'),
                 current_sale_id=self.instance.pk if self.instance else None
             )
+            
+            # Add salesperson to validated data
+            if self.current_user:
+                try:
+                    current_salesperson = self.current_user.salesperson_profile
+                    validated_data['salesperson'] = current_salesperson
+                except Salesperson.DoesNotExist:
+                    if not self.current_user.is_superuser:
+                        raise ValidationError("Faqat sotuvchilar sotuv amalga oshira oladi.")
             
             # Update cleaned_data with validated values
             cleaned_data.update(validated_data)

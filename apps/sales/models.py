@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from apps.inventory.models import Acquisition
 from apps.accounting.models import FinancialAccount
+from apps.core.models import Salesperson
 from decimal import Decimal
 
 
@@ -17,6 +18,15 @@ class Sale(models.Model):
         Acquisition, 
         on_delete=models.PROTECT,
         related_name='sales_from_this_batch'
+    )
+
+    salesperson = models.ForeignKey(
+        Salesperson,
+        on_delete=models.PROTECT,
+        related_name='sales_made',
+        null=True,
+        blank=True,
+        help_text="Bu sotuvni amalga oshirgan sotuvchi"
     )
 
     agent = models.ForeignKey(

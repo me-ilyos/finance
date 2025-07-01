@@ -4,19 +4,20 @@ from .models import Sale
 class SaleAdmin(admin.ModelAdmin):
     list_display = (
         'id', 'sale_date', 'display_ticket_info', 'quantity', 'related_acquisition',
-        'buyer_display', 'total_sale_amount', 'sale_currency', 
+        'buyer_display', 'salesperson', 'total_sale_amount', 'sale_currency', 
         'profit', 'paid_to_account'
     )
-    list_filter = ('sale_date', 'sale_currency', 'agent', 'paid_to_account')
+    list_filter = ('sale_date', 'sale_currency', 'agent', 'salesperson', 'paid_to_account')
     search_fields = (
         'related_acquisition__ticket__description', 'agent__name', 'client_full_name',
+        'salesperson__user__username', 'salesperson__user__first_name', 'salesperson__user__last_name',
         'related_acquisition__id',
         'paid_to_account__name'
     )
     readonly_fields = ('sale_currency', 'total_sale_amount', 'profit', 'created_at', 'updated_at', 'display_ticket_description')
     fieldsets = (
         (None, {
-            'fields': ('sale_date', 'display_ticket_description', 'quantity', 'related_acquisition')
+            'fields': ('sale_date', 'salesperson', 'display_ticket_description', 'quantity', 'related_acquisition')
         }),
         ('Buyer Information', {
             'fields': ('agent', 'client_full_name', 'client_id_number')

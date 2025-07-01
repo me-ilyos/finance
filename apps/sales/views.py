@@ -2,6 +2,8 @@ from django.shortcuts import render, redirect
 from django.urls import reverse_lazy
 from django.views.generic import ListView
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import JsonResponse, HttpResponse
 from .models import Sale
 from .forms import SaleForm
@@ -11,6 +13,7 @@ from datetime import timedelta, date
 from decimal import Decimal
 from apps.inventory.models import Acquisition
 from apps.accounting.models import FinancialAccount
+from apps.core.models import Salesperson
 from django.db.models import Sum, Case, When, Value, DecimalField
 from django.core.exceptions import ValidationError
 from apps.core.services import DateFilterService
@@ -22,19 +25,32 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class SaleListView(ListView):
+class SaleListView(LoginRequiredMixin, ListView):
     model = Sale
     template_name = 'sales/sale_list.html'
     context_object_name = 'sales'
     paginate_by = 20
+    login_url = '/core/login/'
 
     def get_queryset(self):
         queryset = super().get_queryset().select_related(
             'related_acquisition', 
             'related_acquisition__ticket',
             'agent', 
-            'paid_to_account'
+            'paid_to_account',
+            'salesperson',
+            'salesperson__user'
         ).order_by('-sale_date', '-created_at')
+        
+        # Filter by current salesperson - only show their own sales
+        try:
+            current_salesperson = self.request.user.salesperson_profile
+            queryset = queryset.filter(salesperson=current_salesperson)
+        except Salesperson.DoesNotExist:
+            # If user is not a salesperson (admin/superuser), show all sales
+            if not self.request.user.is_superuser:
+                # Non-salesperson, non-admin users see no sales
+                queryset = queryset.none()
         
         # Store filter parameters for context
         self.filter_period = self.request.GET.get('filter_period')
@@ -53,7 +69,7 @@ class SaleListView(ListView):
         context = super().get_context_data(**kwargs)
         
         if 'sale_form' not in context:
-            context['sale_form'] = SaleForm()
+            context['sale_form'] = SaleForm(current_user=self.request.user)
         
         # Use the service to get filter context
         filter_context = DateFilterService.get_filter_context(
@@ -102,7 +118,7 @@ class SaleListView(ListView):
 
     def post(self, request, *args, **kwargs):
         """Handle sale creation using service layer"""
-        form = SaleForm(request.POST)
+        form = SaleForm(request.POST, current_user=request.user)
         if form.is_valid():
             try:
                 sale = form.save()
@@ -130,6 +146,7 @@ class SaleListView(ListView):
         return self.render_to_response(context)
 
 
+@login_required(login_url='/core/login/')
 def get_accounts_for_acquisition_currency(request, acquisition_id):
     """AJAX view to get accounts matching acquisition currency"""
     try:
@@ -149,6 +166,7 @@ def get_accounts_for_acquisition_currency(request, acquisition_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+@login_required(login_url='/core/login/')
 def export_sales_excel(request):
     """Export sales data to Excel (XLSX) format"""
     try:
@@ -157,8 +175,20 @@ def export_sales_excel(request):
             'related_acquisition', 
             'related_acquisition__ticket',
             'agent', 
-            'paid_to_account'
+            'paid_to_account',
+            'salesperson',
+            'salesperson__user'
         ).order_by('-sale_date', '-created_at')
+        
+        # Filter by current salesperson - only export their own sales
+        try:
+            current_salesperson = request.user.salesperson_profile
+            queryset = queryset.filter(salesperson=current_salesperson)
+        except Salesperson.DoesNotExist:
+            # If user is not a salesperson (admin/superuser), export all sales
+            if not request.user.is_superuser:
+                # Non-salesperson, non-admin users export no sales
+                queryset = queryset.none()
         
         # Apply the same filtering as the list view
         filter_period = request.GET.get('filter_period')
