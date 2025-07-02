@@ -1,8 +1,7 @@
 from django import forms
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from django.db import transaction
-from .models import Salesperson
+
 
 class LoginForm(forms.Form):
     username = forms.CharField(
@@ -94,29 +93,4 @@ class SalespersonForm(forms.Form):
             if password != password_confirm:
                 raise ValidationError("Parollar mos kelmaydi.")
         
-        return cleaned_data
-
-    def save(self):
-        """Create both User and Salesperson in one transaction"""
-        try:
-            with transaction.atomic():
-                # Create user
-                user = User.objects.create_user(
-                    username=self.cleaned_data['username'],
-                    first_name=self.cleaned_data['first_name'],
-                    last_name=self.cleaned_data['last_name'],
-                    email=self.cleaned_data.get('email', ''),
-                    password=self.cleaned_data['password']
-                )
-                
-                # Create salesperson
-                salesperson = Salesperson.objects.create(
-                    user=user,
-                    phone_number=self.cleaned_data.get('phone_number', ''),
-                    is_active=self.cleaned_data.get('is_active', True)
-                )
-                
-                return salesperson
-                
-        except Exception as e:
-            raise ValidationError(f"Sotuvchini yaratishda xatolik: {e}") 
+        return cleaned_data 

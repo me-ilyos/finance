@@ -1,13 +1,12 @@
 from django import forms
-from .models import Sale, Acquisition
-from .validators import SaleValidator
-from .services import SaleService
+from .models import Sale
+from apps.inventory.models import Acquisition
 from apps.contacts.models import Agent
 from apps.accounting.models import FinancialAccount
 from apps.core.models import Salesperson
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from decimal import Decimal
+
 
 class AcquisitionChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):
@@ -15,6 +14,7 @@ class AcquisitionChoiceField(forms.ModelChoiceField):
         return (f"{obj.acquisition_date.strftime('%d.%m.%y')} - "
                 f"{obj.ticket.description[:25]}... ({obj.available_quantity} dona) - "
                 f"{currency_symbol} - {obj.supplier.name[:15]}")
+
 
 class SaleForm(forms.ModelForm):
     class Meta:
@@ -63,6 +63,7 @@ class SaleForm(forms.ModelForm):
         self.current_user = kwargs.pop('current_user', None)
         super().__init__(*args, **kwargs)
 
+        # Custom acquisition field with better display
         original_field = self.fields['related_acquisition']
         self.fields['related_acquisition'] = AcquisitionChoiceField(
             queryset=Acquisition.objects.filter(available_quantity__gt=0)
@@ -74,91 +75,70 @@ class SaleForm(forms.ModelForm):
             widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
         )
         
+        # Set up other fields
         self.fields['agent'].queryset = Agent.objects.all().order_by('name')
         self.fields['paid_to_account'].queryset = FinancialAccount.objects.filter(is_active=True).order_by('name')
         self.fields['paid_to_account'].required = False
         self.fields['initial_payment_amount'].required = False
         self.fields['client_full_name'].required = False
         self.fields['client_id_number'].required = False
+        
+        # Set current datetime as default
+        self.fields['sale_date'].initial = timezone.now().strftime('%Y-%m-%dT%H:%M')
 
     def clean(self):
-        """Use centralized validation"""
+        """Basic validation - business logic will be in views"""
         cleaned_data = super().clean()
         
-        try:
-            # Use centralized validator
-            validated_data = SaleValidator.validate_sale_data(
-                sale_date=cleaned_data.get('sale_date'),
-                related_acquisition=cleaned_data.get('related_acquisition'),
-                quantity=cleaned_data.get('quantity'),
-                agent=cleaned_data.get('agent'),
-                client_full_name=cleaned_data.get('client_full_name'),
-                client_id_number=cleaned_data.get('client_id_number'),
-                unit_sale_price=cleaned_data.get('unit_sale_price'),
-                initial_payment_amount=cleaned_data.get('initial_payment_amount'),
-                paid_to_account=cleaned_data.get('paid_to_account'),
-                current_sale_id=self.instance.pk if self.instance else None
-            )
-            
-            # Add salesperson to validated data
-            if self.current_user:
-                try:
-                    current_salesperson = self.current_user.salesperson_profile
-                    validated_data['salesperson'] = current_salesperson
-                except Salesperson.DoesNotExist:
-                    if not self.current_user.is_superuser:
-                        raise ValidationError("Faqat sotuvchilar sotuv amalga oshira oladi.")
-            
-            # Update cleaned_data with validated values
-            cleaned_data.update(validated_data)
-            
-        except ValidationError as e:
-            if hasattr(e, 'error_dict'):
-                for field, errors in e.error_dict.items():
-                    for error in errors:
-                        self.add_error(field, error.message if hasattr(error, 'message') else str(error))
-            else:
-                self.add_error(None, str(e))
+        agent = cleaned_data.get('agent')
+        client_full_name = cleaned_data.get('client_full_name')
+        client_id_number = cleaned_data.get('client_id_number')
+        quantity = cleaned_data.get('quantity')
+        unit_sale_price = cleaned_data.get('unit_sale_price')
+        related_acquisition = cleaned_data.get('related_acquisition')
+        initial_payment_amount = cleaned_data.get('initial_payment_amount')
+        paid_to_account = cleaned_data.get('paid_to_account')
 
-        return cleaned_data
-
-    def save(self, commit=True):
-        """Use service to create/update sale"""
-        if not commit:
-            return super().save(commit=False)
+        # Basic buyer validation
+        if agent and (client_full_name or client_id_number):
+            raise ValidationError("Bir vaqtning o'zida ham agent, ham mijoz ma'lumotlarini kiritish mumkin emas.")
         
-        try:
-            # Prepare sale data for service
-            sale_data = {
-                field: self.cleaned_data[field] 
-                for field in self.Meta.fields 
-                if field in self.cleaned_data
-            }
+        if not agent and not (client_full_name and client_id_number):
+            raise ValidationError("Agentni tanlang yoki mijozning to'liq ismi va ID raqamini kiriting.")
+
+        # Basic quantity and price validation
+        if quantity and quantity <= 0:
+            self.add_error('quantity', "Miqdor noldan katta bo'lishi kerak.")
+        
+        if unit_sale_price and unit_sale_price <= 0:
+            self.add_error('unit_sale_price', "Sotish narxi noldan katta bo'lishi kerak.")
+
+        # Basic stock validation
+        if related_acquisition and quantity:
+            effective_available_qty = related_acquisition.available_quantity
             
-            # Add salesperson if it exists in cleaned_data
-            if 'salesperson' in self.cleaned_data:
-                sale_data['salesperson'] = self.cleaned_data['salesperson']
+            # For updates, add back the original quantity
+            if self.instance.pk and self.instance.related_acquisition_id == related_acquisition.id:
+                effective_available_qty += getattr(self.instance, 'quantity', 0)
             
-            if self.instance.pk:
-                # Update existing sale
-                for field, value in sale_data.items():
-                    setattr(self.instance, field, value)
-                
-                # Get original data for service
-                original_data = {
-                    'quantity': getattr(self.instance, 'quantity', 0),
-                    'related_acquisition_id': getattr(self.instance, 'related_acquisition_id', None),
-                    'total_sale_amount': getattr(self.instance, 'total_sale_amount', Decimal('0.00')),
-                    'agent_id': getattr(self.instance, 'agent_id', None),
-                    'sale_currency': getattr(self.instance, 'sale_currency', None),
-                    'paid_to_account_id': getattr(self.instance, 'paid_to_account_id', None),
-                }
-                
-                return SaleService.update_sale(self.instance, original_data)
-            else:
-                # Create new sale
-                return SaleService.create_sale(sale_data)
-                
-        except Exception as e:
-            self.add_error(None, f"Sotuvni saqlashda xatolik: {e}")
-            return None 
+            if quantity > effective_available_qty:
+                self.add_error('quantity', f"Kiritilgan miqdor ({quantity}) mavjud miqdordan ({effective_available_qty}) ortiq.")
+
+        # Basic payment validation
+        if agent and initial_payment_amount and initial_payment_amount > 0 and not paid_to_account:
+            self.add_error('paid_to_account', "Boshlang'ich to'lov kiritilsa, to'lov hisobi tanlanishi shart.")
+
+        # Currency matching validation
+        if related_acquisition and paid_to_account and paid_to_account.currency != related_acquisition.currency:
+            self.add_error('paid_to_account', f"Hisob valyutasi ({paid_to_account.currency}) sotuv valyutasiga ({related_acquisition.currency}) mos kelmadi.")
+
+        # Add salesperson for validation
+        if self.current_user:
+            try:
+                current_salesperson = self.current_user.salesperson_profile
+                cleaned_data['salesperson'] = current_salesperson
+            except Salesperson.DoesNotExist:
+                if not self.current_user.is_superuser:
+                    raise ValidationError("Faqat sotuvchilar sotuv amalga oshira oladi.")
+
+        return cleaned_data 

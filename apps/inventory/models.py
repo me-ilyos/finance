@@ -51,7 +51,6 @@ class Acquisition(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
-        """Save with debt/payment management"""
         # Calculate total amount
         self.total_amount = self.unit_price * self.initial_quantity
         
@@ -60,25 +59,7 @@ class Acquisition(models.Model):
             self.available_quantity = self.initial_quantity
         
         self.full_clean()
-        is_new = self.pk is None
         super().save(*args, **kwargs)
-        
-        # Handle debt/payment for new acquisitions
-        if is_new:
-            # Step 1: Always add debt to supplier (because acquisition was made)
-            self.supplier.add_debt(self.total_amount, self.currency)
-            
-            # Step 2: If automatic payment, create payment record to clear the debt
-            if self.paid_from_account:
-                from apps.contacts.models import SupplierPayment
-                SupplierPayment.objects.create(
-                    supplier=self.supplier,
-                    payment_date=self.acquisition_date,
-                    amount=self.total_amount,
-                    currency=self.currency,
-                    paid_from_account=self.paid_from_account,
-                    notes=f"Avtomatik to'lov - Xarid #{self.pk}"
-                )
 
     def __str__(self):
         return f"{self.supplier.name} - {self.ticket.description} ({self.available_quantity}/{self.initial_quantity})"

@@ -1,9 +1,6 @@
 from django import forms
 from .models import Acquisition, Ticket
-from apps.contacts.models import Supplier
-from apps.accounting.models import FinancialAccount
 from django.utils import timezone
-from django.core.exceptions import ValidationError
 
 
 class AcquisitionForm(forms.ModelForm):
@@ -19,8 +16,7 @@ class AcquisitionForm(forms.ModelForm):
     )
     ticket_departure_date_time = forms.DateTimeField(
         widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control form-control-sm'}),
-        label="Uchish Vaqti",
-        initial=timezone.now().strftime('%Y-%m-%dT%H:%M')
+        label="Uchish Vaqti"
     )
     ticket_arrival_date_time = forms.DateTimeField(
         required=False, 
@@ -52,48 +48,7 @@ class AcquisitionForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['acquisition_date'].initial = timezone.now().strftime('%Y-%m-%dT%H:%M')
-        
-        # Filter accounts by currency when editing
-        if self.instance.pk and self.instance.currency:
-            self.fields['paid_from_account'].queryset = FinancialAccount.objects.filter(
-                currency=self.instance.currency, is_active=True
-            )
-
-    def clean(self):
-        """Basic validation - let model handle the rest"""
-        cleaned_data = super().clean()
-        
-        # Basic currency matching validation
-        paid_from_account = cleaned_data.get('paid_from_account')
-        currency = cleaned_data.get('currency')
-        
-        if paid_from_account and currency and paid_from_account.currency != currency:
-            raise ValidationError(
-                f"Payment account currency ({paid_from_account.currency}) "
-                f"must match acquisition currency ({currency})"
-            )
-        
-        return cleaned_data
-
-    def save(self, commit=True):
-        """Create ticket and acquisition"""
-        if not commit:
-            return super().save(commit=False)
-        
-        # Create ticket first
-        ticket = Ticket.objects.create(
-            ticket_type=self.cleaned_data['ticket_type'],
-            description=self.cleaned_data['ticket_description'],
-            departure_date_time=self.cleaned_data['ticket_departure_date_time'],
-            arrival_date_time=self.cleaned_data.get('ticket_arrival_date_time')
-        )
-        
-        # Create acquisition
-        acquisition = super().save(commit=False)
-        acquisition.ticket = ticket
-        
-        if commit:
-            acquisition.save()
-        
-        return acquisition
+        # Set current datetime as default for both acquisition and ticket departure
+        current_time = timezone.now().strftime('%Y-%m-%dT%H:%M')
+        self.fields['acquisition_date'].initial = current_time
+        self.fields['ticket_departure_date_time'].initial = current_time

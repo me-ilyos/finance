@@ -1,10 +1,12 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import ListView
 from django.http import HttpResponse
-from .models import Acquisition
+from django.contrib import messages
+from .models import Acquisition, Ticket
 from .forms import AcquisitionForm
 from apps.core.services import DateFilterService
+from apps.contacts.models import SupplierPayment
 from django.utils import timezone
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
@@ -21,20 +23,21 @@ class AcquisitionListView(ListView):
     paginate_by = 20
 
     def get_queryset(self):
-        queryset = super().get_queryset().select_related(
+        return self._get_filtered_queryset()
+
+    def _get_filtered_queryset(self):
+        """Centralized queryset filtering to avoid duplication"""
+        queryset = self.model.objects.select_related(
             'supplier', 'ticket', 'paid_from_account'
         ).order_by('-acquisition_date', '-created_at')
         
-        # Get filter parameters
-        filter_period = self.request.GET.get('filter_period')
-        date_filter = self.request.GET.get('date_filter')
-        start_date = self.request.GET.get('start_date')
-        end_date = self.request.GET.get('end_date')
-
-        # Use centralized date filtering service
+        # Apply date filtering
         try:
             start_date_obj, end_date_obj = DateFilterService.get_date_range(
-                filter_period, date_filter, start_date, end_date
+                self.request.GET.get('filter_period'),
+                self.request.GET.get('date_filter'),
+                self.request.GET.get('start_date'),
+                self.request.GET.get('end_date')
             )
             queryset = queryset.filter(acquisition_date__date__range=[start_date_obj, end_date_obj])
         except ValueError as e:
@@ -70,17 +73,47 @@ class AcquisitionListView(ListView):
         return context
 
     def post(self, request, *args, **kwargs):
-        """Handle acquisition creation"""
+        """Handle acquisition creation with ticket and business logic"""
         form = AcquisitionForm(request.POST)
         if form.is_valid():
             try:
-                acquisition = form.save()
+                # Create ticket first
+                ticket = Ticket.objects.create(
+                    ticket_type=form.cleaned_data['ticket_type'],
+                    description=form.cleaned_data['ticket_description'],
+                    departure_date_time=form.cleaned_data['ticket_departure_date_time'],
+                    arrival_date_time=form.cleaned_data.get('ticket_arrival_date_time')
+                )
+                
+                # Create acquisition
+                acquisition = form.save(commit=False)
+                acquisition.ticket = ticket
+                acquisition.save()
+                
+                # Handle business logic moved from model
+                # Step 1: Always add debt to supplier
+                acquisition.supplier.add_debt(acquisition.total_amount, acquisition.currency)
+                
+                # Step 2: If automatic payment, create payment record
+                if acquisition.paid_from_account:
+                    SupplierPayment.objects.create(
+                        supplier=acquisition.supplier,
+                        payment_date=acquisition.acquisition_date,
+                        amount=acquisition.total_amount,
+                        currency=acquisition.currency,
+                        paid_from_account=acquisition.paid_from_account,
+                        notes=f"Avtomatik to'lov - Xarid #{acquisition.pk}"
+                    )
+                
+                messages.success(request, "Xarid muvaffaqiyatli qo'shildi.")
                 logger.info(f"Created acquisition {acquisition.id}")
                 return redirect(reverse_lazy('inventory:acquisition-list'))
             except Exception as e:
                 logger.error(f"Error creating acquisition: {e}")
+                messages.error(request, "Xarid yaratishda xatolik yuz berdi.")
         else:
             logger.warning(f"Form validation errors: {form.errors}")
+            messages.error(request, "Ma'lumotlarni tekshiring.")
         
         # Re-render with form errors
         self.object_list = self.get_queryset()
@@ -89,51 +122,40 @@ class AcquisitionListView(ListView):
 
 
 def export_acquisitions_excel(request):
-    """Export acquisitions data to Excel (XLSX) format"""
+    """Export acquisitions data to Excel format"""
     try:
-        # Get the same queryset as the list view
+        # Use the same filtering logic as the list view
         queryset = Acquisition.objects.select_related(
             'supplier', 'ticket', 'paid_from_account'
         ).order_by('-acquisition_date', '-created_at')
         
-        # Apply the same filtering as the list view
-        filter_period = request.GET.get('filter_period')
-        date_filter = request.GET.get('date_filter')
-        start_date = request.GET.get('start_date')
-        end_date = request.GET.get('end_date')
-
+        # Apply date filtering (reuse logic)
         try:
             start_date_obj, end_date_obj = DateFilterService.get_date_range(
-                filter_period, date_filter, start_date, end_date
+                request.GET.get('filter_period'),
+                request.GET.get('date_filter'),
+                request.GET.get('start_date'),
+                request.GET.get('end_date')
             )
             queryset = queryset.filter(acquisition_date__date__range=[start_date_obj, end_date_obj])
         except ValueError:
-            # Fall back to today's data on error
             today = timezone.localdate()
             queryset = queryset.filter(acquisition_date__date=today)
+            start_date_obj = end_date_obj = today
 
-        # Create Excel workbook and worksheet
+        # Create Excel workbook
         wb = Workbook()
         ws = wb.active
         ws.title = "Xaridlar Ro'yxati"
 
-        # Define headers (matching the table structure)
+        # Headers
         headers = [
-            'Sana',
-            'Ta\'minotchi',
-            'Chipta turi', 
-            'Chipta manzili',
-            'Mavjud miqdori',
-            'Boshlang\'ich miqdori',
-            'Birlik narxi',
-            'Jami summa',
-            'Valyuta',
-            'To\'lov hisobi',
-            'To\'lov holati',
-            'Izohlar'
+            'Sana', 'Ta\'minotchi', 'Chipta turi', 'Chipta manzili',
+            'Mavjud miqdori', 'Boshlang\'ich miqdori', 'Birlik narxi',
+            'Jami summa', 'Valyuta', 'To\'lov hisobi', 'To\'lov holati', 'Izohlar'
         ]
 
-        # Write headers
+        # Write headers with styling
         for col_num, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col_num, value=header)
             cell.font = Font(bold=True, color="FFFFFF")
@@ -141,86 +163,47 @@ def export_acquisitions_excel(request):
             cell.alignment = Alignment(horizontal="center", vertical="center")
 
         # Write data rows
-        for row_num, acquisition in enumerate(queryset, 2):
-            # Format data to match template display
-            acquisition_date = acquisition.acquisition_date.strftime('%d.%m.%Y')
-            supplier_name = acquisition.supplier.name
-            ticket_type = acquisition.ticket.get_ticket_type_display()
-            ticket_description = acquisition.ticket.description
-            available_quantity = acquisition.available_quantity
-            initial_quantity = acquisition.initial_quantity
-            
-            # Format price and total based on currency
-            if acquisition.currency == 'UZS':
-                unit_price = f"{acquisition.unit_price:,.0f}"
-                total_amount = f"{acquisition.total_amount:,.0f}"
-            else:  # USD
-                unit_price = f"{acquisition.unit_price:,.2f}"
-                total_amount = f"{acquisition.total_amount:,.2f}"
-            
-            currency = acquisition.currency
-            payment_account = acquisition.paid_from_account.name if acquisition.paid_from_account else "To'lanmagan"
-            payment_status = "To'langan" if acquisition.paid_from_account else "To'lanmagan"
-            notes = acquisition.notes or ""
-
-            # Write row data
+        for row_num, acq in enumerate(queryset, 2):
+            # Format data
             row_data = [
-                acquisition_date,
-                supplier_name,
-                ticket_type,
-                ticket_description,
-                available_quantity,
-                initial_quantity,
-                unit_price,
-                total_amount,
-                currency,
-                payment_account,
-                payment_status,
-                notes
+                acq.acquisition_date.strftime('%d.%m.%Y'),
+                acq.supplier.name,
+                acq.ticket.get_ticket_type_display(),
+                acq.ticket.description,
+                acq.available_quantity,
+                acq.initial_quantity,
+                f"{acq.unit_price:,.0f}" if acq.currency == 'UZS' else f"{acq.unit_price:,.2f}",
+                f"{acq.total_amount:,.0f}" if acq.currency == 'UZS' else f"{acq.total_amount:,.2f}",
+                acq.currency,
+                acq.paid_from_account.name if acq.paid_from_account else "To'lanmagan",
+                "To'langan" if acq.paid_from_account else "To'lanmagan",
+                acq.notes or ""
             ]
 
             for col_num, value in enumerate(row_data, 1):
                 cell = ws.cell(row=row_num, column=col_num, value=value)
-                
-                # Center align numeric columns
-                if col_num in [5, 6, 7, 8]:  # quantity and price columns
-                    cell.alignment = Alignment(horizontal="center")
-                elif col_num in [9, 10, 11]:  # currency, account, status columns
+                # Center align numeric and status columns
+                if col_num in [5, 6, 7, 8, 9, 10, 11]:
                     cell.alignment = Alignment(horizontal="center")
 
         # Auto-adjust column widths
         for column in ws.columns:
-            max_length = 0
-            column_letter = get_column_letter(column[0].column)
-            
-            for cell in column:
-                try:
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except:
-                    pass
-            
-            # Set minimum and maximum width limits
+            max_length = max(len(str(cell.value or "")) for cell in column)
             adjusted_width = min(max(max_length + 2, 12), 50)
-            ws.column_dimensions[column_letter].width = adjusted_width
+            ws.column_dimensions[get_column_letter(column[0].column)].width = adjusted_width
 
-        # Create HTTP response with Excel file
+        # Create response
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
         
-        # Set filename based on filter
-        if start_date_obj and end_date_obj:
-            if start_date_obj == end_date_obj:
-                filename = f"xaridlar_{start_date_obj.strftime('%d.%m.%Y')}.xlsx"
-            else:
-                filename = f"xaridlar_{start_date_obj.strftime('%d.%m.%Y')}_dan_{end_date_obj.strftime('%d.%m.%Y')}_gacha.xlsx"
+        # Set filename
+        if start_date_obj == end_date_obj:
+            filename = f"xaridlar_{start_date_obj.strftime('%d.%m.%Y')}.xlsx"
         else:
-            filename = f"xaridlar_{timezone.now().strftime('%d.%m.%Y')}.xlsx"
+            filename = f"xaridlar_{start_date_obj.strftime('%d.%m.%Y')}_dan_{end_date_obj.strftime('%d.%m.%Y')}_gacha.xlsx"
             
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        
-        # Save workbook to response
         wb.save(response)
         
         logger.info(f"Exported {queryset.count()} acquisitions to Excel")

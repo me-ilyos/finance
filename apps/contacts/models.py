@@ -1,12 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-from decimal import Decimal
-from django.db import transaction
-from apps.core.constants import CurrencyChoices, BusinessLimits
-import logging
-
-logger = logging.getLogger(__name__)
+from apps.core.constants import CurrencyChoices
 
 
 class BaseContact(models.Model):
@@ -79,13 +74,6 @@ class BasePayment(models.Model):
         super().clean()
         if self.amount <= 0:
             raise ValidationError("To'lov miqdori musbat bo'lishi kerak.")
-        
-        account_field = getattr(self, 'paid_to_account', None) or getattr(self, 'paid_from_account', None)
-        if account_field and account_field.currency != self.currency:
-            raise ValidationError(
-                f"Hisob valyutasi ({account_field.currency}) "
-                f"to'lov valyutasi ({self.currency}) bilan mos kelmaydi."
-            )
 
     def __str__(self):
         contact = getattr(self, 'agent', None) or getattr(self, 'supplier', None)
@@ -96,16 +84,6 @@ class SupplierPayment(BasePayment):
     supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name='payments')
     paid_from_account = models.ForeignKey('accounting.FinancialAccount', on_delete=models.PROTECT)
 
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        is_new = self.pk is None
-        super().save(*args, **kwargs)
-        
-        if is_new:
-            self.supplier.reduce_debt(self.amount, self.currency)
-            self.paid_from_account.current_balance -= self.amount
-            self.paid_from_account.save(update_fields=['current_balance', 'updated_at'])
-
     class Meta(BasePayment.Meta):
         verbose_name = "Ta'minotchi To'lovi"
         verbose_name_plural = "Ta'minotchi To'lovlari"
@@ -114,16 +92,6 @@ class SupplierPayment(BasePayment):
 class AgentPayment(BasePayment):
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='payments')
     paid_to_account = models.ForeignKey('accounting.FinancialAccount', on_delete=models.PROTECT)
-
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        is_new = self.pk is None
-        super().save(*args, **kwargs)
-        
-        if is_new:
-            self.agent.reduce_debt(self.amount, self.currency)
-            self.paid_to_account.current_balance += self.amount
-            self.paid_to_account.save(update_fields=['current_balance', 'updated_at'])
 
     class Meta(BasePayment.Meta):
         verbose_name = "Agent To'lovi"

@@ -1,0 +1,197 @@
+from django.utils import timezone
+from datetime import timedelta
+from apps.sales.models import Sale
+from apps.accounting.models import Expenditure
+from apps.contacts.models import AgentPayment, SupplierPayment
+
+
+class DashboardService:
+    @staticmethod
+    def get_account_transactions(account):
+        """Get all transactions for a specific account"""
+        transactions = []
+        
+        # Get client sales paid directly to this account
+        client_sales = Sale.objects.filter(
+            paid_to_account=account,
+            agent__isnull=True
+        ).select_related('related_acquisition__ticket')
+        
+        for sale in client_sales:
+            ticket_desc = (sale.related_acquisition.ticket.get_ticket_type_display() 
+                         if sale.related_acquisition and sale.related_acquisition.ticket 
+                         else "Unknown Ticket")
+            
+            transactions.append({
+                'date': sale.sale_date,
+                'type': 'Sotuv (Mijoz)',
+                'description': f"{ticket_desc} - {sale.client_full_name or 'N/A'}",
+                'amount': sale.total_sale_amount,
+                'currency': sale.sale_currency,
+                'balance_effect': 'income'
+            })
+        
+        # Get agent payments to this account
+        agent_payments = AgentPayment.objects.filter(
+            paid_to_account=account
+        ).select_related('agent')
+        
+        for payment in agent_payments:
+            transactions.append({
+                'date': payment.payment_date,
+                'type': 'Agent To\'lovi',
+                'description': f"Agent: {payment.agent.name}",
+                'amount': payment.amount,
+                'currency': payment.currency,
+                'balance_effect': 'income'
+            })
+        
+        # Get supplier payments from this account
+        supplier_payments = SupplierPayment.objects.filter(
+            paid_from_account=account
+        ).select_related('supplier')
+        
+        for payment in supplier_payments:
+            transactions.append({
+                'date': payment.payment_date,
+                'type': 'Ta\'minotchi To\'lovi',
+                'description': f"Ta'minotchi: {payment.supplier.name}",
+                'amount': payment.amount,
+                'currency': payment.currency,
+                'balance_effect': 'expense'
+            })
+        
+        # Get expenditures from this account
+        expenditures = Expenditure.objects.filter(paid_from_account=account)
+        
+        for exp in expenditures:
+            transactions.append({
+                'date': exp.expenditure_date,
+                'type': 'Xarajat',
+                'description': exp.description,
+                'amount': exp.amount,
+                'currency': exp.currency,
+                'balance_effect': 'expense'
+            })
+        
+        transactions.sort(key=lambda t: t['date'], reverse=True)
+        return transactions
+
+    @staticmethod
+    def get_recent_all_transactions(limit_days=30):
+        """Get recent transactions from all accounts"""
+        date_limit = timezone.now() - timedelta(days=limit_days)
+        transactions = []
+        
+        # Get recent client sales
+        client_sales = Sale.objects.filter(
+            sale_date__gte=date_limit,
+            agent__isnull=True
+        ).select_related('related_acquisition__ticket', 'paid_to_account')
+        
+        for sale in client_sales:
+            ticket_desc = (sale.related_acquisition.ticket.get_ticket_type_display() 
+                         if sale.related_acquisition and sale.related_acquisition.ticket 
+                         else "Unknown Ticket")
+            
+            transactions.append({
+                'date': sale.sale_date,
+                'type': 'Sotuv (Mijoz)',
+                'description': f"{ticket_desc} - {sale.client_full_name or 'N/A'}",
+                'amount': sale.total_sale_amount,
+                'currency': sale.sale_currency,
+                'balance_effect': 'income',
+                'account': sale.paid_to_account.name if sale.paid_to_account else 'N/A'
+            })
+        
+        # Get recent agent payments
+        agent_payments = AgentPayment.objects.filter(
+            payment_date__gte=date_limit
+        ).select_related('agent', 'paid_to_account')
+        
+        for payment in agent_payments:
+            transactions.append({
+                'date': payment.payment_date,
+                'type': 'Agent To\'lovi',
+                'description': f"Agent: {payment.agent.name}",
+                'amount': payment.amount,
+                'currency': payment.currency,
+                'balance_effect': 'income',
+                'account': payment.paid_to_account.name if payment.paid_to_account else 'N/A'
+            })
+        
+        # Get recent supplier payments
+        supplier_payments = SupplierPayment.objects.filter(
+            payment_date__gte=date_limit
+        ).select_related('supplier', 'paid_from_account')
+        
+        for payment in supplier_payments:
+            transactions.append({
+                'date': payment.payment_date,
+                'type': 'Ta\'minotchi To\'lovi',
+                'description': f"Ta'minotchi: {payment.supplier.name}",
+                'amount': payment.amount,
+                'currency': payment.currency,
+                'balance_effect': 'expense',
+                'account': payment.paid_from_account.name if payment.paid_from_account else 'N/A'
+            })
+        
+        # Get recent expenditures
+        expenditures = Expenditure.objects.filter(
+            expenditure_date__gte=date_limit
+        ).select_related('paid_from_account')
+        
+        for exp in expenditures:
+            transactions.append({
+                'date': exp.expenditure_date,
+                'type': 'Xarajat',
+                'description': exp.description,
+                'amount': exp.amount,
+                'currency': exp.currency,
+                'balance_effect': 'expense',
+                'account': exp.paid_from_account.name if exp.paid_from_account else 'N/A'
+            })
+        
+        transactions.sort(key=lambda t: t['date'], reverse=True)
+        return transactions
+
+    @staticmethod
+    def calculate_account_statistics(accounts):
+        """Calculate comprehensive account statistics"""
+        if not accounts:
+            return {
+                'total_count': 0,
+                'positive_count': 0,
+                'total_uzs': 0,
+                'total_usd': 0,
+                'currency_count': 0,
+                'negative_count': 0
+            }
+        
+        uzs_total = 0
+        usd_total = 0
+        positive_count = 0
+        negative_count = 0
+        currencies = set()
+        
+        for account in accounts:
+            if account.current_balance > 0:
+                positive_count += 1
+            elif account.current_balance < 0:
+                negative_count += 1
+            
+            if account.currency == 'UZS':
+                uzs_total += account.current_balance
+            elif account.currency == 'USD':
+                usd_total += account.current_balance
+            
+            currencies.add(account.currency)
+        
+        return {
+            'total_count': len(accounts),
+            'positive_count': positive_count,
+            'negative_count': negative_count,
+            'total_uzs': uzs_total,
+            'total_usd': usd_total,
+            'currency_count': len(currencies)
+        } 

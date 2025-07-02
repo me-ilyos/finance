@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load sales_filters %}
+{% load core_filters %}
 
 {% block title %}{{ salesperson.user.get_full_name|default:salesperson.user.username }} - Sotuvchilar Tafsiloti{% endblock %}
 
@@ -127,20 +128,16 @@
                                 <small class="text-muted">{{ sale.related_acquisition|ticket_description_short }}</small>
                             </td>
                             <td class="py-2 px-3">{{ sale|buyer_display }}</td>
-                            <td class="py-2 px-3 text-center">{{ sale.quantity|safe_intcomma }}</td>
+                            <td class="py-2 px-3 text-center">{{ sale.quantity|floatformat:0 }}</td>
                             
                             <!-- Unit Price Column -->
                             <td class="price-col standout-col align-middle">
                                 <div class="container-fluid gx-0"><div class="row gx-0">
                                     <div class="col text-end small border-end">
-                                        {% with sale|currency_unit_price_in_column:"UZS" as uzs_price %}
-                                            {% if uzs_price %}{{ uzs_price|currency_display:"UZS" }}{% else %}-{% endif %}
-                                        {% endwith %}
+                                        {% if sale.sale_currency == "UZS" %}{{ sale.unit_sale_price|format_currency:"UZS" }}{% else %}-{% endif %}
                                     </div>
                                     <div class="col text-end small">
-                                        {% with sale|currency_unit_price_in_column:"USD" as usd_price %}
-                                            {% if usd_price %}{{ usd_price|currency_display:"USD" }}{% else %}-{% endif %}
-                                        {% endwith %}
+                                        {% if sale.sale_currency == "USD" %}{{ sale.unit_sale_price|format_currency:"USD" }}{% else %}-{% endif %}
                                     </div>
                                 </div></div>
                             </td>
@@ -149,24 +146,20 @@
                             <td class="price-col standout-col align-middle">
                                 <div class="container-fluid gx-0"><div class="row gx-0">
                                     <div class="col text-end small border-end">
-                                        {% with sale|currency_amount_in_column:"UZS" as uzs_amount %}
-                                            {% if uzs_amount %}
-                                                {{ uzs_amount|currency_display:"UZS" }}
-                                                {% if sale|has_initial_payment %}
-                                                    <br><span class="initial-payment">({{ sale.initial_payment_amount|currency_display:"UZS" }})</span>
-                                                {% endif %}
-                                            {% else %}-{% endif %}
-                                        {% endwith %}
+                                        {% if sale.sale_currency == "UZS" %}
+                                            {{ sale.total_sale_amount|format_currency:"UZS" }}
+                                            {% if sale|has_initial_payment %}
+                                                <br><span class="initial-payment">({{ sale.initial_payment_amount|format_currency:"UZS" }})</span>
+                                            {% endif %}
+                                        {% else %}-{% endif %}
                                     </div>
                                     <div class="col text-end small">
-                                        {% with sale|currency_amount_in_column:"USD" as usd_amount %}
-                                            {% if usd_amount %}
-                                                {{ usd_amount|currency_display:"USD" }}
-                                                {% if sale|has_initial_payment %}
-                                                    <br><span class="initial-payment">({{ sale.initial_payment_amount|currency_display:"USD" }})</span>
-                                                {% endif %}
-                                            {% else %}-{% endif %}
-                                        {% endwith %}
+                                        {% if sale.sale_currency == "USD" %}
+                                            {{ sale.total_sale_amount|format_currency:"USD" }}
+                                            {% if sale|has_initial_payment %}
+                                                <br><span class="initial-payment">({{ sale.initial_payment_amount|format_currency:"USD" }})</span>
+                                            {% endif %}
+                                        {% else %}-{% endif %}
                                     </div>
                                 </div></div>
                             </td>
@@ -175,32 +168,28 @@
                             <td class="price-col standout-col align-middle">
                                 <div class="container-fluid gx-0"><div class="row gx-0">
                                     <div class="col text-end small border-end">
-                                        {% with sale|currency_profit_in_column:"UZS" as uzs_profit %}
-                                            {% if uzs_profit %}<span class="profit-value">{{ uzs_profit|currency_display:"UZS" }}</span>{% else %}-{% endif %}
-                                        {% endwith %}
+                                        {% if sale.sale_currency == "UZS" %}<span class="profit-value">{{ sale.profit|format_currency:"UZS" }}</span>{% else %}-{% endif %}
                                     </div>
                                     <div class="col text-end small">
-                                        {% with sale|currency_profit_in_column:"USD" as usd_profit %}
-                                            {% if usd_profit %}<span class="profit-value">{{ usd_profit|currency_display:"USD" }}</span>{% else %}-{% endif %}
-                                        {% endwith %}
+                                        {% if sale.sale_currency == "USD" %}<span class="profit-value">{{ sale.profit|format_currency:"USD" }}</span>{% else %}-{% endif %}
                                     </div>
                                 </div></div>
                             </td>
                             
                             <!-- Payment Status Column -->
                             <td class="py-2 px-3">
-                                {% with sale|payment_status_display as payment_info %}
-                                    {% if payment_info.type == 'account' %}
-                                        {{ payment_info.name }}
-                                    {% elif payment_info.type == 'agent_debt' %}
-                                        <span class="badge {{ payment_info.badge }}">{{ payment_info.text }}</span>
-                                        {% if payment_info.payment_text %}
-                                            <small class="d-block text-muted">{{ payment_info.payment_text }}</small>
-                                        {% endif %}
-                                    {% elif payment_info.type == 'unpaid' %}
-                                        <span class="badge {{ payment_info.badge }}">{{ payment_info.text }}</span>
+                                {% if sale.paid_to_account %}
+                                    {{ sale.paid_to_account.name }}
+                                {% elif sale.agent %}
+                                    <span class="badge bg-warning text-dark">Agent Qarzi</span>
+                                    {% if sale|has_initial_payment %}
+                                        <small class="d-block text-muted">Boshlang'ich to'lov: {{ sale.initial_payment_amount|format_currency:sale.sale_currency }}</small>
+                                    {% else %}
+                                        <small class="d-block text-muted">Boshlang'ich to'lov qilinmagan</small>
                                     {% endif %}
-                                {% endwith %}
+                                {% else %}
+                                    <span class="badge bg-danger">To'lanmagan</span>
+                                {% endif %}
                             </td>
                         </tr>
                         {% empty %}
@@ -214,18 +203,18 @@
                     <tfoot class="totals-row">
                         <tr>
                             <td colspan="3" class="text-end fw-bold">Jami:</td>
-                            <td class="text-center fw-bold">{{ totals.total_quantity|default:0|safe_intcomma }}</td>
+                            <td class="text-center fw-bold">{{ totals.total_quantity|default:0|floatformat:0 }}</td>
                             <td class="price-col standout-col align-middle"></td> {# Empty Unit Price Total #}
                             <td class="price-col standout-col align-middle">
                                 <div class="container-fluid gx-0"><div class="row gx-0">
-                                    <div class="col text-end small border-end fw-bold">{{ totals.total_sum_uzs|default:0|currency_display:"UZS" }}</div>
-                                    <div class="col text-end small fw-bold">{{ totals.total_sum_usd|default:0|currency_display:"USD" }}</div>
+                                    <div class="col text-end small border-end fw-bold">{{ totals.total_sum_uzs|default:0|format_currency:"UZS" }}</div>
+                                    <div class="col text-end small fw-bold">{{ totals.total_sum_usd|default:0|format_currency:"USD" }}</div>
                                 </div></div>
                             </td>
                             <td class="price-col standout-col align-middle">
                                 <div class="container-fluid gx-0"><div class="row gx-0">
-                                    <div class="col text-end small border-end fw-bold">{{ totals.total_profit_uzs|default:0|currency_display:"UZS" }}</div>
-                                    <div class="col text-end small fw-bold">{{ totals.total_profit_usd|default:0|currency_display:"USD" }}</div>
+                                    <div class="col text-end small border-end fw-bold">{{ totals.total_profit_uzs|default:0|format_currency:"UZS" }}</div>
+                                    <div class="col text-end small fw-bold">{{ totals.total_profit_usd|default:0|format_currency:"USD" }}</div>
                                 </div></div>
                             </td>
                             <td></td> {# Empty cell for payment status total #}

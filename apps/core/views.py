@@ -9,18 +9,17 @@ from django.contrib import messages
 from django.urls import reverse_lazy
 from django.db.models import Q, Count, Sum, Case, When, Value, DecimalField
 from django.utils import timezone
-from datetime import timedelta
+from django.contrib.auth.models import User
+from django.core.paginator import Paginator
+from django.db import transaction
 from .forms import LoginForm, SalespersonForm
 from .models import Salesperson
 from apps.sales.models import Sale
-from .services import DashboardService, DateFilterService
+from .services import DateFilterService
+from .dashboard_service import DashboardService
+from .utils import ExcelExportService
 from apps.accounting.models import FinancialAccount
-from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment, PatternFill
-from openpyxl.utils import get_column_letter
-from django.http import HttpResponse
 import logging
-from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
@@ -58,54 +57,64 @@ class SalespersonListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         return self.request.user.is_superuser
 
     def get_queryset(self):
-        queryset = super().get_queryset().select_related('user').order_by('-created_at')
-        
-        # Store filter parameters for context
-        self.filter_period = self.request.GET.get('filter_period')
-        self.date_filter = self.request.GET.get('date_filter')
-        self.start_date = self.request.GET.get('start_date')
-        self.end_date = self.request.GET.get('end_date')
+        return self._get_filtered_queryset()
 
-        # Apply date filtering using service for creation date
-        start_date, end_date = DateFilterService.get_date_range(
-            self.filter_period, self.date_filter, self.start_date, self.end_date
-        )
+    def _get_filtered_queryset(self):
+        """Centralized queryset filtering to avoid duplication"""
+        queryset = self.model.objects.select_related('user').order_by('-created_at')
         
-        # Store date range for sales filtering
-        self.sales_start_date = start_date
-        self.sales_end_date = end_date
-        
-        # Annotate with sales statistics for the filtered period
-        queryset = queryset.annotate(
-            total_sales_count=Count(
-                'sales_made',
-                filter=Q(sales_made__sale_date__date__range=[start_date, end_date])
-            ),
-            total_sales_uzs=Sum(
-                Case(
-                    When(
-                        sales_made__sale_date__date__range=[start_date, end_date],
-                        sales_made__sale_currency='UZS',
-                        then='sales_made__total_sale_amount'
-                    ),
-                    default=Value(0),
-                    output_field=DecimalField()
-                )
-            ),
-            total_sales_usd=Sum(
-                Case(
-                    When(
-                        sales_made__sale_date__date__range=[start_date, end_date],
-                        sales_made__sale_currency='USD',
-                        then='sales_made__total_sale_amount'
-                    ),
-                    default=Value(0),
-                    output_field=DecimalField()
+        # Apply date filtering for sales statistics
+        try:
+            start_date, end_date = DateFilterService.get_date_range(
+                self.request.GET.get('filter_period'),
+                self.request.GET.get('date_filter'),
+                self.request.GET.get('start_date'),
+                self.request.GET.get('end_date')
+            )
+            
+            # Store date range for context
+            self.sales_start_date = start_date
+            self.sales_end_date = end_date
+            
+            # Annotate with sales statistics for the filtered period
+            queryset = queryset.annotate(
+                total_sales_count=Count(
+                    'sales_made',
+                    filter=Q(sales_made__sale_date__date__range=[start_date, end_date])
+                ),
+                total_sales_uzs=Sum(
+                    Case(
+                        When(
+                            sales_made__sale_date__date__range=[start_date, end_date],
+                            sales_made__sale_currency='UZS',
+                            then='sales_made__total_sale_amount'
+                        ),
+                        default=Value(0),
+                        output_field=DecimalField()
+                    )
+                ),
+                total_sales_usd=Sum(
+                    Case(
+                        When(
+                            sales_made__sale_date__date__range=[start_date, end_date],
+                            sales_made__sale_currency='USD',
+                            then='sales_made__total_sale_amount'
+                        ),
+                        default=Value(0),
+                        output_field=DecimalField()
+                    )
                 )
             )
-        )
+        except ValueError as e:
+            logger.warning(f"Date filter error: {e}")
+            today = timezone.localdate()
+            self.sales_start_date = self.sales_end_date = today
+            queryset = queryset.annotate(
+                total_sales_count=Value(0),
+                total_sales_uzs=Value(0),
+                total_sales_usd=Value(0)
+            )
         
-        # Don't filter by creation date for salespeople - show all salespeople with their sales stats
         return queryset
 
     def get_context_data(self, **kwargs):
@@ -116,7 +125,10 @@ class SalespersonListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         
         # Use the service to get filter context
         filter_context = DateFilterService.get_filter_context(
-            self.filter_period, self.date_filter, self.start_date, self.end_date
+            self.request.GET.get('filter_period'),
+            self.request.GET.get('date_filter'),
+            self.request.GET.get('start_date'),
+            self.request.GET.get('end_date')
         )
         context.update(filter_context)
 
@@ -150,11 +162,11 @@ class SalespersonListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         return context
 
     def post(self, request, *args, **kwargs):
-        """Handle salesperson creation"""
+        """Handle salesperson creation with business logic"""
         form = SalespersonForm(request.POST)
         if form.is_valid():
             try:
-                salesperson = form.save()
+                salesperson = self._create_salesperson(form)
                 if salesperson:
                     messages.success(request, "Yangi sotuvchi muvaffaqiyatli qo'shildi.")
                     return redirect(reverse_lazy('core:salesperson-list'))
@@ -176,10 +188,35 @@ class SalespersonListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         
         return self.render_to_response(context)
 
+    def _create_salesperson(self, form):
+        """Create salesperson with business logic (moved from form)"""
+        try:
+            with transaction.atomic():
+                # Create user
+                user = User.objects.create_user(
+                    username=form.cleaned_data['username'],
+                    first_name=form.cleaned_data['first_name'],
+                    last_name=form.cleaned_data['last_name'],
+                    email=form.cleaned_data.get('email', ''),
+                    password=form.cleaned_data['password']
+                )
+                
+                # Create salesperson
+                salesperson = Salesperson.objects.create(
+                    user=user,
+                    phone_number=form.cleaned_data.get('phone_number', ''),
+                    is_active=form.cleaned_data.get('is_active', True)
+                )
+                
+                return salesperson
+        except Exception as e:
+            logger.error(f"Error creating salesperson: {e}")
+            raise
+
 
 @login_required
 def dashboard_view(request):
-    """Dashboard view using service layer for data aggregation"""
+    """Dashboard view with business logic moved from service"""
     selected_account = None
     selected_account_id = request.GET.get('account_id')
 
@@ -194,32 +231,50 @@ def dashboard_view(request):
             messages.error(request, "Tanlangan hisob topilmadi.")
             return redirect('core:dashboard')
 
-    # Get pagination parameters
+    # Get active accounts
+    accounts = FinancialAccount.objects.filter(is_active=True)
+    
+    # Get transactions with pagination
     transactions_page = request.GET.get('page', 1)
     transactions_per_page = 10
-
-    # Get dashboard data using service
-    dashboard_data = DashboardService.get_dashboard_data(
-        selected_account, 
-        transactions_page, 
-        transactions_per_page
-    )
+    
+    if selected_account:
+        all_transactions = DashboardService.get_account_transactions(selected_account)
+    else:
+        all_transactions = DashboardService.get_recent_all_transactions()
+    
+    transactions_paginator = Paginator(all_transactions, transactions_per_page)
+    transactions_page_obj = transactions_paginator.get_page(transactions_page)
+    transactions = transactions_page_obj.object_list
+    
+    # Calculate statistics
+    stats = DashboardService.calculate_account_statistics(accounts)
     
     context = {
-        **dashboard_data,
+        'accounts': accounts,
+        'selected_account': selected_account,
+        'transactions': transactions,
+        'transactions_paginator': transactions_paginator,
+        'transactions_page_obj': transactions_page_obj,
+        'stats': stats,
         'page_title': 'Boshqaruv Paneli'
     }
     
     return render(request, 'core/dashboard.html', context)
+
+
+
+
 
 @login_required
 def logout_view(request):
     logout(request)
     return redirect('core:login')
 
+
 @login_required
 def salesperson_export_excel(request):
-    """Export salesperson data to Excel (XLSX) format"""
+    """Export salesperson data to Excel format"""
     if not request.user.is_superuser:
         messages.error(request, "Bu funktsiyaga faqat administratorlar kirish huquqiga ega.")
         return redirect('core:salesperson-list')
@@ -229,14 +284,16 @@ def salesperson_export_excel(request):
         queryset = Salesperson.objects.select_related('user').order_by('-created_at')
         
         # Apply the same filtering as the list view
-        filter_period = request.GET.get('filter_period')
-        date_filter = request.GET.get('date_filter')
-        start_date = request.GET.get('start_date')
-        end_date = request.GET.get('end_date')
-
-        start_date_obj, end_date_obj = DateFilterService.get_date_range(
-            filter_period, date_filter, start_date, end_date
-        )
+        try:
+            start_date_obj, end_date_obj = DateFilterService.get_date_range(
+                request.GET.get('filter_period'),
+                request.GET.get('date_filter'),
+                request.GET.get('start_date'),
+                request.GET.get('end_date')
+            )
+        except ValueError:
+            today = timezone.localdate()
+            start_date_obj = end_date_obj = today
         
         # Annotate with sales statistics for the filtered period
         queryset = queryset.annotate(
@@ -268,74 +325,14 @@ def salesperson_export_excel(request):
             )
         )
 
-        # Create workbook and worksheet
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Sotuvchilar Hisoboti"
-
-        # Define styles
-        header_font = Font(bold=True, color="FFFFFF")
-        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-        header_alignment = Alignment(horizontal="center", vertical="center")
-        
-        # Headers
-        headers = [
-            "№", 
-            "To'liq Ism", 
-            "Foydalanuvchi Nomi", 
-            "Telefon", 
-            "Sotuvlar Soni", 
-            "Jami Sotuv (UZS)", 
-            "Jami Sotuv (USD)",
-            "Holat",
-            "Yaratilgan Sana"
-        ]
-        
-        # Write headers
-        for col, header in enumerate(headers, 1):
-            cell = ws.cell(row=1, column=col, value=header)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = header_alignment
-
-        # Write data
-        for row_idx, salesperson in enumerate(queryset, 2):
-            ws.cell(row=row_idx, column=1, value=row_idx - 1)  # Row number
-            ws.cell(row=row_idx, column=2, value=salesperson.user.get_full_name() or "N/A")
-            ws.cell(row=row_idx, column=3, value=salesperson.user.username)
-            ws.cell(row=row_idx, column=4, value=salesperson.phone_number or "N/A")
-            ws.cell(row=row_idx, column=5, value=salesperson.total_sales_count or 0)
-            ws.cell(row=row_idx, column=6, value=float(salesperson.total_sales_uzs or 0))
-            ws.cell(row=row_idx, column=7, value=float(salesperson.total_sales_usd or 0))
-            ws.cell(row=row_idx, column=8, value="Faol" if salesperson.is_active else "Faol emas")
-            ws.cell(row=row_idx, column=9, value=salesperson.created_at.strftime('%d.%m.%Y %H:%M') if salesperson.created_at else "N/A")
-
-        # Auto-adjust column widths
-        for col in range(1, len(headers) + 1):
-            column_letter = get_column_letter(col)
-            max_length = max(
-                len(str(ws.cell(row=1, column=col).value)),
-                max(len(str(ws.cell(row=row, column=col).value or "")) for row in range(2, ws.max_row + 1)) if ws.max_row > 1 else 0
-            )
-            ws.column_dimensions[column_letter].width = min(max_length + 2, 50)
-
-        # Add filter information
-        filter_info = f"Filtrlash davri: {start_date_obj.strftime('%d.%m.%Y')} - {end_date_obj.strftime('%d.%m.%Y')}"
-        ws.cell(row=ws.max_row + 2, column=1, value=filter_info)
-
-        # Prepare response
-        response = HttpResponse(
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        response['Content-Disposition'] = f'attachment; filename="sotuvchilar_hisoboti_{timezone.now().strftime("%Y%m%d_%H%M")}.xlsx"'
-        
-        wb.save(response)
-        return response
+        # Use ExcelExportService to generate the Excel file
+        return ExcelExportService.export_salespeople(queryset, start_date_obj, end_date_obj)
         
     except Exception as e:
         logger.error(f"Error exporting salespeople to Excel: {e}")
         messages.error(request, "Excel faylini eksport qilishda xatolik yuz berdi.")
         return redirect('core:salesperson-list')
+
 
 @login_required
 def salesperson_edit(request, salesperson_id):
@@ -358,12 +355,12 @@ def salesperson_edit(request, salesperson_id):
             password = request.POST.get('password', '').strip()
             password_confirm = request.POST.get('password_confirm', '').strip()
             
-            # Validate required fields
+            # Basic validation
             if not username or not first_name or not last_name:
                 messages.error(request, "Majburiy maydonlarni to'ldiring.")
                 return redirect('core:salesperson-list')
             
-            # Validate password if provided
+            # Password validation
             if password or password_confirm:
                 if not password:
                     messages.error(request, "Parol maydonini to'ldiring.")
@@ -375,8 +372,7 @@ def salesperson_edit(request, salesperson_id):
                     messages.error(request, "Parol kamida 8 ta belgidan iborat bo'lishi kerak.")
                     return redirect('core:salesperson-list')
             
-            # Check if username is unique (excluding current user)
-            from django.contrib.auth.models import User
+            # Check username uniqueness
             if User.objects.filter(username=username).exclude(id=salesperson.user.id).exists():
                 messages.error(request, "Bu foydalanuvchi nomi allaqachon mavjud.")
                 return redirect('core:salesperson-list')
@@ -390,7 +386,6 @@ def salesperson_edit(request, salesperson_id):
                     user.last_name = last_name
                     user.email = email
                     
-                    # Update password if provided
                     if password:
                         user.set_password(password)
                     
@@ -401,21 +396,17 @@ def salesperson_edit(request, salesperson_id):
                     salesperson.is_active = is_active
                     salesperson.save()
                     
-                    success_message = "Sotuvchi ma'lumotlari muvaffaqiyatli yangilandi."
-                    if password:
-                        success_message += " Parol ham o'zgartirildi."
-                    messages.success(request, success_message)
+                    messages.success(request, "Sotuvchi ma'lumotlari muvaffaqiyatli yangilandi.")
                     
             except Exception as e:
-                logger.error(f"Error updating salesperson {salesperson_id}: {e}")
-                messages.error(request, "Yangilashda xatolik yuz berdi.")
-        
-        return redirect('core:salesperson-list')
+                logger.error(f"Error updating salesperson: {e}")
+                messages.error(request, "Ma'lumotlarni yangilashda xatolik yuz berdi.")
         
     except Exception as e:
         logger.error(f"Error in salesperson_edit: {e}")
-        messages.error(request, "Sotuvchini tahrirlashda xatolik yuz berdi.")
-        return redirect('core:salesperson-list')
+        messages.error(request, "Xatolik yuz berdi.")
+    
+    return redirect('core:salesperson-list')
 
 
 @login_required  
@@ -425,34 +416,20 @@ def salesperson_toggle_status(request, salesperson_id):
         messages.error(request, "Bu funktsiyaga faqat administratorlar kirish huquqiga ega.")
         return redirect('core:salesperson-list')
     
-    if request.method == 'POST':
-        try:
-            salesperson = get_object_or_404(Salesperson, id=salesperson_id)
-            action = request.POST.get('action')
-            
-            if action == 'activate':
-                salesperson.is_active = True
-                action_text = "faollashtirildi"
-            elif action == 'deactivate':
-                salesperson.is_active = False
-                action_text = "faolsizlashtirildi"
-            else:
-                messages.error(request, "Noto'g'ri amal.")
-                return redirect('core:salesperson-list')
-            
-            salesperson.save(update_fields=['is_active', 'updated_at'])
-            
-            full_name = f"{salesperson.user.first_name} {salesperson.user.last_name}".strip()
-            if not full_name:
-                full_name = salesperson.user.username
-                
-            messages.success(request, f"Sotuvchi {full_name} muvaffaqiyatli {action_text}.")
-            
-        except Exception as e:
-            logger.error(f"Error toggling salesperson status {salesperson_id}: {e}")
-            messages.error(request, "Holat o'zgartirishda xatolik yuz berdi.")
+    try:
+        salesperson = get_object_or_404(Salesperson, id=salesperson_id)
+        salesperson.is_active = not salesperson.is_active
+        salesperson.save()
+        
+        status = "faollashtirildi" if salesperson.is_active else "faolsizlashtirildi"
+        messages.success(request, f"Sotuvchi muvaffaqiyatli {status}.")
+        
+    except Exception as e:
+        logger.error(f"Error toggling salesperson status: {e}")
+        messages.error(request, "Sotuvchi holatini o'zgartirishda xatolik yuz berdi.")
     
     return redirect('core:salesperson-list')
+
 
 class SalespersonDetailView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     model = Sale
@@ -465,71 +442,58 @@ class SalespersonDetailView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         return self.request.user.is_superuser
 
     def get_queryset(self):
-        self.salesperson = get_object_or_404(Salesperson, id=self.kwargs['salesperson_id'])
+        return self._get_filtered_queryset()
+
+    def _get_filtered_queryset(self):
+        """Centralized queryset filtering"""
+        self.salesperson = get_object_or_404(Salesperson, pk=self.kwargs['salesperson_id'])
         
         queryset = Sale.objects.filter(salesperson=self.salesperson).select_related(
-            'related_acquisition', 
             'related_acquisition__ticket',
-            'agent', 
-            'paid_to_account',
-            'salesperson',
-            'salesperson__user'
-        ).order_by('-sale_date', '-created_at')
+            'agent',
+            'paid_to_account'
+        ).order_by('-sale_date')
         
-        # Store filter parameters for context
-        self.filter_period = self.request.GET.get('filter_period')
-        self.date_filter = self.request.GET.get('date_filter')
-        self.start_date = self.request.GET.get('start_date')
-        self.end_date = self.request.GET.get('end_date')
-
-        # Apply date filtering using service
-        start_date, end_date = DateFilterService.get_date_range(
-            self.filter_period, self.date_filter, self.start_date, self.end_date
-        )
+        # Apply date filtering
+        try:
+            start_date, end_date = DateFilterService.get_date_range(
+                self.request.GET.get('filter_period'),
+                self.request.GET.get('date_filter'),
+                self.request.GET.get('start_date'),
+                self.request.GET.get('end_date')
+            )
+            queryset = queryset.filter(sale_date__date__range=[start_date, end_date])
+        except ValueError as e:
+            logger.warning(f"Date filter error: {e}")
+            today = timezone.localdate()
+            queryset = queryset.filter(sale_date__date=today)
         
-        return queryset.filter(sale_date__date__range=[start_date, end_date])
+        return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
         context['salesperson'] = self.salesperson
         
-        # Use the service to get filter context
+        # Use service to get filter context
         filter_context = DateFilterService.get_filter_context(
-            self.filter_period, self.date_filter, self.start_date, self.end_date
+            self.request.GET.get('filter_period'),
+            self.request.GET.get('date_filter'),
+            self.request.GET.get('start_date'),
+            self.request.GET.get('end_date')
         )
         context.update(filter_context)
-
-        # Calculate totals for the current filtered queryset
-        filtered_queryset = self.get_queryset()
-        totals = filtered_queryset.aggregate(
-            total_quantity=Sum('quantity'),
-            total_sum_uzs=Sum(
-                Case(When(sale_currency='UZS', then='total_sale_amount'), 
-                     default=Value(0), output_field=DecimalField())
-            ),
-            total_sum_usd=Sum(
-                Case(When(sale_currency='USD', then='total_sale_amount'), 
-                     default=Value(0), output_field=DecimalField())
-            ),
-            total_profit_uzs=Sum(
-                Case(When(sale_currency='UZS', then='profit'), 
-                     default=Value(0), output_field=DecimalField())
-            ),
-            total_profit_usd=Sum(
-                Case(When(sale_currency='USD', then='profit'), 
-                     default=Value(0), output_field=DecimalField())
-            ),
-            total_initial_payment_uzs=Sum(
-                Case(When(agent__isnull=False, sale_currency='UZS', then='initial_payment_amount'), 
-                     default=Value(0), output_field=DecimalField())
-            ),
-            total_initial_payment_usd=Sum(
-                Case(When(agent__isnull=False, sale_currency='USD', then='initial_payment_amount'), 
-                     default=Value(0), output_field=DecimalField())
-            )
-        )
-        context['totals'] = totals
+        
+        # Calculate totals for filtered sales
+        filtered_sales = self.get_queryset()
+        stats = {
+            'total_sales': filtered_sales.count(),
+            'total_quantity': sum(sale.quantity for sale in filtered_sales),
+            'total_amount_uzs': sum(sale.total_sale_amount for sale in filtered_sales if sale.sale_currency == 'UZS'),
+            'total_amount_usd': sum(sale.total_sale_amount for sale in filtered_sales if sale.sale_currency == 'USD'),
+            'total_profit_uzs': sum(sale.profit for sale in filtered_sales if sale.sale_currency == 'UZS'),
+            'total_profit_usd': sum(sale.profit for sale in filtered_sales if sale.sale_currency == 'USD'),
+        }
+        context['stats'] = stats
         
         # Preserve query parameters for pagination
         query_params = self.request.GET.copy()
