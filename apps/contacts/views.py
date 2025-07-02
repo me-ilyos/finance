@@ -1,8 +1,8 @@
 from django.shortcuts import get_object_or_404, redirect
-from django.contrib import messages
 from django.views.generic import DetailView, CreateView
 from django.urls import reverse_lazy
 from django.http import HttpResponseRedirect
+from django.db.models import Sum, Q
 import logging
 
 from .models import Agent, Supplier, AgentPayment, SupplierPayment
@@ -25,15 +25,9 @@ class AgentListView(CreateView):
     def form_valid(self, form):
         try:
             form.save()
-            messages.success(self.request, "Agent muvaffaqiyatli qo'shildi.")
         except Exception as e:
             logger.error(f"Error creating Agent: {e}")
-            messages.error(self.request, "Agent yaratishda xatolik yuz berdi.")
         return HttpResponseRedirect(self.success_url)
-
-    def form_invalid(self, form):
-        messages.error(self.request, "Agent qo'shishda xatolik. Ma'lumotlarni tekshiring.")
-        return super().form_invalid(form)
 
 
 class SupplierListView(CreateView):
@@ -50,15 +44,9 @@ class SupplierListView(CreateView):
     def form_valid(self, form):
         try:
             form.save()
-            messages.success(self.request, "Ta'minotchi muvaffaqiyatli qo'shildi.")
         except Exception as e:
             logger.error(f"Error creating Supplier: {e}")
-            messages.error(self.request, "Ta'minotchi yaratishda xatolik yuz berdi.")
         return HttpResponseRedirect(self.success_url)
-
-    def form_invalid(self, form):
-        messages.error(self.request, "Ta'minotchi qo'shishda xatolik. Ma'lumotlarni tekshiring.")
-        return super().form_invalid(form)
 
 
 class SupplierDetailView(DetailView):
@@ -80,11 +68,27 @@ class SupplierDetailView(DetailView):
         
         transactions.sort(key=lambda x: x['date'], reverse=True)
         
+        # Calculate totals for display in table footer
+        uzs_acquisitions = acquisitions.filter(currency='UZS').aggregate(
+            total=Sum('total_amount'))['total'] or 0
+        usd_acquisitions = acquisitions.filter(currency='USD').aggregate(
+            total=Sum('total_amount'))['total'] or 0
+        
+        uzs_payments = payments.filter(currency='UZS').aggregate(
+            total=Sum('amount'))['total'] or 0
+        usd_payments = payments.filter(currency='USD').aggregate(
+            total=Sum('amount'))['total'] or 0
+        
         context.update({
             'transactions': transactions,
             'acquisitions': acquisitions,
             'payments': payments,
-            'payment_form': SupplierPaymentForm()
+            'payment_form': SupplierPaymentForm(),
+            # Table footer totals
+            'uzs_acquisitions': uzs_acquisitions,
+            'usd_acquisitions': usd_acquisitions,
+            'uzs_payments': uzs_payments,
+            'usd_payments': usd_payments,
         })
         return context
 
@@ -108,11 +112,27 @@ class AgentDetailView(DetailView):
         
         transactions.sort(key=lambda x: x['date'], reverse=True)
         
+        # Calculate totals for display in table footer
+        uzs_sales = sales.filter(sale_currency='UZS').aggregate(
+            total=Sum('total_sale_amount'))['total'] or 0
+        usd_sales = sales.filter(sale_currency='USD').aggregate(
+            total=Sum('total_sale_amount'))['total'] or 0
+        
+        uzs_payments = payments.filter(currency='UZS').aggregate(
+            total=Sum('amount'))['total'] or 0
+        usd_payments = payments.filter(currency='USD').aggregate(
+            total=Sum('amount'))['total'] or 0
+        
         context.update({
             'transactions': transactions,
             'sales': sales,
             'payments': payments,
-            'payment_form': AgentPaymentForm()
+            'payment_form': AgentPaymentForm(),
+            # Table footer totals
+            'uzs_sales': uzs_sales,
+            'usd_sales': usd_sales,
+            'uzs_payments': uzs_payments,
+            'usd_payments': usd_payments,
         })
         return context
 
@@ -123,12 +143,10 @@ def add_payment(request, contact_pk, contact_type):
         contact = get_object_or_404(Agent, pk=contact_pk)
         form_class = AgentPaymentForm
         redirect_name = 'contacts:agent-detail'
-        success_message = "Agent to'lovi muvaffaqiyatli qo'shildi."
     else:  # supplier
         contact = get_object_or_404(Supplier, pk=contact_pk)
         form_class = SupplierPaymentForm
         redirect_name = 'contacts:supplier-detail'
-        success_message = f"Ta'minotchi {contact.name}ga to'lov muvaffaqiyatli amalga oshirildi."
     
     if request.method == 'POST':
         form = form_class(request.POST)
@@ -137,25 +155,19 @@ def add_payment(request, contact_pk, contact_type):
                 payment = form.save(commit=False)
                 if contact_type == 'agent':
                     payment.agent = contact
-                    # Handle agent payment business logic
                     payment.save()
                     contact.reduce_debt(payment.amount, payment.currency)
                     payment.paid_to_account.current_balance += payment.amount
                     payment.paid_to_account.save(update_fields=['current_balance', 'updated_at'])
                 else:
                     payment.supplier = contact
-                    # Handle supplier payment business logic
                     payment.save()
                     contact.reduce_debt(payment.amount, payment.currency)
                     payment.paid_from_account.current_balance -= payment.amount
                     payment.paid_from_account.save(update_fields=['current_balance', 'updated_at'])
                 
-                messages.success(request, success_message)
             except Exception as e:
                 logger.error(f"Error creating {contact_type} payment: {e}")
-                messages.error(request, "To'lovni qo'shishda xatolik yuz berdi.")
-        else:
-            messages.error(request, "To'lov ma'lumotlarini tekshiring.")
 
     return redirect(redirect_name, pk=contact_pk)
 

@@ -2,7 +2,6 @@ from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import ListView
 from django.http import HttpResponse
-from django.contrib import messages
 from .models import Acquisition, Ticket
 from .forms import AcquisitionForm
 from apps.core.services import DateFilterService
@@ -50,26 +49,7 @@ class AcquisitionListView(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
-        # Add form to context
-        if 'acquisition_form' not in context:
-            context['acquisition_form'] = AcquisitionForm()
-        
-        # Use centralized filter context service
-        filter_context = DateFilterService.get_filter_context(
-            self.request.GET.get('filter_period'),
-            self.request.GET.get('date_filter'),
-            self.request.GET.get('start_date'),
-            self.request.GET.get('end_date')
-        )
-        context.update(filter_context)
-        
-        # For pagination - preserve query parameters
-        query_params = self.request.GET.copy()
-        if 'page' in query_params:
-            del query_params['page']
-        context['query_params'] = query_params.urlencode()
-        
+        context['form'] = AcquisitionForm()
         return context
 
     def post(self, request, *args, **kwargs):
@@ -105,110 +85,64 @@ class AcquisitionListView(ListView):
                         notes=f"Avtomatik to'lov - Xarid #{acquisition.pk}"
                     )
                 
-                messages.success(request, "Xarid muvaffaqiyatli qo'shildi.")
                 logger.info(f"Created acquisition {acquisition.id}")
                 return redirect(reverse_lazy('inventory:acquisition-list'))
+                
             except Exception as e:
                 logger.error(f"Error creating acquisition: {e}")
-                messages.error(request, "Xarid yaratishda xatolik yuz berdi.")
         else:
-            logger.warning(f"Form validation errors: {form.errors}")
-            messages.error(request, "Ma'lumotlarni tekshiring.")
+            logger.warning(f"Form validation failed: {form.errors}")
+
+        return redirect(reverse_lazy('inventory:acquisition-list'))
+
+    def export_to_excel(self, request):
+        """Export filtered acquisitions to Excel"""
+        acquisitions = self._get_filtered_queryset()
         
-        # Re-render with form errors
-        self.object_list = self.get_queryset()
-        context = self.get_context_data(acquisition_form=form, object_list=self.object_list)
-        return self.render_to_response(context)
-
-
-def export_acquisitions_excel(request):
-    """Export acquisitions data to Excel format"""
-    try:
-        # Use the same filtering logic as the list view
-        queryset = Acquisition.objects.select_related(
-            'supplier', 'ticket', 'paid_from_account'
-        ).order_by('-acquisition_date', '-created_at')
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet.title = "Xaridlar Ro'yxati"
         
-        # Apply date filtering (reuse logic)
-        try:
-            start_date_obj, end_date_obj = DateFilterService.get_date_range(
-                request.GET.get('filter_period'),
-                request.GET.get('date_filter'),
-                request.GET.get('start_date'),
-                request.GET.get('end_date')
-            )
-            queryset = queryset.filter(acquisition_date__date__range=[start_date_obj, end_date_obj])
-        except ValueError:
-            today = timezone.localdate()
-            queryset = queryset.filter(acquisition_date__date=today)
-            start_date_obj = end_date_obj = today
-
-        # Create Excel workbook
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Xaridlar Ro'yxati"
-
-        # Headers
         headers = [
-            'Sana', 'Ta\'minotchi', 'Chipta turi', 'Chipta manzili',
-            'Mavjud miqdori', 'Boshlang\'ich miqdori', 'Birlik narxi',
-            'Jami summa', 'Valyuta', 'To\'lov hisobi', 'To\'lov holati', 'Izohlar'
+            'Sana', 'Ta\'minotchi', 'Chipta Turi', 'Tavsif', 
+            'Miqdor', 'Narxi', 'Jami Summa', 'To\'lov Holati'
         ]
-
-        # Write headers with styling
+        
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        
         for col_num, header in enumerate(headers, 1):
-            cell = ws.cell(row=1, column=col_num, value=header)
-            cell.font = Font(bold=True, color="FFFFFF")
-            cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-
-        # Write data rows
-        for row_num, acq in enumerate(queryset, 2):
-            # Format data
-            row_data = [
-                acq.acquisition_date.strftime('%d.%m.%Y'),
-                acq.supplier.name,
-                acq.ticket.get_ticket_type_display(),
-                acq.ticket.description,
-                acq.available_quantity,
-                acq.initial_quantity,
-                f"{acq.unit_price:,.0f}" if acq.currency == 'UZS' else f"{acq.unit_price:,.2f}",
-                f"{acq.total_amount:,.0f}" if acq.currency == 'UZS' else f"{acq.total_amount:,.2f}",
-                acq.currency,
-                acq.paid_from_account.name if acq.paid_from_account else "To'lanmagan",
-                "To'langan" if acq.paid_from_account else "To'lanmagan",
-                acq.notes or ""
-            ]
-
-            for col_num, value in enumerate(row_data, 1):
-                cell = ws.cell(row=row_num, column=col_num, value=value)
-                # Center align numeric and status columns
-                if col_num in [5, 6, 7, 8, 9, 10, 11]:
-                    cell.alignment = Alignment(horizontal="center")
-
-        # Auto-adjust column widths
-        for column in ws.columns:
-            max_length = max(len(str(cell.value or "")) for cell in column)
-            adjusted_width = min(max(max_length + 2, 12), 50)
-            ws.column_dimensions[get_column_letter(column[0].column)].width = adjusted_width
-
-        # Create response
+            cell = worksheet.cell(row=1, column=col_num)
+            cell.value = header
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center")
+        
+        for row_num, acq in enumerate(acquisitions, 2):
+            worksheet.cell(row=row_num, column=1, value=acq.acquisition_date.strftime('%d.%m.%Y'))
+            worksheet.cell(row=row_num, column=2, value=acq.supplier.name)
+            worksheet.cell(row=row_num, column=3, value=acq.ticket.get_ticket_type_display())
+            worksheet.cell(row=row_num, column=4, value=acq.ticket.description)
+            worksheet.cell(row=row_num, column=5, value=f"{acq.available_quantity}/{acq.initial_quantity}")
+            worksheet.cell(row=row_num, column=6, value=f"{acq.unit_price} {acq.currency}")
+            worksheet.cell(row=row_num, column=7, value=f"{acq.total_amount} {acq.currency}")
+            worksheet.cell(row=row_num, column=8, value="To'langan" if acq.paid_from_account else "To'lanmagan")
+        
+        for column in worksheet.columns:
+            max_length = 0
+            column_letter = get_column_letter(column[0].column)
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            worksheet.column_dimensions[column_letter].width = adjusted_width
+        
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        
-        # Set filename
-        if start_date_obj == end_date_obj:
-            filename = f"xaridlar_{start_date_obj.strftime('%d.%m.%Y')}.xlsx"
-        else:
-            filename = f"xaridlar_{start_date_obj.strftime('%d.%m.%Y')}_dan_{end_date_obj.strftime('%d.%m.%Y')}_gacha.xlsx"
-            
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        wb.save(response)
-        
-        logger.info(f"Exported {queryset.count()} acquisitions to Excel")
+        response['Content-Disposition'] = 'attachment; filename="xaridlar_royxati.xlsx"'
+        workbook.save(response)
         return response
-
-    except Exception as e:
-        logger.error(f"Error exporting acquisitions to Excel: {e}")
-        return HttpResponse("Excel export xatolik bilan yakunlandi.", status=500)
