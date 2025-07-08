@@ -81,8 +81,11 @@
 <!-- Acquisition Modal -->
 {% include 'inventory/partials/acquisition_modal.html' %}
 
+<!-- Edit Acquisition Modal (Admin Only) -->
+{% include 'inventory/partials/edit_acquisition_modal.html' %}
+
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/acquisition_form.js' %}"></script>
+<script src="{% static 'inventory/js/acquisition_form.js' %}"></script>
 {% endblock %} 

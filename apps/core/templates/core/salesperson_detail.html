@@ -117,6 +117,9 @@
                                 </div></div>
                             </th>
                             <th class="py-3 px-3 fw-semibold">To'lov Hisobi</th>
+                            {% if user.is_superuser %}
+                            <th class="py-3 px-3 fw-semibold text-center">Amallar</th>
+                            {% endif %}
                         </tr>
                     </thead>
                     <tbody>
@@ -146,20 +149,10 @@
                             <td class="price-col standout-col align-middle">
                                 <div class="container-fluid gx-0"><div class="row gx-0">
                                     <div class="col text-end small border-end">
-                                        {% if sale.sale_currency == "UZS" %}
-                                            {{ sale.total_sale_amount|format_currency:"UZS" }}
-                                            {% if sale|has_initial_payment %}
-                                                <br><span class="initial-payment">({{ sale.initial_payment_amount|format_currency:"UZS" }})</span>
-                                            {% endif %}
-                                        {% else %}-{% endif %}
+                                        {% if sale.sale_currency == "UZS" %}{{ sale.total_sale_amount|format_currency:"UZS" }}{% else %}-{% endif %}
                                     </div>
                                     <div class="col text-end small">
-                                        {% if sale.sale_currency == "USD" %}
-                                            {{ sale.total_sale_amount|format_currency:"USD" }}
-                                            {% if sale|has_initial_payment %}
-                                                <br><span class="initial-payment">({{ sale.initial_payment_amount|format_currency:"USD" }})</span>
-                                            {% endif %}
-                                        {% else %}-{% endif %}
+                                        {% if sale.sale_currency == "USD" %}{{ sale.total_sale_amount|format_currency:"USD" }}{% else %}-{% endif %}
                                     </div>
                                 </div></div>
                             </td>
@@ -182,19 +175,28 @@
                                     {{ sale.paid_to_account.name }}
                                 {% elif sale.agent %}
                                     <span class="badge bg-warning text-dark">Agent Qarzi</span>
-                                    {% if sale|has_initial_payment %}
-                                        <small class="d-block text-muted">Boshlang'ich to'lov: {{ sale.initial_payment_amount|format_currency:sale.sale_currency }}</small>
-                                    {% else %}
-                                        <small class="d-block text-muted">Boshlang'ich to'lov qilinmagan</small>
-                                    {% endif %}
                                 {% else %}
                                     <span class="badge bg-danger">To'lanmagan</span>
                                 {% endif %}
                             </td>
+                            
+                            <!-- Actions Column (Admin Only) -->
+                            {% if user.is_superuser %}
+                            <td class="py-2 px-3 text-center">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="editSale('{{ sale.id }}')" title="Tahrirlash">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteSale('{{ sale.id }}')" title="O'chirish">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                            {% endif %}
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="8" class="text-center py-3 px-3">Bu sotuvchi uchun sotuvlar mavjud emas yoki filtrga mos kelmadi.</td>
+                            <td colspan="{% if user.is_superuser %}9{% else %}8{% endif %}" class="text-center py-3 px-3">Bu sotuvchi uchun sotuvlar mavjud emas yoki filtrga mos kelmadi.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -218,6 +220,9 @@
                                 </div></div>
                             </td>
                             <td></td> {# Empty cell for payment status total #}
+                            {% if user.is_superuser %}
+                            <td></td> {# Empty cell for actions total #}
+                            {% endif %}
                         </tr>
                     </tfoot>
                     {% endif %}
@@ -281,8 +286,274 @@
     </div>
 </div>
 
+<!-- Edit Sale Modal (Admin Only) -->
+{% if user.is_superuser %}
+<div class="modal fade" id="editSaleModal" tabindex="-1" aria-labelledby="editSaleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="editSaleForm">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editSaleModalLabel">Sotuvni Tahrirlash</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <!-- Sale Details -->
+                        <div class="col-md-6">
+                            <h6 class="text-primary mb-3">Sotuv Ma'lumotlari</h6>
+                            <div class="mb-3">
+                                <label for="edit_sale_date" class="form-label">Sotuv Sanasi va Vaqti</label>
+                                <input type="datetime-local" class="form-control form-control-sm" id="edit_sale_date" name="sale_date" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_related_acquisition" class="form-label">Chipta Ombori</label>
+                                <select class="form-select form-select-sm" id="edit_related_acquisition" name="related_acquisition" required>
+                                    <option value="">Tanlang...</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_quantity" class="form-label">Miqdori</label>
+                                <input type="number" class="form-control form-control-sm" id="edit_quantity" name="quantity" min="1" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_unit_sale_price" class="form-label">Narxi</label>
+                                <input type="number" class="form-control form-control-sm" id="edit_unit_sale_price" name="unit_sale_price" step="0.01" required>
+                            </div>
+                        </div>
+                        
+                        <!-- Buyer and Payment Information -->
+                        <div class="col-md-6">
+                            <h6 class="text-success mb-3">Xaridor va To'lov</h6>
+                            <div class="mb-3">
+                                <label for="edit_agent" class="form-label">Agent</label>
+                                <select class="form-select form-select-sm" id="edit_agent" name="agent">
+                                    <option value="">Tanlang...</option>
+                                </select>
+                                <small class="form-text text-muted">Agent tanlansa, mijoz ma'lumotlari o'chiriladi</small>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_client_full_name" class="form-label">Mijozning To'liq Ismi</label>
+                                <input type="text" class="form-control form-control-sm" id="edit_client_full_name" name="client_full_name">
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_client_id_number" class="form-label">Mijozning ID Raqami</label>
+                                <input type="text" class="form-control form-control-sm" id="edit_client_id_number" name="client_id_number">
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="edit_paid_to_account" class="form-label">To'lov Hisobi</label>
+                                <select class="form-select form-select-sm" id="edit_paid_to_account" name="paid_to_account">
+                                    <option value="">Tanlang...</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_notes" class="form-label">Izohlar</label>
+                                <textarea class="form-control form-control-sm" id="edit_notes" name="notes" rows="3"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Bekor Qilish</button>
+                    <button type="submit" class="btn btn-primary">Saqlash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% endblock %}
 
 {% block extra_js %}
 <script src="{% static 'sales/js/sale_form.js' %}"></script>
+{% if user.is_superuser %}
+<script>
+let currentEditingSaleId = null;
+let currentSaleData = null;
+
+// Delete sale function
+function deleteSale(saleId) {
+    if (confirm("Rostdan ham bu sotuvni o'chirmoqchimisiz? Bu amal qaytarilmaydi va barcha bog'liq tranzaktsiyalar bekor qilinadi.")) {
+        fetch(`/sales/${saleId}/delete/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json',
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                location.reload(); // Refresh page to show updated data
+            } else {
+                alert('Xatolik: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert("Sotuvni o'chirishda xatolik yuz berdi. Iltimos, qayta urinib ko'ring.");
+        });
+    }
+}
+
+// Edit sale function
+function editSale(saleId) {
+    currentEditingSaleId = saleId;
+    
+    // Load sale data
+    fetch(`/sales/${saleId}/edit/`, {
+        method: 'GET',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            currentSaleData = data.sale;
+            populateEditForm(data.sale);
+            loadEditFormDropdowns();
+            
+            // Show modal
+            var editModal = new bootstrap.Modal(document.getElementById('editSaleModal'));
+            editModal.show();
+        } else {
+            alert('Xatolik: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert("Sotuv ma'lumotlarini yuklashda xatolik yuz berdi.");
+    });
+}
+
+// Populate edit form with sale data
+function populateEditForm(sale) {
+    document.getElementById('edit_sale_date').value = sale.sale_date;
+    document.getElementById('edit_quantity').value = sale.quantity;
+    document.getElementById('edit_unit_sale_price').value = sale.unit_sale_price;
+    document.getElementById('edit_client_full_name').value = sale.client_full_name;
+    document.getElementById('edit_client_id_number').value = sale.client_id_number;
+    document.getElementById('edit_notes').value = sale.notes;
+}
+
+// Load dropdown options for edit form
+function loadEditFormDropdowns() {
+    // Load acquisitions
+    fetch('/inventory/api/acquisitions/')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('edit_related_acquisition');
+            select.innerHTML = '<option value="">Tanlang...</option>';
+            data.forEach(acquisition => {
+                const option = document.createElement('option');
+                option.value = acquisition.id;
+                option.textContent = acquisition.display_name;
+                select.appendChild(option);
+            });
+            
+            // Set current value if editing
+            if (currentSaleData && currentSaleData.related_acquisition) {
+                select.value = currentSaleData.related_acquisition;
+            }
+        })
+        .catch(error => console.error('Error loading acquisitions:', error));
+    
+    // Load agents
+    fetch('/contacts/api/agents/')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('edit_agent');
+            select.innerHTML = '<option value="">Tanlang...</option>';
+            data.forEach(agent => {
+                const option = document.createElement('option');
+                option.value = agent.id;
+                option.textContent = agent.name;
+                select.appendChild(option);
+            });
+            
+            // Set current value if editing
+            if (currentSaleData && currentSaleData.agent) {
+                select.value = currentSaleData.agent;
+            }
+        })
+        .catch(error => console.error('Error loading agents:', error));
+    
+    // Load financial accounts
+    fetch('/accounting/api/accounts/')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('edit_paid_to_account');
+            select.innerHTML = '<option value="">Tanlang...</option>';
+            data.forEach(account => {
+                const option = document.createElement('option');
+                option.value = account.id;
+                option.textContent = account.name;
+                select.appendChild(option);
+            });
+            
+            // Set current value if editing
+            if (currentSaleData && currentSaleData.paid_to_account) {
+                select.value = currentSaleData.paid_to_account;
+            }
+        })
+        .catch(error => console.error('Error loading accounts:', error));
+}
+
+// Handle edit form submission
+document.getElementById('editSaleForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    if (!currentEditingSaleId) {
+        alert("Xatolik: Tahrirlash uchun sotuv tanlanmagan.");
+        return;
+    }
+    
+    const formData = new FormData(this);
+    
+    fetch(`/sales/${currentEditingSaleId}/edit/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            bootstrap.Modal.getInstance(document.getElementById('editSaleModal')).hide();
+            location.reload(); // Refresh page to show updated data
+        } else {
+            alert('Xatolik: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert("Sotuvni saqlashda xatolik yuz berdi. Iltimos, qayta urinib ko'ring.");
+    });
+});
+
+// Handle agent selection change in edit form
+document.getElementById('edit_agent').addEventListener('change', function() {
+    const clientNameField = document.getElementById('edit_client_full_name');
+    const clientIdField = document.getElementById('edit_client_id_number');
+    
+    if (this.value) {
+        // Agent selected, clear client fields
+        clientNameField.value = '';
+        clientIdField.value = '';
+        clientNameField.disabled = true;
+        clientIdField.disabled = true;
+    } else {
+        // No agent selected, enable client fields
+        clientNameField.disabled = false;
+        clientIdField.disabled = false;
+    }
+});
+</script>
+{% endif %}
 {% endblock %} 

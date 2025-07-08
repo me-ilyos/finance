@@ -61,19 +61,12 @@
                 <td class="price-col standout-col align-middle">
                     <div class="container-fluid gx-0"><div class="row gx-0">
                         <div class="col text-end small border-end">
-                            {% if sale.sale_currency == "UZS" %}
-                                {{ sale.total_sale_amount|format_currency:"UZS" }}
-                                {% if sale|has_initial_payment %}
-                                    <br><span class="initial-payment">({{ sale.initial_payment_amount|format_currency:"UZS" }})</span>
-                                {% endif %}
-                            {% else %}-{% endif %}
+                            {% if sale.sale_currency == "UZS" %}{{ sale.total_sale_amount|format_currency:"UZS" }}{% else %}-{% endif %}
                         </div>
                         <div class="col text-end small">
                             {% if sale.sale_currency == "USD" %}
                                 {{ sale.total_sale_amount|format_currency:"USD" }}
-                                {% if sale|has_initial_payment %}
-                                    <br><span class="initial-payment">({{ sale.initial_payment_amount|format_currency:"USD" }})</span>
-                                {% endif %}
+
                             {% else %}-{% endif %}
                         </div>
                     </div></div>
@@ -97,11 +90,6 @@
                         {{ sale.paid_to_account.name }}
                     {% elif sale.agent %}
                         <span class="badge bg-warning text-dark">Agent Qarzi</span>
-                        {% if sale|has_initial_payment %}
-                            <small class="d-block text-muted">Boshlang'ich to'lov: {{ sale.initial_payment_amount|format_currency:sale.sale_currency }}</small>
-                        {% else %}
-                            <small class="d-block text-muted">Boshlang'ich to'lov qilinmagan</small>
-                        {% endif %}
                     {% else %}
                         <span class="badge bg-danger">To'lanmagan</span>
                     {% endif %}

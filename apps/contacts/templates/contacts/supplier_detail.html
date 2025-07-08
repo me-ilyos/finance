@@ -19,6 +19,15 @@
             <button class="btn btn-success btn-sm me-2" data-bs-toggle="modal" data-bs-target="#paymentModal">
                 <i class="fas fa-plus me-1"></i>To'lov qilish
             </button>
+            {% if can_deactivate and supplier.can_be_deactivated %}
+            <button class="btn btn-warning btn-sm me-2" onclick="deactivateSupplier('{{ supplier.pk }}')">
+                <i class="fas fa-ban me-1"></i>Faolsizlashtirish
+            </button>
+            {% elif can_deactivate and not supplier.can_be_deactivated %}
+            <button class="btn btn-warning btn-sm me-2" disabled title="Barcha qarzlar to'lanishi kerak">
+                <i class="fas fa-ban me-1"></i>Faolsizlashtirish
+            </button>
+            {% endif %}
             <a href="{% url 'contacts:supplier-list' %}" class="btn btn-secondary btn-sm">
                 <i class="fas fa-arrow-left me-1"></i>Ortga
             </a>
@@ -273,4 +282,35 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if can_deactivate %}
+<script>
+function deactivateSupplier(supplierId) {
+    if (confirm("Rostdan ham bu ta'minotchini faolsizlashtirishni xohlaysizmi? Bu amalni bekor qilib bo'lmaydi.")) {
+        fetch(`/contacts/suppliers/${supplierId}/deactivate/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json',
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                window.location.href = "{% url 'contacts:supplier-list' %}";
+            } else {
+                alert(data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert("Xatolik yuz berdi. Iltimos, qayta urinib ko'ring.");
+        });
+    }
+}
+</script>
+{% endif %}
 {% endblock %} 

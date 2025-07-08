@@ -1,8 +1,10 @@
 from django.shortcuts import get_object_or_404, redirect
 from django.views.generic import DetailView, CreateView
 from django.urls import reverse_lazy
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 from django.db.models import Sum, Q
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.contrib.auth.decorators import login_required
 import logging
 
 from .models import Agent, Supplier, AgentPayment, SupplierPayment
@@ -30,16 +32,26 @@ class AgentListView(CreateView):
         return HttpResponseRedirect(self.success_url)
 
 
-class SupplierListView(CreateView):
+class SupplierListView(LoginRequiredMixin, CreateView):
     model = Supplier
     form_class = SupplierForm
     template_name = 'contacts/supplier_list.html'
     success_url = reverse_lazy('contacts:supplier-list')
+    login_url = '/core/login/'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['suppliers'] = Supplier.objects.all().order_by('-created_at')
+        # Show only active suppliers
+        context['suppliers'] = Supplier.objects.filter(is_active=True).order_by('-created_at')
+        # Check if user can add suppliers (only admins)
+        context['can_add_supplier'] = self.request.user.is_superuser
         return context
+
+    def post(self, request, *args, **kwargs):
+        # Only allow admins to create suppliers
+        if not request.user.is_superuser:
+            return redirect('contacts:supplier-list')
+        return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
         try:
@@ -49,9 +61,10 @@ class SupplierListView(CreateView):
         return HttpResponseRedirect(self.success_url)
 
 
-class SupplierDetailView(DetailView):
+class SupplierDetailView(LoginRequiredMixin, DetailView):
     model = Supplier
     template_name = 'contacts/supplier_detail.html'
+    login_url = '/core/login/'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -89,8 +102,41 @@ class SupplierDetailView(DetailView):
             'usd_acquisitions': usd_acquisitions,
             'uzs_payments': uzs_payments,
             'usd_payments': usd_payments,
+            # Check if user can deactivate (only admins)
+            'can_deactivate': self.request.user.is_superuser,
         })
         return context
+
+
+@login_required(login_url='/core/login/')
+def deactivate_supplier(request, supplier_pk):
+    """Deactivate supplier - only admins and only when there's no debt"""
+    if not request.user.is_superuser:
+        return JsonResponse({
+            'success': False, 
+            'message': "Faqat administratorlar ta'minotchini faolsizlashtira oladi."
+        })
+    
+    try:
+        supplier = get_object_or_404(Supplier, pk=supplier_pk)
+        
+        if not supplier.can_be_deactivated():
+            return JsonResponse({
+                'success': False,
+                'message': "Ta'minotchini faolsizlashtirish uchun barcha qarzlar to'lanishi kerak (UZS va USD balans 0 bo'lishi kerak)."
+            })
+        
+        supplier.is_active = False
+        supplier.save(update_fields=['is_active', 'updated_at'])
+        
+        return JsonResponse({'success': True, 'message': "Ta'minotchi faolsizlashtirildi."})
+        
+    except Exception as e:
+        logger.error(f"Error deactivating supplier: {e}")
+        return JsonResponse({
+            'success': False, 
+            'message': "Ta'minotchini faolsizlashtirishda xatolik yuz berdi."
+        })
 
 
 class AgentDetailView(DetailView):
@@ -178,3 +224,10 @@ def add_agent_payment(request, agent_pk):
 
 def add_supplier_payment(request, supplier_pk):
     return add_payment(request, supplier_pk, 'supplier')
+
+
+@login_required(login_url='/core/login/')
+def api_agents_list(request):
+    """API endpoint to get list of agents for dropdowns"""
+    agents = Agent.objects.filter().values('id', 'name').order_by('name')
+    return JsonResponse(list(agents), safe=False)

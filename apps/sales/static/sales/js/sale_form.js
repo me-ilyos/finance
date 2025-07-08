@@ -10,43 +10,37 @@ document.addEventListener('DOMContentLoaded', function () {
     const clientIDNumberModal = document.getElementById('id_client_id_number');
     const relatedAcquisitionSelectModal = document.getElementById('id_related_acquisition');
     const paidToAccountSelectModal = document.getElementById('id_paid_to_account');
+    const paidToAccountWrapper = document.getElementById('wrapper_id_paid_to_account');
     const paidToAccountLabelModal = document.querySelector("label[for='id_paid_to_account']");
-    const initialPaymentAmountWrapper = document.getElementById('wrapper_id_initial_payment_amount');
-    const initialPaymentAmountInput = document.getElementById('id_initial_payment_amount');
 
     /**
-     * Toggle client/agent fields based on agent selection
+     * Toggle client/agent fields and payment requirements based on agent selection
      */
     function toggleClientAgentFields() {
         if (!agentSelectModal || !clientFullNameModal || !clientIDNumberModal || 
-            !initialPaymentAmountWrapper || !paidToAccountLabelModal) {
+            !paidToAccountWrapper || !paidToAccountLabelModal) {
             return;
         }
 
         if (agentSelectModal.value) {
-            // Agent selected - disable client fields, show payment field
+            // Agent selected - disable client fields, disable payment account (creates debt)
             clientFullNameModal.value = '';
             clientIDNumberModal.value = '';
             clientFullNameModal.disabled = true;
             clientIDNumberModal.disabled = true;
-            initialPaymentAmountWrapper.style.display = 'flex';
             
-            if (paidToAccountLabelModal) {
-                paidToAccountLabelModal.firstChild.textContent = "Boshlang'ich To'lov Hisobi";
-            }
+            // Agent sales create debt - no payment account allowed
+            paidToAccountSelectModal.value = '';
+            paidToAccountSelectModal.disabled = true;
+            paidToAccountWrapper.style.display = 'none';
         } else {
-            // No agent - enable client fields, hide payment field
+            // No agent - enable client fields, require payment account
             clientFullNameModal.disabled = false;
             clientIDNumberModal.disabled = false;
-            initialPaymentAmountWrapper.style.display = 'none';
             
-            if (initialPaymentAmountInput) {
-                initialPaymentAmountInput.value = '';
-            }
-            
-            if (paidToAccountLabelModal) {
-                paidToAccountLabelModal.firstChild.textContent = "To'lov Hisobi";
-            }
+            // Customer sales require immediate payment
+            paidToAccountSelectModal.disabled = false;
+            paidToAccountWrapper.style.display = 'block';
         }
     }
 
@@ -62,6 +56,12 @@ document.addEventListener('DOMContentLoaded', function () {
         paidToAccountSelectModal.innerHTML = '<option value="">---------</option>';
 
         if (!acquisitionId) {
+            paidToAccountSelectModal.disabled = true;
+            return;
+        }
+
+        // If agent is selected, keep payment account disabled
+        if (agentSelectModal && agentSelectModal.value) {
             paidToAccountSelectModal.disabled = true;
             return;
         }
@@ -123,7 +123,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Event listeners
     if (agentSelectModal) {
-        agentSelectModal.addEventListener('change', toggleClientAgentFields);
+        agentSelectModal.addEventListener('change', function() {
+            toggleClientAgentFields();
+            updatePaymentAccountOptions(); // Update accounts based on new selection
+        });
         toggleClientAgentFields(); // Set initial state
     }
 

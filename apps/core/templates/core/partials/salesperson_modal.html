@@ -198,7 +198,7 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="post" id="editSalespersonForm">
+            <form method="post" id="editSalespersonForm" data-edit-url="{% url 'core:salesperson-edit' 0 %}">
                 <div class="modal-body">
                     {% csrf_token %}
                     <input type="hidden" id="edit_salesperson_id" name="salesperson_id">

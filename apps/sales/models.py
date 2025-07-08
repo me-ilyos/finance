@@ -1,5 +1,4 @@
 from django.db import models
-from django.core.exceptions import ValidationError
 from django.utils import timezone
 from apps.inventory.models import Acquisition
 from apps.accounting.models import FinancialAccount
@@ -72,13 +71,7 @@ class Sale(models.Model):
         related_name='sale_payments_received',
         help_text="Account that received the payment for direct sales to clients."
     )
-    initial_payment_amount = models.DecimalField(
-        max_digits=15, 
-        decimal_places=2, 
-        null=True, 
-        blank=True, 
-        help_text="Agent uchun boshlang'ich to'lov miqdori (sotuv valyutasida)."
-    )
+
 
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -95,27 +88,18 @@ class Sale(models.Model):
             return self.paid_to_account is not None
 
     def clean(self):
-        """Basic model validation - complex business logic handled by validators"""
+        """Basic model validation - detailed validation handled by forms"""
         super().clean()
         
-        # Basic validation only - detailed validation in validators
+        # Set sale currency from acquisition
         if self.related_acquisition:
             self.sale_currency = self.related_acquisition.currency
-        
-        # Basic buyer validation
-        if self.agent and (self.client_full_name or self.client_id_number):
-            raise ValidationError(
-                "Cannot specify both an agent and client details for the same sale."
-            )
-        
-        if not self.agent and not (self.client_full_name and self.client_id_number):
-            raise ValidationError(
-                "Must specify either an agent or both client full name and ID number."
-            )
 
     def save(self, *args, **kwargs):
         """Save sale - business logic handled by service layer"""
-        self.full_clean()
+        # Only set currency if not already set (service layer handles this)
+        if self.related_acquisition and not self.sale_currency:
+            self.sale_currency = self.related_acquisition.currency
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
@@ -123,16 +107,9 @@ class Sale(models.Model):
         super().delete(*args, **kwargs)
 
     def __str__(self):
-        buyer_info = str(self.agent.name) if self.agent else f"{self.client_full_name or 'N/A Client'}"
-        ticket_info = (str(self.related_acquisition.ticket) 
-                      if self.related_acquisition and self.related_acquisition.ticket 
-                      else f"Acq.ID: {self.related_acquisition_id}")
-        sale_date_str = self.sale_date.strftime('%Y-%m-%d') if self.sale_date else 'N/A Date'
-        profit_str = str(self.profit) if hasattr(self, 'profit') else "N/A"
-        payment_status = "Paid" if self.paid_to_account else ("Agent Sale" if self.agent else "Unpaid")
-        
-        return (f"Sale: {self.quantity}x {ticket_info} to {buyer_info} on {sale_date_str} "
-                f"(Profit: {profit_str} {self.sale_currency}) - {payment_status}")
+        buyer_info = "Agent sotishi" if self.agent_id else (self.client_full_name or "To'g'ridan-to'g'ri sotuv")
+        sale_date_str = self.sale_date.strftime('%d.%m.%Y') if self.sale_date else 'Sana yo\'q'
+        return f"Sotuv #{self.id}: {self.quantity} dona {buyer_info} ga {sale_date_str}"
 
     class Meta:
         verbose_name = "Sale"

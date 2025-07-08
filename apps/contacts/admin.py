@@ -11,8 +11,8 @@ class AgentAdmin(admin.ModelAdmin):
 
 @admin.register(Supplier)
 class SupplierAdmin(admin.ModelAdmin):
-    list_display = ('name', 'phone_number', 'initial_balance_uzs', 'initial_balance_usd', 'balance_uzs', 'balance_usd', 'created_at')
-    list_filter = ('created_at',)
+    list_display = ('name', 'phone_number', 'is_active', 'initial_balance_uzs', 'initial_balance_usd', 'balance_uzs', 'balance_usd', 'created_at')
+    list_filter = ('is_active', 'created_at')
     search_fields = ('name', 'phone_number')
     readonly_fields = ('initial_balance_uzs', 'initial_balance_usd', 'created_at', 'updated_at')
     ordering = ('-created_at',)

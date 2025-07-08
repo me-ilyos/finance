@@ -10,17 +10,8 @@
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid" data-toggle-url="{% url 'core:salesperson-toggle-status' 0 %}">
     
-    {% comment %} Display Django Messages {% endcomment %}
-    {% if messages %}
-        {% for message in messages %}
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        {% endfor %}
-    {% endif %}
 
     <!-- Filter Form -->
     {% include 'core/partials/salesperson_filter_form.html' %}
@@ -95,73 +86,5 @@
 
 {% block extra_js %}
 <script src="{% static 'sales/js/sale_form.js' %}"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Handle edit salesperson button clicks
-    document.querySelectorAll('.edit-salesperson-btn').forEach(button => {
-        button.addEventListener('click', function() {
-            const id = this.dataset.id;
-            const username = this.dataset.username;
-            const firstName = this.dataset.firstName;
-            const lastName = this.dataset.lastName;
-            const email = this.dataset.email;
-            const phone = this.dataset.phone;
-            const isActive = this.dataset.isActive === 'true';
-            
-            // Populate edit form
-            document.getElementById('edit_salesperson_id').value = id;
-            document.getElementById('edit_username').value = username;
-            document.getElementById('edit_first_name').value = firstName;
-            document.getElementById('edit_last_name').value = lastName;
-            document.getElementById('edit_email').value = email;
-            document.getElementById('edit_phone_number').value = phone;
-            document.getElementById('edit_is_active').checked = isActive;
-            
-            // Clear password fields for security
-            document.getElementById('edit_password').value = '';
-            document.getElementById('edit_password_confirm').value = '';
-            
-            // Set form action to edit endpoint
-            document.getElementById('editSalespersonForm').action = '{% url "core:salesperson-edit" 0 %}'.replace('0', id);
-            
-            // Show modal
-            new bootstrap.Modal(document.getElementById('editSalespersonModal')).show();
-        });
-    });
-    
-    // Handle toggle status button clicks
-    document.querySelectorAll('.toggle-status-btn').forEach(button => {
-        button.addEventListener('click', function() {
-            const id = this.dataset.id;
-            const action = this.dataset.action;
-            const actionText = action === 'activate' ? 'faollashtirish' : 'faolsizlashtirish';
-            
-            if (confirm(`Haqiqatan ham bu sotuvchini ${actionText}ni xohlaysizmi?`)) {
-                // Create and submit form
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = '{% url "core:salesperson-toggle-status" 0 %}'.replace('0', id);
-                
-                // Add CSRF token
-                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-                const csrfInput = document.createElement('input');
-                csrfInput.type = 'hidden';
-                csrfInput.name = 'csrfmiddlewaretoken';
-                csrfInput.value = csrfToken;
-                form.appendChild(csrfInput);
-                
-                // Add action
-                const actionInput = document.createElement('input');
-                actionInput.type = 'hidden';
-                actionInput.name = 'action';
-                actionInput.value = action;
-                form.appendChild(actionInput);
-                
-                document.body.appendChild(form);
-                form.submit();
-            }
-        });
-    });
-});
-</script>
+<script src="{% static 'core/js/salesperson.js' %}"></script>
 {% endblock %} 

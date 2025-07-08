@@ -3,10 +3,7 @@ from django import template
 register = template.Library()
 
 
-@register.filter
-def has_initial_payment(sale):
-    """Check if sale has initial payment"""
-    return sale.agent and sale.initial_payment_amount and sale.initial_payment_amount > 0
+
 
 
 @register.filter

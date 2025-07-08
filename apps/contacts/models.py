@@ -46,10 +46,16 @@ class BaseContact(models.Model):
 
 
 class Supplier(BaseContact):
+    is_active = models.BooleanField(default=True, verbose_name="Faol")
+    
     class Meta:
         verbose_name = "Ta'minotchi"
         verbose_name_plural = "Ta'minotchilar"
         ordering = ['name']
+
+    def can_be_deactivated(self):
+        """Check if supplier can be deactivated (when there's no debt on both sides)"""
+        return self.balance_uzs == 0 and self.balance_usd == 0
 
 
 class Agent(BaseContact):

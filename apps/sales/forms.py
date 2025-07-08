@@ -25,7 +25,6 @@ class SaleForm(forms.ModelForm):
             'quantity', 
             'agent', 'client_full_name', 'client_id_number',
             'unit_sale_price', 
-            'initial_payment_amount',
             'paid_to_account', 
             'notes'
         ]
@@ -37,15 +36,13 @@ class SaleForm(forms.ModelForm):
             'client_full_name': "Mijozning To'liq Ismi",
             'client_id_number': "Mijozning ID Raqami",
             'unit_sale_price': "Narxi",
-            'initial_payment_amount': "Boshlang'ich To'lov Miqdori (Agent)",
-            'paid_to_account': "To'lov Hisobi (Boshlang'ich / To'liq)",
+            'paid_to_account': "To'lov Hisobi (Faqat mijoz uchun)",
             'notes': "Izohlar",
         }
         help_texts = {
             'related_acquisition': "Faqat sotuvda mavjud bo'lgan xaridlar ko'rsatiladi.",
             'unit_sale_price': "Sotuv valyutasida birlik narxni kiriting.",
-            'initial_payment_amount': "Faqat agent tanlanganda ishlatiladi. Agar agent to'lov qilsa, shu yerga kiriting.",
-            'paid_to_account': "Mijoz uchun to'liq to'lov yoki agent uchun boshlang'ich to'lov qabul qilingan hisob.",
+            'paid_to_account': "Faqat mijoz sotib olganda to'lov hisobi talab qilinadi. Agentga sotuv qarzdorlik sifatida qayd etiladi.",
         }
         widgets = {
             'sale_date': forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control form-control-sm'}),
@@ -54,7 +51,6 @@ class SaleForm(forms.ModelForm):
             'client_full_name': forms.TextInput(attrs={'class': 'form-control form-control-sm'}),
             'client_id_number': forms.TextInput(attrs={'class': 'form-control form-control-sm'}),
             'unit_sale_price': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'step': '0.01'}),
-            'initial_payment_amount': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'step': '0.01'}),
             'paid_to_account': forms.Select(attrs={'class': 'form-select form-select-sm'}),
             'notes': forms.Textarea(attrs={'class': 'form-control form-control-sm', 'rows': 3}),
         }
@@ -79,7 +75,6 @@ class SaleForm(forms.ModelForm):
         self.fields['agent'].queryset = Agent.objects.all().order_by('name')
         self.fields['paid_to_account'].queryset = FinancialAccount.objects.filter(is_active=True).order_by('name')
         self.fields['paid_to_account'].required = False
-        self.fields['initial_payment_amount'].required = False
         self.fields['client_full_name'].required = False
         self.fields['client_id_number'].required = False
         
@@ -96,7 +91,6 @@ class SaleForm(forms.ModelForm):
         quantity = cleaned_data.get('quantity')
         unit_sale_price = cleaned_data.get('unit_sale_price')
         related_acquisition = cleaned_data.get('related_acquisition')
-        initial_payment_amount = cleaned_data.get('initial_payment_amount')
         paid_to_account = cleaned_data.get('paid_to_account')
 
         # Basic buyer validation
@@ -124,12 +118,16 @@ class SaleForm(forms.ModelForm):
             if quantity > effective_available_qty:
                 self.add_error('quantity', f"Kiritilgan miqdor ({quantity}) mavjud miqdordan ({effective_available_qty}) ortiq.")
 
-        # Basic payment validation
-        if agent and initial_payment_amount and initial_payment_amount > 0 and not paid_to_account:
-            self.add_error('paid_to_account', "Boshlang'ich to'lov kiritilsa, to'lov hisobi tanlanishi shart.")
+        # Payment validation - customers must pay immediately
+        if not agent and not paid_to_account:
+            self.add_error('paid_to_account', "Mijoz sotib olganda to'lov hisobi tanlanishi shart.")
+        
+        # Agent sales don't require payment account
+        if agent and paid_to_account:
+            self.add_error('paid_to_account', "Agentga sotuv qarzdorlik sifatida qayd etiladi. To'lov hisobi tanlanmasligi kerak.")
 
-        # Currency matching validation
-        if related_acquisition and paid_to_account and paid_to_account.currency != related_acquisition.currency:
+        # Currency matching validation for customer sales
+        if not agent and related_acquisition and paid_to_account and paid_to_account.currency != related_acquisition.currency:
             self.add_error('paid_to_account', f"Hisob valyutasi ({paid_to_account.currency}) sotuv valyutasiga ({related_acquisition.currency}) mos kelmadi.")
 
         # Add salesperson for validation

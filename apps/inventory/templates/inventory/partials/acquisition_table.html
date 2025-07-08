@@ -12,8 +12,10 @@
                 <th class="py-3 px-3 fw-semibold">Mavjud/Boshl</th>
                 <th class="py-3 px-3 fw-semibold">Narx</th>
                 <th class="py-3 px-3 fw-semibold">Jami</th>
-                <th class="py-3 px-3 fw-semibold">To'lov</th>
                 <th class="py-3 px-3 fw-semibold">Izohlar</th>
+                {% if user.is_superuser %}
+                <th class="py-3 px-3 fw-semibold">Amallar</th>
+                {% endif %}
             </tr>
         </thead>
         <tbody>
@@ -26,12 +28,25 @@
                 <td class="py-2 px-3">{{ acq|format_quantity_display }}</td>
                 <td class="py-2 px-3">{{ acq.unit_price|format_currency:acq.currency }}</td>
                 <td class="py-2 px-3">{{ acq.total_amount|format_currency:acq.currency }}</td>
-                <td class="py-2 px-3">{{ acq|format_payment_status }}</td>
                 <td class="py-2 px-3">{{ acq.notes|default:"-"|truncatewords:15 }}</td>
+                {% if user.is_superuser %}
+                <td class="py-2 px-3">
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-sm btn-outline-primary edit-acquisition-btn" 
+                                data-acquisition-id="{{ acq.id }}" title="Tahrirlash">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger delete-acquisition-btn" 
+                                data-acquisition-id="{{ acq.id }}" title="O'chirish">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+                {% endif %}
             </tr>
             {% empty %}
             <tr>
-                <td colspan="9" class="text-center py-3 px-3">
+                <td colspan="{% if user.is_superuser %}9{% else %}8{% endif %}" class="text-center py-3 px-3">
                     Hozircha xaridlar mavjud emas yoki tanlangan filtrga mos kelmadi.
                 </td>
             </tr>

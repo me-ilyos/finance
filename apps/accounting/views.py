@@ -2,6 +2,8 @@ from django.shortcuts import redirect
 from django.views.generic import ListView, CreateView
 from django.contrib import messages
 from django.urls import reverse_lazy
+from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
 from django.db.models import Sum, Q, Value, DecimalField
 from django.db.models.functions import Coalesce
 from .models import Expenditure, FinancialAccount
@@ -121,3 +123,21 @@ class ExpenditureCreateView(CreateView):
     def form_invalid(self, form):
         messages.error(self.request, "Formada xatoliklar mavjud. Iltimos, to'g'rilang.")
         return super().form_invalid(form)
+
+
+@login_required(login_url='/core/login/')
+def api_accounts_list(request):
+    """API endpoint to get list of active financial accounts for dropdowns"""
+    accounts = FinancialAccount.objects.filter(is_active=True).values(
+        'id', 'name', 'currency'
+    ).order_by('currency', 'name')
+    
+    # Format for display
+    result = []
+    for account in accounts:
+        result.append({
+            'id': account['id'],
+            'name': f"{account['name']} ({account['currency']})"
+        })
+    
+    return JsonResponse(result, safe=False)

@@ -15,9 +15,11 @@
     <div class="card shadow mb-4">
         <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
             <h6 class="m-0 font-weight-bold text-primary">Barcha Ta'minotchilar</h6>
+            {% if can_add_supplier %}
             <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addSupplierModal">
                 <i class="fas fa-plus me-1"></i> Yangi Ta'minotchi Qo'shish
             </button>
+            {% endif %}
         </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -133,6 +135,7 @@
 </div>
 
 <!-- Add Supplier Modal -->
+{% if can_add_supplier %}
 <div class="modal fade" id="addSupplierModal" tabindex="-1" aria-labelledby="addSupplierModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -204,9 +207,11 @@
         </div>
     </div>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
+{% if can_add_supplier %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     // Show modal if there are form errors
@@ -219,4 +224,5 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 </script>
+{% endif %}
 {% endblock %} 
