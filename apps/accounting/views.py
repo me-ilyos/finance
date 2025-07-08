@@ -1,6 +1,5 @@
 from django.shortcuts import redirect
 from django.views.generic import ListView, CreateView
-from django.contrib import messages
 from django.urls import reverse_lazy
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
@@ -9,9 +8,6 @@ from django.db.models.functions import Coalesce
 from .models import Expenditure, FinancialAccount
 from .forms import ExpenditureForm, FinancialAccountForm
 from apps.core.services import DateFilterService
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 class FinancialAccountListView(ListView):
@@ -44,21 +40,10 @@ class FinancialAccountCreateView(CreateView):
     
     def form_valid(self, form):
         try:
-            account = form.save()
-            messages.success(
-                self.request, 
-                f"Moliyaviy hisob '{account.name}' muvaffaqiyatli yaratildi. "
-                f"Balans: {account.formatted_balance()}"
-            )
+            form.save()
             return redirect(self.success_url)
-        except Exception as e:
-            logger.error(f"Error creating financial account: {e}")
-            messages.error(self.request, "Moliyaviy hisob yaratishda xatolik yuz berdi.")
+        except:
             return self.form_invalid(form)
-    
-    def form_invalid(self, form):
-        messages.error(self.request, "Formada xatoliklar mavjud. Iltimos, to'g'rilang.")
-        return super().form_invalid(form)
 
 
 class ExpenditureListView(ListView):
@@ -113,26 +98,17 @@ class ExpenditureCreateView(CreateView):
     def form_valid(self, form):
         try:
             form.save()
-            messages.success(self.request, "Xarajat muvaffaqiyatli qo'shildi.")
             return redirect(self.success_url)
-        except Exception as e:
-            logger.error(f"Error creating expenditure: {e}")
-            messages.error(self.request, "Xarajat yaratishda xatolik yuz berdi.")
+        except:
             return self.form_invalid(form)
-    
-    def form_invalid(self, form):
-        messages.error(self.request, "Formada xatoliklar mavjud. Iltimos, to'g'rilang.")
-        return super().form_invalid(form)
 
 
 @login_required(login_url='/core/login/')
 def api_accounts_list(request):
-    """API endpoint to get list of active financial accounts for dropdowns"""
     accounts = FinancialAccount.objects.filter(is_active=True).values(
         'id', 'name', 'currency'
     ).order_by('currency', 'name')
     
-    # Format for display
     result = []
     for account in accounts:
         result.append({

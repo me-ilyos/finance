@@ -36,6 +36,111 @@ class FinancialAccount(models.Model):
         verbose_name_plural = "Financial Accounts"
 
 
+class Transfer(models.Model):
+    transfer_date = models.DateTimeField(default=timezone.now)
+    from_account = models.ForeignKey(
+        FinancialAccount,
+        on_delete=models.PROTECT,
+        related_name='transfers_sent'
+    )
+    to_account = models.ForeignKey(
+        FinancialAccount,
+        on_delete=models.PROTECT,
+        related_name='transfers_received'
+    )
+    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    currency = models.CharField(max_length=3, choices=CurrencyChoices.choices)
+    
+    # Currency conversion fields
+    conversion_rate = models.DecimalField(
+        max_digits=10, 
+        decimal_places=4, 
+        null=True, 
+        blank=True,
+        help_text="UZS per 1 USD exchange rate (only for cross-currency transfers)"
+    )
+    converted_amount = models.DecimalField(
+        max_digits=15, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        help_text="Amount in receiving account's currency"
+    )
+    
+    description = models.CharField(max_length=255, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        """Validate transfer data"""
+        super().clean()
+        
+        if self.from_account == self.to_account:
+            raise ValidationError("Cannot transfer to the same account")
+        
+        if self.amount <= 0:
+            raise ValidationError("Transfer amount must be positive")
+        
+        # Check sufficient balance
+        if self.from_account and not self.from_account.has_sufficient_balance(self.amount):
+            raise ValidationError(
+                f"Insufficient balance in {self.from_account.name}. "
+                f"Available: {self.from_account.current_balance:,.2f} {self.from_account.currency}"
+            )
+        
+        # Handle currency conversion
+        if self.from_account.currency != self.to_account.currency:
+            if not self.conversion_rate:
+                raise ValidationError("Conversion rate required for cross-currency transfers")
+            if self.conversion_rate <= 0:
+                raise ValidationError("Conversion rate must be positive")
+            
+            # Calculate converted amount
+            if self.from_account.currency == 'USD' and self.to_account.currency == 'UZS':
+                self.converted_amount = self.amount * self.conversion_rate
+            elif self.from_account.currency == 'UZS' and self.to_account.currency == 'USD':
+                self.converted_amount = self.amount / self.conversion_rate
+            else:
+                raise ValidationError("Only USD-UZS conversions are supported")
+        else:
+            # Same currency transfer
+            self.converted_amount = self.amount
+            self.conversion_rate = None
+
+    def save(self, *args, **kwargs):
+        """Save transfer and update account balances"""
+        # Run validation first
+        self.full_clean()
+        
+        with transaction.atomic():
+            # Update account balances
+            self.from_account.current_balance -= self.amount
+            self.from_account.save(update_fields=['current_balance', 'updated_at'])
+            
+            self.to_account.current_balance += self.converted_amount
+            self.to_account.save(update_fields=['current_balance', 'updated_at'])
+            
+            # Save the transfer record
+            super().save(*args, **kwargs)
+
+    def is_cross_currency(self):
+        """Check if this is a cross-currency transfer"""
+        return self.from_account.currency != self.to_account.currency
+
+    def __str__(self):
+        if self.is_cross_currency():
+            return f"Transfer: {self.amount} {self.from_account.currency} -> {self.converted_amount} {self.to_account.currency} (Rate: {self.conversion_rate})"
+        else:
+            return f"Transfer: {self.amount} {self.currency} from {self.from_account.name} to {self.to_account.name}"
+
+    class Meta:
+        verbose_name = "Transfer"
+        verbose_name_plural = "Transfers"
+        ordering = ['-transfer_date']
+
+
 class Expenditure(models.Model):
     expenditure_date = models.DateTimeField(default=timezone.now)
     description = models.CharField(max_length=255)

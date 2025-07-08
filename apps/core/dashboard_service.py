@@ -1,7 +1,7 @@
 from django.utils import timezone
 from datetime import timedelta
 from apps.sales.models import Sale
-from apps.accounting.models import Expenditure
+from apps.accounting.models import Expenditure, Transfer
 from apps.contacts.models import AgentPayment, SupplierPayment
 
 
@@ -72,6 +72,53 @@ class DashboardService:
                 'amount': exp.amount,
                 'currency': exp.currency,
                 'balance_effect': 'expense'
+            })
+        
+        # Get transfers sent from this account
+        transfers_sent = Transfer.objects.filter(from_account=account).select_related('to_account')
+        
+        for transfer in transfers_sent:
+            description = f"Transfer to {transfer.to_account.name}"
+            if transfer.is_cross_currency():
+                description += f" (Rate: {transfer.conversion_rate:,.4f})"
+            if transfer.description:
+                description += f" - {transfer.description}"
+            
+            transactions.append({
+                'date': transfer.transfer_date,
+                'type': 'Transfer (Chiqim)',
+                'description': description,
+                'amount': transfer.amount,
+                'currency': transfer.currency,
+                'balance_effect': 'expense',
+                'is_transfer': True,
+                'transfer_id': transfer.id,
+                'conversion_rate': transfer.conversion_rate,
+                'converted_amount': transfer.converted_amount
+            })
+        
+        # Get transfers received to this account
+        transfers_received = Transfer.objects.filter(to_account=account).select_related('from_account')
+        
+        for transfer in transfers_received:
+            description = f"Transfer from {transfer.from_account.name}"
+            if transfer.is_cross_currency():
+                description += f" (Rate: {transfer.conversion_rate:,.4f})"
+            if transfer.description:
+                description += f" - {transfer.description}"
+            
+            transactions.append({
+                'date': transfer.transfer_date,
+                'type': 'Transfer (Kirim)',
+                'description': description,
+                'amount': transfer.converted_amount,
+                'currency': transfer.to_account.currency,
+                'balance_effect': 'income',
+                'is_transfer': True,
+                'transfer_id': transfer.id,
+                'conversion_rate': transfer.conversion_rate,
+                'original_amount': transfer.amount,
+                'original_currency': transfer.currency
             })
         
         transactions.sort(key=lambda t: t['date'], reverse=True)
@@ -150,6 +197,55 @@ class DashboardService:
                 'currency': exp.currency,
                 'balance_effect': 'expense',
                 'account': exp.paid_from_account.name if exp.paid_from_account else 'N/A'
+            })
+        
+        # Get recent transfers
+        recent_transfers = Transfer.objects.filter(
+            transfer_date__gte=date_limit
+        ).select_related('from_account', 'to_account')
+        
+        for transfer in recent_transfers:
+            # Add sent transfer
+            description = f"Transfer to {transfer.to_account.name}"
+            if transfer.is_cross_currency():
+                description += f" (Rate: {transfer.conversion_rate:,.4f})"
+            if transfer.description:
+                description += f" - {transfer.description}"
+            
+            transactions.append({
+                'date': transfer.transfer_date,
+                'type': 'Transfer (Chiqim)',
+                'description': description,
+                'amount': transfer.amount,
+                'currency': transfer.currency,
+                'balance_effect': 'expense',
+                'account': transfer.from_account.name,
+                'is_transfer': True,
+                'transfer_id': transfer.id,
+                'conversion_rate': transfer.conversion_rate,
+                'converted_amount': transfer.converted_amount
+            })
+            
+            # Add received transfer
+            description = f"Transfer from {transfer.from_account.name}"
+            if transfer.is_cross_currency():
+                description += f" (Rate: {transfer.conversion_rate:,.4f})"
+            if transfer.description:
+                description += f" - {transfer.description}"
+            
+            transactions.append({
+                'date': transfer.transfer_date,
+                'type': 'Transfer (Kirim)',
+                'description': description,
+                'amount': transfer.converted_amount,
+                'currency': transfer.to_account.currency,
+                'balance_effect': 'income',
+                'account': transfer.to_account.name,
+                'is_transfer': True,
+                'transfer_id': transfer.id,
+                'conversion_rate': transfer.conversion_rate,
+                'original_amount': transfer.amount,
+                'original_currency': transfer.currency
             })
         
         transactions.sort(key=lambda t: t['date'], reverse=True)

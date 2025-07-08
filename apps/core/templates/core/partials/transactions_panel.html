@@ -17,16 +17,38 @@
     
     {% if transactions %}
         {% for transaction in transactions %}
-        <div class="transaction-item">
+        <div class="transaction-item {% if transaction.is_transfer %}transfer-transaction{% endif %}">
             <div class="transaction-details">
                 <h5>{{ transaction.description|truncatewords:5 }}</h5>
                 <div class="transaction-meta">
-                    <span class="transaction-type">{{ transaction.type }}</span>
+                    <span class="transaction-type {% if transaction.is_transfer %}transfer-type{% endif %}">
+                        {{ transaction.type }}
+                    </span>
                     <span class="ms-2">
                         <i class="fas fa-calendar me-1"></i>
                         {{ transaction.date|date:"M d, Y H:i" }}
                     </span>
                 </div>
+                
+                {% if transaction.is_transfer and transaction.conversion_rate %}
+                    <div class="conversion-info mt-2">
+                        <small class="text-muted">
+                            <i class="fas fa-calculator me-1"></i>
+                            Konversiya kursi: 1 USD = {{ transaction.conversion_rate|floatformat:4 }} UZS
+                        </small>
+                    </div>
+                {% endif %}
+                
+                {% if transaction.is_transfer and transaction.original_amount %}
+                    <div class="conversion-details mt-1">
+                        <small class="text-info">
+                            <i class="fas fa-arrows-alt-h me-1"></i>
+                            {{ transaction.original_amount|format_currency:transaction.original_currency }} 
+                            {{ transaction.original_currency }} → 
+                            {{ transaction.amount|format_currency:transaction.currency }} {{ transaction.currency }}
+                        </small>
+                    </div>
+                {% endif %}
             </div>
             <div class="transaction-amount">
                 <div class="amount-value {{ transaction.balance_effect|transaction_amount_class }}">

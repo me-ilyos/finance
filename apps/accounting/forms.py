@@ -1,5 +1,6 @@
 from django import forms
-from .models import Expenditure, FinancialAccount
+from django.core.exceptions import ValidationError
+from .models import Expenditure, FinancialAccount, Transfer
 from django.utils import timezone
 from apps.core.constants import CurrencyChoices, AccountTypeChoices
 
@@ -79,7 +80,120 @@ class ExpenditureForm(forms.ModelForm):
     class Meta:
         model = Expenditure
         fields = ['expenditure_date', 'description', 'amount', 'currency', 'paid_from_account', 'notes']
+        widgets = {
+            'expenditure_date': forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control'}),
+            'description': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Xarajat tavsifi'}),
+            'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
+            'currency': forms.Select(attrs={'class': 'form-select'}),
+            'paid_from_account': forms.Select(attrs={'class': 'form-select'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Qo\'shimcha izoh (ixtiyoriy)'}),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['paid_from_account'].empty_label = "Hisobni tanlang"
+        # Only show active accounts
+        self.fields['paid_from_account'].queryset = FinancialAccount.objects.filter(is_active=True)
+        
+        # Set labels in Uzbek
+        self.fields['expenditure_date'].label = "Xarajat sanasi"
+        self.fields['description'].label = "Tavsif"
+        self.fields['amount'].label = "Summa"
+        self.fields['currency'].label = "Valyuta"
+        self.fields['paid_from_account'].label = "To'lov hisobi"
+        self.fields['notes'].label = "Izoh"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        paid_from_account = cleaned_data.get('paid_from_account')
+        currency = cleaned_data.get('currency')
+        
+        # Check if the account currency matches the expenditure currency
+        if paid_from_account and currency and paid_from_account.currency != currency:
+            raise ValidationError(
+                f"Hisob valyutasi ({paid_from_account.currency}) va xarajat valyutasi ({currency}) mos kelmaydi."
+            )
+        
+        return cleaned_data
+
+
+class TransferForm(forms.ModelForm):
+    class Meta:
+        model = Transfer
+        fields = ['transfer_date', 'from_account', 'to_account', 'amount', 'conversion_rate', 'description', 'notes']
+        widgets = {
+            'transfer_date': forms.DateTimeInput(attrs={'type': 'hidden'}),
+            'from_account': forms.Select(attrs={'class': 'form-select'}),
+            'to_account': forms.Select(attrs={'class': 'form-select'}),
+            'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
+            'conversion_rate': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.0001', 'min': '0.0001'}),
+            'description': forms.HiddenInput(),
+            'notes': forms.HiddenInput(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Only show active accounts
+        active_accounts = FinancialAccount.objects.filter(is_active=True)
+        self.fields['from_account'].queryset = active_accounts
+        self.fields['to_account'].queryset = active_accounts
+        
+        # Set initial transfer_date to current datetime
+        if not self.instance.pk:
+            self.fields['transfer_date'].initial = timezone.now()
+        
+        # Set default values for hidden fields
+        self.fields['description'].initial = 'Transfer'
+        self.fields['notes'].initial = ''
+        
+        # Make conversion rate and hidden fields not required
+        self.fields['conversion_rate'].required = False
+        self.fields['description'].required = False
+        self.fields['notes'].required = False
+
+    def clean(self):
+        cleaned_data = super().clean()
+        from_account = cleaned_data.get('from_account')
+        to_account = cleaned_data.get('to_account')
+        amount = cleaned_data.get('amount')
+        conversion_rate = cleaned_data.get('conversion_rate')
+        
+        # Set default description if not provided
+        if not cleaned_data.get('description'):
+            cleaned_data['description'] = 'Transfer'
+        
+        # Check if accounts are different
+        if from_account and to_account and from_account == to_account:
+            raise ValidationError("Bir xil hisobga transfer qilish mumkin emas")
+        
+        # Check sufficient balance
+        if from_account and amount:
+            if not from_account.has_sufficient_balance(amount):
+                raise ValidationError(
+                    f"Hisobda yetarli mablag' yo'q. "
+                    f"Mavjud: {from_account.current_balance:,.2f} {from_account.currency}"
+                )
+        
+        # Check currency conversion requirements
+        if from_account and to_account:
+            if from_account.currency != to_account.currency:
+                if not conversion_rate:
+                    raise ValidationError("Turli valyutalar uchun konversiya kursi talab qilinadi")
+                if conversion_rate <= 0:
+                    raise ValidationError("Konversiya kursi musbat bo'lishi kerak")
+        
+        return cleaned_data
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        
+        # Set currency from from_account
+        if self.cleaned_data.get('from_account'):
+            instance.currency = self.cleaned_data['from_account'].currency
+        
+        # Ensure description has a value
+        if not instance.description:
+            instance.description = 'Transfer'
+            
+        if commit:
+            instance.save()
+        return instance
