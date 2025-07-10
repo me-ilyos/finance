@@ -356,7 +356,7 @@ class SalespersonDetailView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         return self.request.user.is_superuser
 
     def get_queryset(self):
-        self.salesperson = get_object_or_404(Salesperson, pk=self.kwargs['salesperson_id'])
+        self.salesperson = get_object_or_404(Salesperson, pk=self.kwargs['pk'])
         
         queryset = Sale.objects.filter(salesperson=self.salesperson).select_related(
             'related_acquisition__ticket',

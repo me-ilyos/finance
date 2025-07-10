@@ -7,64 +7,59 @@ console.log('Acquisition form JavaScript is loading...');
 
 document.addEventListener('DOMContentLoaded', function () {
     console.log('DOMContentLoaded fired - starting acquisition form initialization');
-    const AcquisitionForm = {
-        // DOM element references
-        currencySelect: document.getElementById('id_currency'),
-        paidFromAccountSelect: document.getElementById('id_paid_from_account'),
-        modal: document.getElementById('addAcquisitionModal'),
-
-        init: function() {
-            this.bindEvents();
-            this.filterAccountsByCurrency(); // Initial state
-        },
-
-        bindEvents: function() {
-            if (this.currencySelect) {
-                this.currencySelect.addEventListener('change', () => this.filterAccountsByCurrency());
-            }
-
-            if (this.modal) {
-                this.modal.addEventListener('shown.bs.modal', () => this.filterAccountsByCurrency());
-            }
-        },
-
-        filterAccountsByCurrency: function() {
-            if (!this.currencySelect || !this.paidFromAccountSelect) {
-                return;
-            }
-
-            const selectedCurrency = this.currencySelect.value;
-            const options = this.paidFromAccountSelect.querySelectorAll('option');
-
-            // Show/hide options based on currency
-            options.forEach(option => {
-                if (option.value === '') {
-                    // Keep empty option visible
-                    option.style.display = '';
-                    return;
-                }
-
-                // Get currency from option text or data attribute
-                const optionText = option.textContent;
-                const isMatchingCurrency = optionText.includes(`(${selectedCurrency})`);
-                
-                option.style.display = isMatchingCurrency ? '' : 'none';
-            });
-
-            // Reset selection if current selection is not compatible
-            const currentOption = this.paidFromAccountSelect.querySelector('option:checked');
-            if (currentOption && currentOption.value !== '' && currentOption.style.display === 'none') {
-                this.paidFromAccountSelect.value = '';
-            }
-        }
-    };
-
-    // Initialize the form handler
-    AcquisitionForm.init();
     
     // Initialize admin action event listeners
     initializeAdminActions();
+    
+    // Fix modal select dropdown z-index issues
+    fixModalSelectDropdowns();
 });
+
+/**
+ * Fix modal select dropdown z-index issues
+ */
+function fixModalSelectDropdowns() {
+    const modals = ['#addAcquisitionModal', '#editAcquisitionModal'];
+    
+    modals.forEach(modalSelector => {
+        const modal = document.querySelector(modalSelector);
+        if (!modal) return;
+        
+        const modalElement = new bootstrap.Modal(modal);
+        
+        // Add event listeners for modal show/hide
+        modal.addEventListener('show.bs.modal', function() {
+            this.style.zIndex = '1055';
+        });
+        
+        modal.addEventListener('shown.bs.modal', function() {
+            const selects = this.querySelectorAll('.form-select');
+            selects.forEach(select => {
+                select.addEventListener('focus', function() {
+                    this.style.zIndex = '1070';
+                    this.style.position = 'relative';
+                });
+                
+                select.addEventListener('blur', function() {
+                    this.style.zIndex = '1060';
+                });
+                
+                select.addEventListener('click', function() {
+                    this.style.position = 'relative';
+                    this.style.zIndex = '1070';
+                });
+            });
+        });
+        
+        modal.addEventListener('hidden.bs.modal', function() {
+            const selects = this.querySelectorAll('.form-select');
+            selects.forEach(select => {
+                select.style.zIndex = '';
+                select.style.position = '';
+            });
+        });
+    });
+}
 
 /**
  * Initialize Admin Action Event Listeners
@@ -193,7 +188,6 @@ function populateEditForm(acquisition) {
     form.querySelector('#edit_initial_quantity').value = acquisition.initial_quantity;
     form.querySelector('#edit_unit_price').value = acquisition.unit_price;
     form.querySelector('#edit_currency').value = acquisition.currency;
-    form.querySelector('#edit_paid_from_account').value = acquisition.paid_from_account || '';
     form.querySelector('#edit_notes').value = acquisition.notes;
     
     // Populate ticket fields

@@ -14,12 +14,12 @@
                 
                 <div class="modal-body">
                     <!-- Supplier Field -->
-                    <div class="mb-3 row">
-                        <label for="edit_supplier" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">Ta'minotchi</label>
-                        <div class="col-sm-8">
+                    <div class="mb-3 row align-items-center">
+                        <label for="edit_supplier" class="col-md-4 col-form-label col-form-label-sm text-md-end fw-medium">Ta'minotchi <span class="text-danger ms-1">*</span></label>
+                        <div class="col-md-8">
                             <select class="form-select form-select-sm" id="edit_supplier" name="supplier" required>
                                 <option value="">Tanlang...</option>
-                                {% for supplier in form.supplier.field.queryset %}
+                                {% for supplier in acquisition_form.supplier.field.queryset %}
                                     <option value="{{ supplier.id }}">{{ supplier.name }}</option>
                                 {% endfor %}
                             </select>
@@ -27,17 +27,17 @@
                     </div>
 
                     <!-- Acquisition Date Field -->
-                    <div class="mb-3 row">
-                        <label for="edit_acquisition_date" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">Xarid Sanasi va Vaqti</label>
-                        <div class="col-sm-8">
+                    <div class="mb-3 row align-items-center">
+                        <label for="edit_acquisition_date" class="col-md-4 col-form-label col-form-label-sm text-md-end fw-medium">Xarid Sanasi va Vaqti <span class="text-danger ms-1">*</span></label>
+                        <div class="col-md-8">
                             <input type="datetime-local" class="form-control form-control-sm" id="edit_acquisition_date" name="acquisition_date" required>
                         </div>
                     </div>
 
                     <!-- Ticket Type Field -->
-                    <div class="mb-3 row">
-                        <label for="edit_ticket_type" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">Chipta Turi</label>
-                        <div class="col-sm-8">
+                    <div class="mb-3 row align-items-center">
+                        <label for="edit_ticket_type" class="col-md-4 col-form-label col-form-label-sm text-md-end fw-medium">Chipta Turi <span class="text-danger ms-1">*</span></label>
+                        <div class="col-md-8">
                             <select class="form-select form-select-sm" id="edit_ticket_type" name="ticket_type" required>
                                 <option value="AIR">Chipta</option>
                                 <option value="TOUR">Tur paket</option>
@@ -46,74 +46,61 @@
                     </div>
 
                     <!-- Ticket Description Field -->
-                    <div class="mb-3 row">
-                        <label for="edit_ticket_description" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">Manzil/Tur Nomi</label>
-                        <div class="col-sm-8">
+                    <div class="mb-3 row align-items-center">
+                        <label for="edit_ticket_description" class="col-md-4 col-form-label col-form-label-sm text-md-end fw-medium">Manzil/Tur Nomi <span class="text-danger ms-1">*</span></label>
+                        <div class="col-md-8">
                             <input type="text" class="form-control form-control-sm" id="edit_ticket_description" name="ticket_description" required>
                         </div>
                     </div>
 
                     <!-- Ticket Departure DateTime Field -->
-                    <div class="mb-3 row">
-                        <label for="edit_ticket_departure_date_time" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">Uchish Vaqti</label>
-                        <div class="col-sm-8">
+                    <div class="mb-3 row align-items-center">
+                        <label for="edit_ticket_departure_date_time" class="col-md-4 col-form-label col-form-label-sm text-md-end fw-medium">Uchish Vaqti <span class="text-danger ms-1">*</span></label>
+                        <div class="col-md-8">
                             <input type="datetime-local" class="form-control form-control-sm" id="edit_ticket_departure_date_time" name="ticket_departure_date_time" required>
                         </div>
                     </div>
 
                     <!-- Ticket Arrival DateTime Field -->
-                    <div class="mb-3 row">
-                        <label for="edit_ticket_arrival_date_time" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">Qo'nish vaqti</label>
-                        <div class="col-sm-8">
+                    <div class="mb-3 row align-items-center">
+                        <label for="edit_ticket_arrival_date_time" class="col-md-4 col-form-label col-form-label-sm text-md-end fw-medium">Qo'nish vaqti</label>
+                        <div class="col-md-8">
                             <input type="datetime-local" class="form-control form-control-sm" id="edit_ticket_arrival_date_time" name="ticket_arrival_date_time">
                         </div>
                     </div>
 
                     <!-- Initial Quantity Field -->
-                    <div class="mb-3 row">
-                        <label for="edit_initial_quantity" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">Miqdori</label>
-                        <div class="col-sm-8">
+                    <div class="mb-3 row align-items-center">
+                        <label for="edit_initial_quantity" class="col-md-4 col-form-label col-form-label-sm text-md-end fw-medium">Miqdori <span class="text-danger ms-1">*</span></label>
+                        <div class="col-md-8">
                             <input type="number" class="form-control form-control-sm" id="edit_initial_quantity" name="initial_quantity" min="1" required>
                         </div>
                     </div>
 
                     <!-- Unit Price Field -->
-                    <div class="mb-3 row">
-                        <label for="edit_unit_price" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">Narx</label>
-                        <div class="col-sm-8">
+                    <div class="mb-3 row align-items-center">
+                        <label for="edit_unit_price" class="col-md-4 col-form-label col-form-label-sm text-md-end fw-medium">Narx <span class="text-danger ms-1">*</span></label>
+                        <div class="col-md-8">
                             <input type="number" class="form-control form-control-sm" id="edit_unit_price" name="unit_price" step="0.01" required>
                         </div>
                     </div>
 
                     <!-- Currency Field -->
-                    <div class="mb-3 row">
-                        <label for="edit_currency" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">Valyuta</label>
-                        <div class="col-sm-8">
+                    <div class="mb-3 row align-items-center">
+                        <label for="edit_currency" class="col-md-4 col-form-label col-form-label-sm text-md-end fw-medium">Valyuta <span class="text-danger ms-1">*</span></label>
+                        <div class="col-md-8">
                             <select class="form-select form-select-sm" id="edit_currency" name="currency" required>
-                                {% for currency_code, currency_name in form.currency.field.choices %}
+                                {% for currency_code, currency_name in acquisition_form.currency.field.choices %}
                                     <option value="{{ currency_code }}">{{ currency_name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                     </div>
 
-                    <!-- Paid From Account Field -->
-                    <div class="mb-3 row">
-                        <label for="edit_paid_from_account" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">To'lov Hisobi</label>
-                        <div class="col-sm-8">
-                            <select class="form-select form-select-sm" id="edit_paid_from_account" name="paid_from_account">
-                                <option value="">Tanlanmagan</option>
-                                {% for account in form.paid_from_account.field.queryset %}
-                                    <option value="{{ account.id }}">{{ account.name }} ({{ account.currency }})</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-
                     <!-- Notes Field -->
-                    <div class="mb-3 row">
-                        <label for="edit_notes" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">Izohlar</label>
-                        <div class="col-sm-8">
+                    <div class="mb-3 row align-items-center">
+                        <label for="edit_notes" class="col-md-4 col-form-label col-form-label-sm text-md-end fw-medium">Izohlar</label>
+                        <div class="col-md-8">
                             <textarea class="form-control form-control-sm" id="edit_notes" name="notes" rows="3"></textarea>
                         </div>
                     </div>

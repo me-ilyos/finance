@@ -20,8 +20,8 @@ class AcquisitionListView(ListView):
         return self._get_filtered_queryset()
 
     def _get_filtered_queryset(self):
-        """Centralized queryset filtering to avoid duplication"""
-        queryset = self.model.objects.select_related(
+        """Centralized queryset filtering to avoid duplication - only show active acquisitions"""
+        queryset = self.model.objects.filter(is_active=True).select_related(
             'supplier', 'ticket', 'paid_from_account'
         ).order_by('-acquisition_date', '-created_at')
         
@@ -43,7 +43,19 @@ class AcquisitionListView(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['form'] = AcquisitionForm()
+        context['acquisition_form'] = AcquisitionForm()
+        
+        # Preserve query parameters for pagination
+        query_params = self.request.GET.copy()
+        if 'page' in query_params:
+            query_params.pop('page')
+        context['query_params'] = query_params.urlencode()
+        
+        # Add current filter values for the form
+        context['current_date_filter'] = self.request.GET.get('date_filter')
+        context['current_start_date'] = self.request.GET.get('start_date')
+        context['current_end_date'] = self.request.GET.get('end_date')
+        
         return context
 
     def post(self, request, *args, **kwargs):
@@ -62,8 +74,11 @@ class AcquisitionListView(ListView):
 
 @login_required(login_url='/core/login/')
 def api_acquisitions_list(request):
-    """API endpoint to get list of available acquisitions for dropdowns"""
-    acquisitions = Acquisition.objects.filter(available_quantity__gt=0).select_related(
+    """API endpoint to get list of available acquisitions for dropdowns - only active ones"""
+    acquisitions = Acquisition.objects.filter(
+        available_quantity__gt=0, 
+        is_active=True
+    ).select_related(
         'ticket', 'supplier'
     ).values(
         'id', 'ticket__description', 'available_quantity', 'currency', 

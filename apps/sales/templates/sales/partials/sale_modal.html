@@ -19,13 +19,13 @@
                     {% endif %}
 
                     {% for field in sale_form %}
-                        <div class="mb-3 row" id="wrapper_{{ field.id_for_label }}">
-                            <label for="{{ field.id_for_label }}" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">
+                        <div class="mb-3 row align-items-center" id="wrapper_{{ field.id_for_label }}">
+                            <label for="{{ field.id_for_label }}" class="col-md-4 col-form-label col-form-label-sm text-md-end fw-medium">
                                 {{ field.label }}
-                                {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+                                {% if field.field.required %}<span class="text-danger ms-1">*</span>{% endif %}
                             </label>
-                            <div class="col-sm-8">
-                                {{ field }} 
+                            <div class="col-md-8">
+                                {{ field }}
                                 {% if field.help_text %}
                                     <small class="form-text text-muted d-block mt-1">{{ field.help_text }}</small>
                                 {% endif %}

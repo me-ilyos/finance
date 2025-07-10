@@ -26,14 +26,13 @@ class AcquisitionForm(forms.ModelForm):
 
     class Meta:
         model = Acquisition
-        fields = ['supplier', 'acquisition_date', 'initial_quantity', 'unit_price', 'currency', 'paid_from_account', 'notes']
+        fields = ['supplier', 'acquisition_date', 'initial_quantity', 'unit_price', 'currency', 'notes']
         widgets = {
             'supplier': forms.Select(attrs={'class': 'form-select form-select-sm'}),
             'acquisition_date': forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control form-control-sm'}),
             'initial_quantity': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'min': '1'}),
             'unit_price': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'step': '0.01'}),
             'currency': forms.Select(attrs={'class': 'form-select form-select-sm'}),
-            'paid_from_account': forms.Select(attrs={'class': 'form-select form-select-sm'}),
             'notes': forms.Textarea(attrs={'class': 'form-control form-control-sm', 'rows': 3}),
         }
         labels = {
@@ -42,7 +41,6 @@ class AcquisitionForm(forms.ModelForm):
             'initial_quantity': "Miqdori",
             'unit_price': "Narx",
             'currency': "Valyuta",
-            'paid_from_account': "To'lov Hisobi",
             'notes': "Izohlar",
         }
 

@@ -1,5 +1,48 @@
 /* Sales App Styles */
 
+/* Modal form improvements */
+.modal .form-select,
+.modal .form-control {
+    position: relative;
+    z-index: 1060;
+}
+
+/* Fix select dropdown visibility in modals */
+.modal .form-select option {
+    background-color: white;
+    color: black;
+}
+
+/* Improve form field spacing in modals */
+.modal-body .row {
+    margin-bottom: 0.75rem;
+}
+
+.modal-body .col-form-label {
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
+}
+
+/* Ensure payment account field maintains proper alignment */
+#wrapper_id_paid_to_account {
+    width: 100%;
+}
+
+#wrapper_id_paid_to_account.d-none {
+    display: none !important;
+}
+
+/* Fix any potential misalignment issues in modal forms */
+.modal-body .row.align-items-center {
+    align-items: center !important;
+}
+
+/* Ensure select dropdowns appear above modal backdrop */
+.modal-backdrop + .dropdown-menu,
+.modal .dropdown-menu {
+    z-index: 1070 !important;
+}
+
 /* Totals row styling */
 .totals-row td {
     background-color: #CCFFCC !important;

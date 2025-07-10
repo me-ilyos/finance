@@ -9,7 +9,7 @@ from .services import AcquisitionService
 
 @login_required(login_url='/core/login/')
 def delete_acquisition(request, acquisition_id):
-    """Delete acquisition - only admins with complete transaction rollback"""
+    """Soft delete acquisition - only admins with complete transaction rollback"""
     if not request.user.is_superuser:
         return JsonResponse({
             'success': False,
@@ -20,17 +20,21 @@ def delete_acquisition(request, acquisition_id):
         AcquisitionService.delete_acquisition(acquisition_id, request.user)
         return JsonResponse({
             'success': True,
-            'message': "Xarid muvaffaqiyatli o'chirildi va barcha tranzaktsiyalar bekor qilindi."
+            'message': "Xarid muvaffaqiyatli o'chirildi (nofaol qilingan)."
         })
     except ValidationError as e:
         return JsonResponse({
             'success': False,
             'message': str(e)
         })
-    except Exception:
+    except Exception as e:
+        # Better error reporting for debugging
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Delete acquisition error: {error_details}")  # For server logs
         return JsonResponse({
             'success': False,
-            'message': "Xaridni o'chirishda xatolik yuz berdi."
+            'message': f"Xaridni o'chirishda xatolik yuz berdi: {str(e)}"
         })
 
 
@@ -44,7 +48,7 @@ def edit_acquisition(request, acquisition_id):
         })
     
     try:
-        acquisition = get_object_or_404(Acquisition, pk=acquisition_id)
+        acquisition = get_object_or_404(Acquisition, pk=acquisition_id, is_active=True)
         
         if request.method == 'GET':
             return _get_acquisition_data(acquisition)
@@ -69,7 +73,6 @@ def _get_acquisition_data(acquisition):
             'initial_quantity': acquisition.initial_quantity,
             'unit_price': str(acquisition.unit_price),
             'currency': acquisition.currency,
-            'paid_from_account': acquisition.paid_from_account.id if acquisition.paid_from_account else None,
             'notes': acquisition.notes or '',
             # Ticket data
             'ticket_type': acquisition.ticket.ticket_type,

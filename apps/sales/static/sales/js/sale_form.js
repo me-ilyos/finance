@@ -14,6 +14,28 @@ document.addEventListener('DOMContentLoaded', function () {
     const paidToAccountLabelModal = document.querySelector("label[for='id_paid_to_account']");
 
     /**
+     * Fix modal select dropdown z-index issues
+     */
+    function fixSelectDropdownZIndex() {
+        const modalSelects = document.querySelectorAll('#addSaleModal .form-select');
+        modalSelects.forEach(select => {
+            select.addEventListener('focus', function() {
+                this.style.zIndex = '1070';
+            });
+            
+            select.addEventListener('blur', function() {
+                this.style.zIndex = '1060';
+            });
+            
+            // Fix for Bootstrap 5 select styling
+            select.addEventListener('click', function() {
+                this.style.position = 'relative';
+                this.style.zIndex = '1070';
+            });
+        });
+    }
+
+    /**
      * Toggle client/agent fields and payment requirements based on agent selection
      */
     function toggleClientAgentFields() {
@@ -32,7 +54,9 @@ document.addEventListener('DOMContentLoaded', function () {
             // Agent sales create debt - no payment account allowed
             paidToAccountSelectModal.value = '';
             paidToAccountSelectModal.disabled = true;
-            paidToAccountWrapper.style.display = 'none';
+            
+            // Use Bootstrap classes to hide while maintaining layout structure
+            paidToAccountWrapper.classList.add('d-none');
         } else {
             // No agent - enable client fields, require payment account
             clientFullNameModal.disabled = false;
@@ -40,7 +64,9 @@ document.addEventListener('DOMContentLoaded', function () {
             
             // Customer sales require immediate payment
             paidToAccountSelectModal.disabled = false;
-            paidToAccountWrapper.style.display = 'block';
+            
+            // Use Bootstrap classes to show while maintaining layout structure
+            paidToAccountWrapper.classList.remove('d-none');
         }
     }
 
@@ -104,8 +130,16 @@ document.addEventListener('DOMContentLoaded', function () {
      * Initialize modal when shown
      */
     function initializeModal() {
+        // Ensure proper initial alignment
+        if (paidToAccountWrapper) {
+            paidToAccountWrapper.classList.remove('d-none');
+            paidToAccountWrapper.style.display = '';
+        }
+        
         if (agentSelectModal) toggleClientAgentFields();
         if (relatedAcquisitionSelectModal.value) updatePaymentAccountOptions();
+        // Fix z-index issues
+        fixSelectDropdownZIndex();
     }
 
     /**
@@ -137,8 +171,26 @@ document.addEventListener('DOMContentLoaded', function () {
     const addSaleModalElement = document.getElementById('addSaleModal');
     if (addSaleModalElement) {
         addSaleModalElement.addEventListener('shown.bs.modal', initializeModal);
+        
+        // Additional modal event handlers for z-index fixes
+        addSaleModalElement.addEventListener('show.bs.modal', function() {
+            // Ensure modal has proper z-index
+            this.style.zIndex = '1055';
+        });
+        
+        addSaleModalElement.addEventListener('hidden.bs.modal', function() {
+            // Reset select z-indexes when modal closes
+            const selects = this.querySelectorAll('.form-select');
+            selects.forEach(select => {
+                select.style.zIndex = '';
+                select.style.position = '';
+            });
+        });
     }
 
     // Show modal if there are form errors
     showModalIfErrors();
+    
+    // Initialize z-index fixes on page load
+    fixSelectDropdownZIndex();
 }); 

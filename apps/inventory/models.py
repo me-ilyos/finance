@@ -14,6 +14,7 @@ class Ticket(models.Model):
     description = models.TextField(help_text="E.g., Destination for air ticket, name/details for tour ticket")
     departure_date_time = models.DateTimeField()
     arrival_date_time = models.DateTimeField(blank=True, null=True)
+    is_active = models.BooleanField(default=True, verbose_name="Faol")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -47,6 +48,7 @@ class Acquisition(models.Model):
         null=True
     )
     notes = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True, verbose_name="Faol")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -81,3 +83,18 @@ class Acquisition(models.Model):
             self.initial_quantity
         )
         self.save(update_fields=['available_quantity', 'updated_at'])
+
+    def can_be_deleted(self):
+        """Check if acquisition can be safely deleted (soft delete)"""
+        return self.available_quantity == self.initial_quantity
+
+    def soft_delete(self):
+        """Mark acquisition and its ticket as inactive instead of deleting"""
+        if not self.can_be_deleted():
+            sold_quantity = self.initial_quantity - self.available_quantity
+            raise ValidationError(f"Bu xariddan {sold_quantity} dona chipta sotilgan. Xaridni o'chirib bo'lmaydi.")
+        
+        self.is_active = False
+        self.ticket.is_active = False
+        self.save(update_fields=['is_active', 'updated_at'])
+        self.ticket.save(update_fields=['is_active', 'updated_at'])

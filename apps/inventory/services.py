@@ -3,7 +3,6 @@ from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
 from .models import Acquisition, Ticket
 from .forms import AcquisitionForm
-from apps.contacts.models import SupplierPayment
 
 
 class AcquisitionService:
@@ -26,59 +25,32 @@ class AcquisitionService:
             acquisition.ticket = ticket
             acquisition.save()
             
-            # Step 1: Always add debt to supplier
+            # Add debt to supplier
             acquisition.supplier.add_debt(acquisition.total_amount, acquisition.currency)
-            
-            # Step 2: If automatic payment, create payment record
-            if acquisition.paid_from_account:
-                SupplierPayment.objects.create(
-                    supplier=acquisition.supplier,
-                    payment_date=acquisition.acquisition_date,
-                    amount=acquisition.total_amount,
-                    currency=acquisition.currency,
-                    paid_from_account=acquisition.paid_from_account,
-                    notes=f"Avtomatik to'lov - Xarid #{acquisition.pk}"
-                )
             
             return acquisition
 
     @staticmethod
     def delete_acquisition(acquisition_id, user):
-        """Delete acquisition with complete transaction rollback"""
+        """Soft delete acquisition with complete transaction rollback"""
+        print(f"DEBUG: Attempting to soft delete acquisition {acquisition_id} by user {user.username}")
+        
         if not user.is_superuser:
             raise ValidationError("Faqat administratorlar xaridni o'chira oladi.")
         
-        acquisition = get_object_or_404(Acquisition, pk=acquisition_id)
-        
-        # Check if tickets were sold
-        if acquisition.available_quantity < acquisition.initial_quantity:
-            sold_quantity = acquisition.initial_quantity - acquisition.available_quantity
-            raise ValidationError(f"Bu xariddan {sold_quantity} dona chipta sotilgan. Xaridni o'chirib bo'lmaydi.")
+        acquisition = get_object_or_404(Acquisition, pk=acquisition_id, is_active=True)
+        print(f"DEBUG: Found active acquisition - Initial: {acquisition.initial_quantity}, Available: {acquisition.available_quantity}")
         
         with transaction.atomic():
-            # Remove supplier debt
+            # Remove supplier debt first
+            print(f"DEBUG: Reducing supplier debt: {acquisition.total_amount} {acquisition.currency}")
             acquisition.supplier.reduce_debt(acquisition.total_amount, acquisition.currency)
             
-            # If there was automatic payment, remove it
-            if acquisition.paid_from_account:
-                try:
-                    payment = SupplierPayment.objects.get(
-                        supplier=acquisition.supplier,
-                        amount=acquisition.total_amount,
-                        currency=acquisition.currency,
-                        notes__contains=f"Xarid #{acquisition.pk}"
-                    )
-                    payment.delete()
-                except SupplierPayment.DoesNotExist:
-                    pass
+            # Soft delete the acquisition and ticket
+            print(f"DEBUG: Soft deleting acquisition and ticket")
+            acquisition.soft_delete()
             
-            # Delete associated ticket
-            if acquisition.ticket:
-                acquisition.ticket.delete()
-            
-            # Delete the acquisition
-            acquisition.delete()
-            
+            print(f"DEBUG: Soft deletion completed successfully")
             return True
 
     @staticmethod
@@ -89,7 +61,6 @@ class AcquisitionService:
             original_supplier = original_acquisition.supplier
             original_total_amount = original_acquisition.total_amount
             original_currency = original_acquisition.currency
-            original_paid_account = original_acquisition.paid_from_account
             original_quantity = original_acquisition.initial_quantity
             
             # Check if tickets were sold and quantity is being reduced
@@ -121,20 +92,18 @@ class AcquisitionService:
             # Handle supplier debt changes
             AcquisitionService._handle_supplier_changes(
                 original_acquisition, original_supplier, original_total_amount, 
-                original_currency, original_paid_account,
-                updated_acquisition
+                original_currency, updated_acquisition
             )
             
             return updated_acquisition
 
     @staticmethod
     def _handle_supplier_changes(original_acquisition, original_supplier, original_total_amount, 
-                               original_currency, original_paid_account, updated_acquisition):
-        """Handle supplier and payment changes"""
+                               original_currency, updated_acquisition):
+        """Handle supplier debt changes"""
         new_supplier = updated_acquisition.supplier
         new_total_amount = updated_acquisition.total_amount
         new_currency = updated_acquisition.currency
-        new_paid_account = updated_acquisition.paid_from_account
         
         # If supplier changed
         if original_supplier.id != new_supplier.id:
@@ -143,12 +112,6 @@ class AcquisitionService:
             
             # Add debt to new supplier
             new_supplier.add_debt(new_total_amount, new_currency)
-            
-            # Handle payment changes
-            AcquisitionService._handle_payment_changes(
-                original_acquisition, original_paid_account, original_total_amount, original_currency,
-                updated_acquisition, new_paid_account, new_total_amount, new_currency
-            )
         else:
             # Same supplier, adjust debt difference
             if original_currency == new_currency:
@@ -158,38 +121,4 @@ class AcquisitionService:
             else:
                 # Currency changed - remove old debt, add new debt
                 original_supplier.reduce_debt(original_total_amount, original_currency)
-                original_supplier.add_debt(new_total_amount, new_currency)
-            
-            # Handle payment changes
-            AcquisitionService._handle_payment_changes(
-                original_acquisition, original_paid_account, original_total_amount, original_currency,
-                updated_acquisition, new_paid_account, new_total_amount, new_currency
-            )
-
-    @staticmethod
-    def _handle_payment_changes(original_acquisition, original_paid_account, original_total_amount, original_currency,
-                              updated_acquisition, new_paid_account, new_total_amount, new_currency):
-        """Handle automatic payment changes"""
-        # Remove original payment if it existed
-        if original_paid_account:
-            try:
-                payment = SupplierPayment.objects.get(
-                    supplier=original_acquisition.supplier,
-                    amount=original_total_amount,
-                    currency=original_currency,
-                    notes__contains=f"Xarid #{original_acquisition.pk}"
-                )
-                payment.delete()
-            except SupplierPayment.DoesNotExist:
-                pass
-        
-        # Create new payment if needed
-        if new_paid_account:
-            SupplierPayment.objects.create(
-                supplier=updated_acquisition.supplier,
-                payment_date=updated_acquisition.acquisition_date,
-                amount=new_total_amount,
-                currency=new_currency,
-                paid_from_account=new_paid_account,
-                notes=f"Avtomatik to'lov - Xarid #{updated_acquisition.pk}"
-            ) 
+                original_supplier.add_debt(new_total_amount, new_currency) 
