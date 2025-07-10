@@ -9,6 +9,7 @@ class Ticket(models.Model):
     class TicketType(models.TextChoices):
         AIR_TICKET = 'AIR', 'Chipta'
         TOUR_TICKET = 'TOUR', 'Tur paket'
+        UMRA_TICKET = 'UMRA', 'Umra'
 
     ticket_type = models.CharField(max_length=4, choices=TicketType.choices)
     description = models.TextField(help_text="E.g., Destination for air ticket, name/details for tour ticket")

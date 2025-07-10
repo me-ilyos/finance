@@ -98,6 +98,44 @@ class SupplierPayment(BasePayment):
 class AgentPayment(BasePayment):
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='payments')
     paid_to_account = models.ForeignKey('accounting.FinancialAccount', on_delete=models.PROTECT)
+    
+    # Cross-currency payment fields
+    exchange_rate = models.DecimalField(
+        max_digits=10, 
+        decimal_places=4, 
+        null=True, 
+        blank=True,
+        help_text="UZS per 1 USD exchange rate (only for cross-currency payments)"
+    )
+    original_amount = models.DecimalField(
+        max_digits=20, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        help_text="Original amount in the currency paid (before conversion)"
+    )
+    original_currency = models.CharField(
+        max_length=3, 
+        choices=CurrencyChoices.choices, 
+        null=True, 
+        blank=True,
+        help_text="Original currency paid (before conversion)"
+    )
+
+    def is_cross_currency_payment(self):
+        """Check if this is a cross-currency payment"""
+        return self.exchange_rate is not None and self.original_amount is not None
+
+    def __str__(self):
+        if self.is_cross_currency_payment():
+            if self.original_currency == 'USD':
+                # USD to UZS conversion
+                return f"{self.agent.name} - ${self.original_amount:,.2f} -> {self.amount:,.0f} UZS (Rate: {self.exchange_rate:,.0f}) - {self.payment_date.strftime('%d-%m-%Y')}"
+            else:
+                # UZS to USD conversion
+                return f"{self.agent.name} - {self.original_amount:,.0f} UZS -> ${self.amount:,.2f} (Rate: {self.exchange_rate:,.0f}) - {self.payment_date.strftime('%d-%m-%Y')}"
+        else:
+            return f"{self.agent.name} - {self.amount:,.2f} {self.currency} - {self.payment_date.strftime('%d-%m-%Y')}"
 
     class Meta(BasePayment.Meta):
         verbose_name = "Agent To'lovi"

@@ -5,8 +5,37 @@
 
 {% block page_title %}Agent: {{ agent.name }} - Hisob Kitob{% endblock %}
 
+{% block extra_css %}
+<style>
+.table-header-date, .table-header-type {
+    width: 18%;
+}
+.table-header-currency {
+    width: 16%;
+}
+.filter-uzs .table-header-date, .filter-uzs .table-header-type,
+.filter-usd .table-header-date, .filter-usd .table-header-type {
+    width: 33%;
+}
+.filter-uzs .table-header-currency-uzs,
+.filter-usd .table-header-currency-usd {
+    width: 17%;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
+    {% comment %} Display Django Messages {% endcomment %}
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+    {% endif %}
+    
     <!-- Transaction History Header -->
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
@@ -25,20 +54,37 @@
         </div>
     </div>
 
+    <!-- Filter Controls -->
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <label for="transactionFilter" class="form-label">Tranzaksiya turi:</label>
+            <select id="transactionFilter" class="form-select form-select-sm">
+                <option value="all" {% if current_filter == 'all' %}selected{% endif %}>Barcha tranzaksiyalar</option>
+                <option value="uzs" {% if current_filter == 'uzs' %}selected{% endif %}>UZS</option>
+                <option value="usd" {% if current_filter == 'usd' %}selected{% endif %}>USD</option>
+                <option value="umra" {% if current_filter == 'umra' %}selected{% endif %}>Umra</option>
+            </select>
+        </div>
+    </div>
+
     <!-- Transaction Table -->
     <div class="card shadow-sm mb-4">
         <div class="card-body">
-            {% if sales or payments %}
+            {% if transactions %}
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle">
+                    <table class="table table-hover align-middle filter-{{ current_filter }}">
                         <thead class="table-light">
                             <tr>
-                                <th style="width: 18%;">Sana va Vaqt</th>
-                                <th style="width: 18%;">Tip</th>
-                                <th style="width: 16%;" class="text-end">Sotuv (UZS)</th>
-                                <th style="width: 16%;" class="text-end">To'lov (UZS)</th>
-                                <th style="width: 16%;" class="text-end">Sotuv (USD)</th>
-                                <th style="width: 16%;" class="text-end">To'lov (USD)</th>
+                                <th class="table-header-date">Sana va Vaqt</th>
+                                <th class="table-header-type">Tip</th>
+                                {% if current_filter != 'usd' %}
+                                <th class="table-header-currency table-header-currency-uzs text-end">Sotuv (UZS)</th>
+                                <th class="table-header-currency table-header-currency-uzs text-end">To'lov (UZS)</th>
+                                {% endif %}
+                                {% if current_filter != 'uzs' %}
+                                <th class="table-header-currency table-header-currency-usd text-end">Sotuv (USD)</th>
+                                <th class="table-header-currency table-header-currency-usd text-end">To'lov (USD)</th>
+                                {% endif %}
                             </tr>
                         </thead>
                         <tbody>
@@ -56,6 +102,7 @@
                                             <br>
                                             <small class="text-muted">{{ transaction.sale.related_acquisition.ticket.description|truncatewords:3 }}</small>
                                         </td>
+                                        {% if current_filter != 'usd' %}
                                         <td class="text-end">
                                             {% if transaction.sale.sale_currency == 'UZS' %}
                                                 <span class="text-success">+{{ transaction.sale.total_sale_amount|floatformat:0|intcomma }}</span>
@@ -64,6 +111,8 @@
                                             {% endif %}
                                         </td>
                                         <td class="text-end">-</td>
+                                        {% endif %}
+                                        {% if current_filter != 'uzs' %}
                                         <td class="text-end">
                                             {% if transaction.sale.sale_currency == 'USD' %}
                                                 <span class="text-success">+${{ transaction.sale.total_sale_amount|floatformat:2|intcomma }}</span>
@@ -72,6 +121,7 @@
                                             {% endif %}
                                         </td>
                                         <td class="text-end">-</td>
+                                        {% endif %}
                                     </tr>
                                 {% elif transaction.type == 'payment' %}
                                     <tr>
@@ -83,9 +133,24 @@
                                         <td>
                                             <i class="fas fa-credit-card text-primary me-1"></i>
                                             <strong>To'lov</strong>
-                                            <br>
-                                            <small class="text-muted">{{ transaction.payment.paid_to_account.name }}</small>
+                                            {% if transaction.payment.is_cross_currency_payment %}
+                                                <span class="badge bg-info ms-1">Konvertatsiya</span>
+                                                <br>
+                                                <small class="text-muted">{{ transaction.payment.paid_to_account.name }}</small>
+                                                <br>
+                                                <small class="text-info">
+                                                    {% if transaction.payment.original_currency == 'USD' %}
+                                                        ${{ transaction.payment.original_amount|floatformat:2 }} × {{ transaction.payment.exchange_rate|floatformat:0 }}
+                                                    {% else %}
+                                                        {{ transaction.payment.original_amount|floatformat:0|intcomma }} ÷ {{ transaction.payment.exchange_rate|floatformat:0 }}
+                                                    {% endif %}
+                                                </small>
+                                            {% else %}
+                                                <br>
+                                                <small class="text-muted">{{ transaction.payment.paid_to_account.name }}</small>
+                                            {% endif %}
                                         </td>
+                                        {% if current_filter != 'usd' %}
                                         <td class="text-end">-</td>
                                         <td class="text-end">
                                             {% if transaction.payment.currency == 'UZS' %}
@@ -94,6 +159,8 @@
                                                 -
                                             {% endif %}
                                         </td>
+                                        {% endif %}
+                                        {% if current_filter != 'uzs' %}
                                         <td class="text-end">-</td>
                                         <td class="text-end">
                                             {% if transaction.payment.currency == 'USD' %}
@@ -102,6 +169,7 @@
                                                 -
                                             {% endif %}
                                         </td>
+                                        {% endif %}
                                     </tr>
                                 {% endif %}
                             {% endfor %}
@@ -111,6 +179,7 @@
                                 <th colspan="2" class="text-center py-3">
                                     <strong><i class="fas fa-calculator me-2"></i>Jami</strong>
                                 </th>
+                                {% if current_filter != 'usd' %}
                                 <th class="text-end py-3">
                                     <strong class="text-success">
                                         +{{ uzs_sales|floatformat:0|intcomma }}
@@ -121,6 +190,8 @@
                                         {{ uzs_payments|floatformat:0|intcomma }}
                                     </strong>
                                 </th>
+                                {% endif %}
+                                {% if current_filter != 'uzs' %}
                                 <th class="text-end py-3">
                                     <strong class="text-success">
                                         {% if usd_sales > 0 %}+${{ usd_sales|floatformat:2|intcomma }}{% else %}-{% endif %}
@@ -131,10 +202,48 @@
                                         {% if usd_payments > 0 %} ${{ usd_payments|floatformat:2|intcomma }}{% else %}-{% endif %}
                                     </strong>
                                 </th>
+                                {% endif %}
                             </tr>
                         </tfoot>
                     </table>
                 </div>
+
+                <!-- Pagination -->
+                {% if transactions.has_other_pages %}
+                <nav aria-label="Transaction pagination">
+                    <ul class="pagination pagination-sm justify-content-center">
+                        {% if transactions.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page=1{% if current_filter != 'all' %}&filter={{ current_filter }}{% endif %}">&laquo; Birinchi</a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ transactions.previous_page_number }}{% if current_filter != 'all' %}&filter={{ current_filter }}{% endif %}">Oldingi</a>
+                            </li>
+                        {% endif %}
+
+                        {% for num in transactions.paginator.page_range %}
+                            {% if transactions.number == num %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                            {% elif num > transactions.number|add:'-3' and num < transactions.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ num }}{% if current_filter != 'all' %}&filter={{ current_filter }}{% endif %}">{{ num }}</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if transactions.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ transactions.next_page_number }}{% if current_filter != 'all' %}&filter={{ current_filter }}{% endif %}">Keyingi</a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ transactions.paginator.num_pages }}{% if current_filter != 'all' %}&filter={{ current_filter }}{% endif %}">Oxirgi &raquo;</a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
             {% else %}
                 <div class="text-center py-4">
                     <i class="fas fa-inbox fa-2x text-muted mb-3"></i>
@@ -273,4 +382,159 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const filterSelect = document.getElementById('transactionFilter');
+    
+    filterSelect.addEventListener('change', function() {
+        const filterValue = this.value;
+        const url = new URL(window.location);
+        
+        if (filterValue === 'all') {
+            url.searchParams.delete('filter');
+        } else {
+            url.searchParams.set('filter', filterValue);
+        }
+        
+        // Reset to first page when filter changes
+        url.searchParams.delete('page');
+        
+        window.location.href = url.toString();
+    });
+
+    // Cross-currency payment functionality
+    const paymentTypeSelect = document.getElementById('id_payment_type');
+    const conversionDirectionSelect = document.getElementById('id_conversion_direction');
+    const exchangeRateField = document.getElementById('id_exchange_rate');
+    const originalAmountField = document.getElementById('id_original_amount');
+    const amountField = document.getElementById('id_amount');
+    const currencyField = document.getElementById('id_currency');
+    const accountField = document.getElementById('id_paid_to_account');
+    
+    // Store all account options for filtering
+    let allAccountOptions = [];
+    if (accountField) {
+        allAccountOptions = Array.from(accountField.options);
+    }
+
+    function toggleCrossCurrencyFields() {
+        const isCrossCurrency = paymentTypeSelect.value === 'cross_currency';
+        
+        // Show/hide cross-currency fields
+        const conversionDirectionRow = conversionDirectionSelect.closest('.mb-3');
+        const exchangeRateRow = exchangeRateField.closest('.mb-3');
+        const originalAmountRow = originalAmountField.closest('.mb-3');
+        
+        if (isCrossCurrency) {
+            conversionDirectionRow.style.display = 'block';
+            exchangeRateRow.style.display = 'block';
+            originalAmountRow.style.display = 'block';
+            // Make amount field readonly for cross-currency
+            amountField.readOnly = true;
+            amountField.style.backgroundColor = '#e9ecef';
+            // Make currency readonly during conversion (but don't disable it)
+            currencyField.style.pointerEvents = 'none';
+            currencyField.style.backgroundColor = '#e9ecef';
+            
+            // Update labels based on conversion direction
+            updateConversionLabels();
+        } else {
+            conversionDirectionRow.style.display = 'none';
+            exchangeRateRow.style.display = 'none';
+            originalAmountRow.style.display = 'none';
+            // Make amount field editable for normal payments
+            amountField.readOnly = false;
+            amountField.style.backgroundColor = '';
+            // Enable currency selection
+            currencyField.style.pointerEvents = '';
+            currencyField.style.backgroundColor = '';
+            
+            // Restore all account options for normal payments
+            if (accountField) {
+                accountField.innerHTML = '';
+                allAccountOptions.forEach(option => {
+                    accountField.appendChild(option.cloneNode(true));
+                });
+            }
+        }
+    }
+
+    function filterAccountsByOriginalCurrency(originalCurrency) {
+        if (!accountField) return;
+        
+        // Clear current options
+        accountField.innerHTML = '';
+        
+        // Add filtered options
+        allAccountOptions.forEach(option => {
+            if (option.value === '' || option.textContent.includes(`(${originalCurrency})`)) {
+                accountField.appendChild(option.cloneNode(true));
+            }
+        });
+    }
+
+    function updateConversionLabels() {
+        const direction = conversionDirectionSelect.value;
+        const originalAmountLabel = originalAmountField.closest('.mb-3').querySelector('label');
+        const originalAmountHelp = originalAmountField.closest('.mb-3').querySelector('.form-text');
+        
+        if (direction === 'usd_to_uzs') {
+            originalAmountLabel.textContent = 'USD miqdori';
+            originalAmountField.placeholder = '100.00';
+            originalAmountHelp.textContent = 'Agent olib kelgan USD miqdori';
+            currencyField.value = 'UZS';
+            filterAccountsByOriginalCurrency('USD');
+        } else { // uzs_to_usd
+            originalAmountLabel.textContent = 'UZS miqdori';
+            originalAmountField.placeholder = '1250000.00';
+            originalAmountHelp.textContent = 'Agent olib kelgan UZS miqdori';
+            currencyField.value = 'USD';
+            filterAccountsByOriginalCurrency('UZS');
+        }
+    }
+
+    function calculateConvertedAmount() {
+        const exchangeRate = parseFloat(exchangeRateField.value) || 0;
+        const originalAmount = parseFloat(originalAmountField.value) || 0;
+        const direction = conversionDirectionSelect.value;
+        
+        if (exchangeRate > 0 && originalAmount > 0) {
+            let calculatedAmount;
+            
+            if (direction === 'usd_to_uzs') {
+                // USD × rate = UZS
+                calculatedAmount = originalAmount * exchangeRate;
+                // Round to 2 decimal places and ensure it's not too large
+                calculatedAmount = Math.round(calculatedAmount * 100) / 100;
+                amountField.value = calculatedAmount.toFixed(2);
+            } else { // uzs_to_usd
+                // UZS ÷ rate = USD
+                calculatedAmount = originalAmount / exchangeRate;
+                // Round to 2 decimal places
+                calculatedAmount = Math.round(calculatedAmount * 100) / 100;
+                amountField.value = calculatedAmount.toFixed(2);
+            }
+        } else {
+            amountField.value = '';
+        }
+    }
+
+    // Initialize the form state
+    if (paymentTypeSelect) {
+        toggleCrossCurrencyFields();
+        
+        // Add event listeners
+        paymentTypeSelect.addEventListener('change', toggleCrossCurrencyFields);
+        conversionDirectionSelect.addEventListener('change', function() {
+            updateConversionLabels();
+            calculateConvertedAmount();
+        });
+        exchangeRateField.addEventListener('input', calculateConvertedAmount);
+        originalAmountField.addEventListener('input', calculateConvertedAmount);
+    }
+});
+</script>
 {% endblock %}

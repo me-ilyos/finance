@@ -5,6 +5,25 @@
 
 {% block page_title %}Ta'minotchi: {{ supplier.name }} - Hisob Kitob{% endblock %}
 
+{% block extra_css %}
+<style>
+.table-header-date, .table-header-type {
+    width: 18%;
+}
+.table-header-currency {
+    width: 16%;
+}
+.filter-uzs .table-header-date, .filter-uzs .table-header-type,
+.filter-usd .table-header-date, .filter-usd .table-header-type {
+    width: 33%;
+}
+.filter-uzs .table-header-currency-uzs,
+.filter-usd .table-header-currency-usd {
+    width: 17%;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <!-- Transaction History Header -->
@@ -34,20 +53,37 @@
         </div>
     </div>
 
+    <!-- Filter Controls -->
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <label for="transactionFilter" class="form-label">Tranzaksiya turi:</label>
+            <select id="transactionFilter" class="form-select form-select-sm">
+                <option value="all" {% if current_filter == 'all' %}selected{% endif %}>Barcha tranzaksiyalar</option>
+                <option value="uzs" {% if current_filter == 'uzs' %}selected{% endif %}>UZS</option>
+                <option value="usd" {% if current_filter == 'usd' %}selected{% endif %}>USD</option>
+                <option value="umra" {% if current_filter == 'umra' %}selected{% endif %}>Umra</option>
+            </select>
+        </div>
+    </div>
+
     <!-- Transaction Table -->
     <div class="card shadow-sm mb-4">
         <div class="card-body">
-            {% if acquisitions or payments %}
+            {% if transactions %}
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle">
+                    <table class="table table-hover align-middle filter-{{ current_filter }}">
                         <thead class="table-light">
                             <tr>
-                                <th style="width: 18%;">Sana va Vaqt</th>
-                                <th style="width: 18%;">Tip</th>
-                                <th style="width: 16%;" class="text-end">Qarz (UZS)</th>
-                                <th style="width: 16%;" class="text-end">To'lov (UZS)</th>
-                                <th style="width: 16%;" class="text-end">Qarz (USD)</th>
-                                <th style="width: 16%;" class="text-end">To'lov (USD)</th>
+                                <th class="table-header-date">Sana va Vaqt</th>
+                                <th class="table-header-type">Tip</th>
+                                {% if current_filter != 'usd' %}
+                                <th class="table-header-currency table-header-currency-uzs text-end">Qarz (UZS)</th>
+                                <th class="table-header-currency table-header-currency-uzs text-end">To'lov (UZS)</th>
+                                {% endif %}
+                                {% if current_filter != 'uzs' %}
+                                <th class="table-header-currency table-header-currency-usd text-end">Qarz (USD)</th>
+                                <th class="table-header-currency table-header-currency-usd text-end">To'lov (USD)</th>
+                                {% endif %}
                             </tr>
                         </thead>
                         <tbody>
@@ -65,6 +101,7 @@
                                             <br>
                                             <small class="text-muted">{{ transaction.acquisition.ticket.description|truncatewords:3 }}</small>
                                         </td>
+                                        {% if current_filter != 'usd' %}
                                         <td class="text-end">
                                             {% if transaction.acquisition.currency == 'UZS' %}
                                                 <span class="text-danger">-{{ transaction.acquisition.total_amount|floatformat:0|intcomma }}</span>
@@ -73,6 +110,8 @@
                                             {% endif %}
                                         </td>
                                         <td class="text-end">-</td>
+                                        {% endif %}
+                                        {% if current_filter != 'uzs' %}
                                         <td class="text-end">
                                             {% if transaction.acquisition.currency == 'USD' %}
                                                 <span class="text-danger">-${{ transaction.acquisition.total_amount|floatformat:2|intcomma }}</span>
@@ -81,6 +120,7 @@
                                             {% endif %}
                                         </td>
                                         <td class="text-end">-</td>
+                                        {% endif %}
                                     </tr>
                                 {% elif transaction.type == 'payment' %}
                                     <tr>
@@ -95,6 +135,7 @@
                                             <br>
                                             <small class="text-muted">{{ transaction.payment.paid_from_account.name }}</small>
                                         </td>
+                                        {% if current_filter != 'usd' %}
                                         <td class="text-end">-</td>
                                         <td class="text-end">
                                             {% if transaction.payment.currency == 'UZS' %}
@@ -103,6 +144,8 @@
                                                 -
                                             {% endif %}
                                         </td>
+                                        {% endif %}
+                                        {% if current_filter != 'uzs' %}
                                         <td class="text-end">-</td>
                                         <td class="text-end">
                                             {% if transaction.payment.currency == 'USD' %}
@@ -111,6 +154,7 @@
                                                 -
                                             {% endif %}
                                         </td>
+                                        {% endif %}
                                     </tr>
                                 {% endif %}
                             {% endfor %}
@@ -120,6 +164,7 @@
                                 <th colspan="2" class="text-center py-3">
                                     <strong><i class="fas fa-calculator me-2"></i>Jami</strong>
                                 </th>
+                                {% if current_filter != 'usd' %}
                                 <th class="text-end py-3">
                                     <strong class="text-danger">
                                         -{{ uzs_acquisitions|floatformat:0|intcomma }}
@@ -130,6 +175,8 @@
                                         {{ uzs_payments|floatformat:0|intcomma }}
                                     </strong>
                                 </th>
+                                {% endif %}
+                                {% if current_filter != 'uzs' %}
                                 <th class="text-end py-3">
                                     <strong class="text-danger">
                                         {% if usd_acquisitions > 0 %}-${{ usd_acquisitions|floatformat:2|intcomma }}{% else %}-{% endif %}
@@ -140,10 +187,48 @@
                                         {% if usd_payments > 0 %} ${{ usd_payments|floatformat:2|intcomma }}{% else %}-{% endif %}
                                     </strong>
                                 </th>
+                                {% endif %}
                             </tr>
                         </tfoot>
                     </table>
                 </div>
+
+                <!-- Pagination -->
+                {% if transactions.has_other_pages %}
+                <nav aria-label="Transaction pagination">
+                    <ul class="pagination pagination-sm justify-content-center">
+                        {% if transactions.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page=1{% if current_filter != 'all' %}&filter={{ current_filter }}{% endif %}">&laquo; Birinchi</a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ transactions.previous_page_number }}{% if current_filter != 'all' %}&filter={{ current_filter }}{% endif %}">Oldingi</a>
+                            </li>
+                        {% endif %}
+
+                        {% for num in transactions.paginator.page_range %}
+                            {% if transactions.number == num %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                            {% elif num > transactions.number|add:'-3' and num < transactions.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ num }}{% if current_filter != 'all' %}&filter={{ current_filter }}{% endif %}">{{ num }}</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if transactions.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ transactions.next_page_number }}{% if current_filter != 'all' %}&filter={{ current_filter }}{% endif %}">Keyingi</a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ transactions.paginator.num_pages }}{% if current_filter != 'all' %}&filter={{ current_filter }}{% endif %}">Oxirgi &raquo;</a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
             {% else %}
                 <div class="text-center py-4">
                     <i class="fas fa-inbox fa-2x text-muted mb-3"></i>
@@ -313,4 +398,26 @@ function deactivateSupplier(supplierId) {
 }
 </script>
 {% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const filterSelect = document.getElementById('transactionFilter');
+    
+    filterSelect.addEventListener('change', function() {
+        const filterValue = this.value;
+        const url = new URL(window.location);
+        
+        if (filterValue === 'all') {
+            url.searchParams.delete('filter');
+        } else {
+            url.searchParams.set('filter', filterValue);
+        }
+        
+        // Reset to first page when filter changes
+        url.searchParams.delete('page');
+        
+        window.location.href = url.toString();
+    });
+});
+</script>
 {% endblock %} 

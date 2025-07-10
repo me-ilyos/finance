@@ -5,6 +5,8 @@ from django.http import HttpResponseRedirect, JsonResponse
 from django.db.models import Sum, Q
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.contrib import messages
 import logging
 
 from .models import Agent, Supplier, AgentPayment, SupplierPayment
@@ -70,9 +72,26 @@ class SupplierDetailView(LoginRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         supplier = self.object
         
+        # Get filter parameter from request
+        filter_type = self.request.GET.get('filter', 'all')
+        page = self.request.GET.get('page', 1)
+        
+        # Get base querysets
         acquisitions = supplier.acquisitions.select_related('ticket').order_by('-acquisition_date')
         payments = supplier.payments.select_related('paid_from_account').order_by('-payment_date')
         
+        # Apply filtering based on filter_type
+        if filter_type == 'uzs':
+            acquisitions = acquisitions.filter(currency='UZS')
+            payments = payments.filter(currency='UZS')
+        elif filter_type == 'usd':
+            acquisitions = acquisitions.filter(currency='USD')
+            payments = payments.filter(currency='USD')
+        elif filter_type == 'umra':
+            acquisitions = acquisitions.filter(ticket__ticket_type='UMRA')
+            payments = payments.none()  # No payments are specific to ticket type
+        
+        # Create transactions list
         transactions = []
         for acq in acquisitions:
             transactions.append({'date': acq.acquisition_date, 'type': 'acquisition', 'acquisition': acq})
@@ -81,23 +100,36 @@ class SupplierDetailView(LoginRequiredMixin, DetailView):
         
         transactions.sort(key=lambda x: x['date'], reverse=True)
         
-        # Calculate totals for display in table footer
-        uzs_acquisitions = acquisitions.filter(currency='UZS').aggregate(
+        # Paginate transactions
+        paginator = Paginator(transactions, 20)  # 20 transactions per page
+        try:
+            paginated_transactions = paginator.page(page)
+        except PageNotAnInteger:
+            paginated_transactions = paginator.page(1)
+        except EmptyPage:
+            paginated_transactions = paginator.page(paginator.num_pages)
+        
+        # Calculate totals for display in table footer (always use all transactions, not filtered)
+        all_acquisitions = supplier.acquisitions.select_related('ticket')
+        all_payments = supplier.payments.select_related('paid_from_account')
+        
+        uzs_acquisitions = all_acquisitions.filter(currency='UZS').aggregate(
             total=Sum('total_amount'))['total'] or 0
-        usd_acquisitions = acquisitions.filter(currency='USD').aggregate(
+        usd_acquisitions = all_acquisitions.filter(currency='USD').aggregate(
             total=Sum('total_amount'))['total'] or 0
         
-        uzs_payments = payments.filter(currency='UZS').aggregate(
+        uzs_payments = all_payments.filter(currency='UZS').aggregate(
             total=Sum('amount'))['total'] or 0
-        usd_payments = payments.filter(currency='USD').aggregate(
+        usd_payments = all_payments.filter(currency='USD').aggregate(
             total=Sum('amount'))['total'] or 0
         
         context.update({
-            'transactions': transactions,
-            'acquisitions': acquisitions,
-            'payments': payments,
+            'transactions': paginated_transactions,
+            'acquisitions': supplier.acquisitions.select_related('ticket').order_by('-acquisition_date'),
+            'payments': supplier.payments.select_related('paid_from_account').order_by('-payment_date'),
             'payment_form': SupplierPaymentForm(),
-            # Table footer totals
+            'current_filter': filter_type,
+            # Table footer totals (always show complete totals)
             'uzs_acquisitions': uzs_acquisitions,
             'usd_acquisitions': usd_acquisitions,
             'uzs_payments': uzs_payments,
@@ -147,9 +179,26 @@ class AgentDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         agent = self.object
         
+        # Get filter parameter from request
+        filter_type = self.request.GET.get('filter', 'all')
+        page = self.request.GET.get('page', 1)
+        
+        # Get base querysets
         sales = agent.agent_sales.select_related('related_acquisition__ticket').order_by('-sale_date')
         payments = agent.payments.select_related('paid_to_account').order_by('-payment_date')
         
+        # Apply filtering based on filter_type
+        if filter_type == 'uzs':
+            sales = sales.filter(sale_currency='UZS')
+            payments = payments.filter(currency='UZS')
+        elif filter_type == 'usd':
+            sales = sales.filter(sale_currency='USD')
+            payments = payments.filter(currency='USD')
+        elif filter_type == 'umra':
+            sales = sales.filter(related_acquisition__ticket__ticket_type='UMRA')
+            payments = payments.none()  # No payments are specific to ticket type
+        
+        # Create transactions list
         transactions = []
         for sale in sales:
             transactions.append({'date': sale.sale_date, 'type': 'sale', 'sale': sale})
@@ -158,23 +207,36 @@ class AgentDetailView(DetailView):
         
         transactions.sort(key=lambda x: x['date'], reverse=True)
         
-        # Calculate totals for display in table footer
-        uzs_sales = sales.filter(sale_currency='UZS').aggregate(
+        # Paginate transactions
+        paginator = Paginator(transactions, 20)  # 20 transactions per page
+        try:
+            paginated_transactions = paginator.page(page)
+        except PageNotAnInteger:
+            paginated_transactions = paginator.page(1)
+        except EmptyPage:
+            paginated_transactions = paginator.page(paginator.num_pages)
+        
+        # Calculate totals for display in table footer (always use all transactions, not filtered)
+        all_sales = agent.agent_sales.select_related('related_acquisition__ticket')
+        all_payments = agent.payments.select_related('paid_to_account')
+        
+        uzs_sales = all_sales.filter(sale_currency='UZS').aggregate(
             total=Sum('total_sale_amount'))['total'] or 0
-        usd_sales = sales.filter(sale_currency='USD').aggregate(
+        usd_sales = all_sales.filter(sale_currency='USD').aggregate(
             total=Sum('total_sale_amount'))['total'] or 0
         
-        uzs_payments = payments.filter(currency='UZS').aggregate(
+        uzs_payments = all_payments.filter(currency='UZS').aggregate(
             total=Sum('amount'))['total'] or 0
-        usd_payments = payments.filter(currency='USD').aggregate(
+        usd_payments = all_payments.filter(currency='USD').aggregate(
             total=Sum('amount'))['total'] or 0
         
         context.update({
-            'transactions': transactions,
-            'sales': sales,
-            'payments': payments,
+            'transactions': paginated_transactions,
+            'sales': agent.agent_sales.select_related('related_acquisition__ticket').order_by('-sale_date'),
+            'payments': agent.payments.select_related('paid_to_account').order_by('-payment_date'),
             'payment_form': AgentPaymentForm(),
-            # Table footer totals
+            'current_filter': filter_type,
+            # Table footer totals (always show complete totals)
             'uzs_sales': uzs_sales,
             'usd_sales': usd_sales,
             'uzs_payments': uzs_payments,
@@ -201,10 +263,33 @@ def add_payment(request, contact_pk, contact_type):
                 payment = form.save(commit=False)
                 if contact_type == 'agent':
                     payment.agent = contact
-                    payment.save()
-                    contact.reduce_debt(payment.amount, payment.currency)
-                    payment.paid_to_account.current_balance += payment.amount
-                    payment.paid_to_account.save(update_fields=['current_balance', 'updated_at'])
+                    
+                    # Handle cross-currency payment for agents
+                    if form.cleaned_data.get('payment_type') == 'cross_currency':
+                        payment.original_amount = form.cleaned_data['original_amount']
+                        payment.original_currency = form.cleaned_data['original_currency']
+                        payment.exchange_rate = form.cleaned_data['exchange_rate']
+                        
+                        # For cross-currency payments:
+                        # - payment.amount = converted amount (for debt reduction)
+                        # - payment.currency = debt currency being paid
+                        # - but actual money goes to account matching original_currency
+                        
+                        # Save payment first
+                        payment.save()
+                        
+                        # Reduce debt using converted amount in the target currency
+                        contact.reduce_debt(payment.amount, payment.currency)
+                        
+                        # Add actual money received to account in original currency
+                        payment.paid_to_account.current_balance += payment.original_amount
+                        payment.paid_to_account.save(update_fields=['current_balance', 'updated_at'])
+                    else:
+                        # Normal same-currency payment
+                        payment.save()
+                        contact.reduce_debt(payment.amount, payment.currency)
+                        payment.paid_to_account.current_balance += payment.amount
+                        payment.paid_to_account.save(update_fields=['current_balance', 'updated_at'])
                 else:
                     payment.supplier = contact
                     payment.save()
@@ -212,8 +297,23 @@ def add_payment(request, contact_pk, contact_type):
                     payment.paid_from_account.current_balance -= payment.amount
                     payment.paid_from_account.save(update_fields=['current_balance', 'updated_at'])
                 
+                # Success - add success message and redirect
+                messages.success(request, f"To'lov muvaffaqiyatli qabul qilindi!")
+                return redirect(redirect_name, pk=contact_pk)
+                
             except Exception as e:
                 logger.error(f"Error creating {contact_type} payment: {e}")
+                messages.error(request, f"To'lov qabul qilishda xatolik yuz berdi: {str(e)}")
+                return redirect(redirect_name, pk=contact_pk)
+        else:
+            # Form validation failed - show errors
+            error_messages = []
+            for field, errors in form.errors.items():
+                for error in errors:
+                    error_messages.append(f"{field}: {error}")
+            messages.error(request, f"Form xatosi: {'; '.join(error_messages)}")
+            logger.error(f"Form validation failed for {contact_type} payment: {form.errors}")
+            return redirect(redirect_name, pk=contact_pk)
 
     return redirect(redirect_name, pk=contact_pk)
 
