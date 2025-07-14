@@ -1,10 +1,10 @@
-import os
 from .base import *
 
+# Production-specific settings
 DEBUG = False
 
-# Update with your domain
-ALLOWED_HOSTS = ['95.130.227.197', 'localhost', '127.0.0.1']
+# Update with your actual domain and IP
+ALLOWED_HOSTS = ['95.130.227.197', 'localhost', '127.0.0.1', 'yourdomain.com']
 
 # Security settings
 SECURE_BROWSER_XSS_FILTER = True
@@ -19,26 +19,6 @@ X_FRAME_OPTIONS = 'DENY'
 # SESSION_COOKIE_SECURE = True
 # CSRF_COOKIE_SECURE = True
 
-# Database configuration - PostgreSQL (recommended)
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'finance_db'),
-        'USER': os.getenv('DB_USER', 'finance_user'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'your_password'),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '5432'),
-    }
-}
-
-# Alternatively, keep SQLite for simple deployment
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-# }
-
 # Static files configuration with WhiteNoise
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -52,18 +32,32 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+    },
     'handlers': {
         'file': {
             'level': 'ERROR',
             'class': 'logging.FileHandler',
-            'filename': '/home/financeapp/finance-app/logs/django.log',
+            'filename': BASE_DIR / 'logs' / 'django.log',
         },
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['file', 'console'],
+        'level': 'INFO',
     },
     'loggers': {
         'django': {
             'handlers': ['file'],
             'level': 'ERROR',
-            'propagate': True,
+            'propagate': False,
         },
     },
-} 
+}

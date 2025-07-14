@@ -10,7 +10,12 @@ def main():
     BASE_DIR = Path(__file__).resolve().parent
     sys.path.append(str(BASE_DIR))
 
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.local')
+    # Auto-detect environment based on server path
+    if '/home/financeapp' in str(BASE_DIR) or os.environ.get('DJANGO_ENV') == 'production':
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.production')
+    else:
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.local')
+    
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

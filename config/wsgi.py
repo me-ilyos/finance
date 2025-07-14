@@ -17,7 +17,10 @@ from django.core.wsgi import get_wsgi_application
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.append(str(BASE_DIR))
 
-# Changed to load settings dynamically
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.local')
+# Auto-detect environment
+if '/home/financeapp' in str(BASE_DIR) or os.environ.get('DJANGO_ENV') == 'production':
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.production')
+else:
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.local')
 
 application = get_wsgi_application()
