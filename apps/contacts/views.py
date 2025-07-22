@@ -109,19 +109,58 @@ class SupplierDetailView(LoginRequiredMixin, DetailView):
         except EmptyPage:
             paginated_transactions = paginator.page(paginator.num_pages)
         
-        # Calculate totals for display in table footer (always use all transactions, not filtered)
-        all_acquisitions = supplier.acquisitions.select_related('ticket')
-        all_payments = supplier.payments.select_related('paid_from_account')
-        
-        uzs_acquisitions = all_acquisitions.filter(currency='UZS').aggregate(
-            total=Sum('total_amount'))['total'] or 0
-        usd_acquisitions = all_acquisitions.filter(currency='USD').aggregate(
-            total=Sum('total_amount'))['total'] or 0
-        
-        uzs_payments = all_payments.filter(currency='UZS').aggregate(
-            total=Sum('amount'))['total'] or 0
-        usd_payments = all_payments.filter(currency='USD').aggregate(
-            total=Sum('amount'))['total'] or 0
+        # Calculate totals for display in table footer - respect current filter
+        if filter_type == 'uzs':
+            filtered_acquisitions = supplier.acquisitions.select_related('ticket').filter(currency='UZS')
+            filtered_payments = supplier.payments.select_related('paid_from_account').filter(currency='UZS')
+            
+            uzs_acquisitions = filtered_acquisitions.aggregate(total=Sum('total_amount'))['total'] or 0
+            uzs_payments = filtered_payments.aggregate(total=Sum('amount'))['total'] or 0
+            usd_acquisitions = 0
+            usd_payments = 0
+            
+            # Calculate filtered balance for UZS only
+            filtered_balance_uzs = uzs_acquisitions - uzs_payments + (supplier.initial_balance_uzs or 0)
+            filtered_balance_usd = 0
+            
+        elif filter_type == 'usd':
+            filtered_acquisitions = supplier.acquisitions.select_related('ticket').filter(currency='USD')
+            filtered_payments = supplier.payments.select_related('paid_from_account').filter(currency='USD')
+            
+            usd_acquisitions = filtered_acquisitions.aggregate(total=Sum('total_amount'))['total'] or 0
+            usd_payments = filtered_payments.aggregate(total=Sum('amount'))['total'] or 0
+            uzs_acquisitions = 0
+            uzs_payments = 0
+            
+            # Calculate filtered balance for USD only
+            filtered_balance_uzs = 0
+            filtered_balance_usd = usd_acquisitions - usd_payments + (supplier.initial_balance_usd or 0)
+            
+        elif filter_type == 'umra':
+            filtered_acquisitions = supplier.acquisitions.select_related('ticket').filter(ticket__ticket_type='UMRA')
+            filtered_payments = supplier.payments.select_related('paid_from_account').none()  # No payments are specific to ticket type
+            
+            uzs_acquisitions = filtered_acquisitions.filter(currency='UZS').aggregate(total=Sum('total_amount'))['total'] or 0
+            usd_acquisitions = filtered_acquisitions.filter(currency='USD').aggregate(total=Sum('total_amount'))['total'] or 0
+            uzs_payments = 0
+            usd_payments = 0
+            
+            # Calculate filtered balance for UMRA only (no initial balance included for ticket-type filters)
+            filtered_balance_uzs = uzs_acquisitions - uzs_payments
+            filtered_balance_usd = usd_acquisitions - usd_payments
+            
+        else:  # filter_type == 'all'
+            filtered_acquisitions = supplier.acquisitions.select_related('ticket')
+            filtered_payments = supplier.payments.select_related('paid_from_account')
+            
+            uzs_acquisitions = filtered_acquisitions.filter(currency='UZS').aggregate(total=Sum('total_amount'))['total'] or 0
+            usd_acquisitions = filtered_acquisitions.filter(currency='USD').aggregate(total=Sum('total_amount'))['total'] or 0
+            uzs_payments = filtered_payments.filter(currency='UZS').aggregate(total=Sum('amount'))['total'] or 0
+            usd_payments = filtered_payments.filter(currency='USD').aggregate(total=Sum('amount'))['total'] or 0
+            
+            # Use actual supplier balance for 'all' filter
+            filtered_balance_uzs = supplier.balance_uzs
+            filtered_balance_usd = supplier.balance_usd
         
         context.update({
             'transactions': paginated_transactions,
@@ -134,6 +173,8 @@ class SupplierDetailView(LoginRequiredMixin, DetailView):
             'usd_acquisitions': usd_acquisitions,
             'uzs_payments': uzs_payments,
             'usd_payments': usd_payments,
+            'filtered_balance_uzs': filtered_balance_uzs,
+            'filtered_balance_usd': filtered_balance_usd,
             # Check if user can deactivate (only admins)
             'can_deactivate': self.request.user.is_superuser,
         })
@@ -216,31 +257,71 @@ class AgentDetailView(DetailView):
         except EmptyPage:
             paginated_transactions = paginator.page(paginator.num_pages)
         
-        # Calculate totals for display in table footer (always use all transactions, not filtered)
-        all_sales = agent.agent_sales.select_related('related_acquisition__ticket')
-        all_payments = agent.payments.select_related('paid_to_account')
-        
-        uzs_sales = all_sales.filter(sale_currency='UZS').aggregate(
-            total=Sum('total_sale_amount'))['total'] or 0
-        usd_sales = all_sales.filter(sale_currency='USD').aggregate(
-            total=Sum('total_sale_amount'))['total'] or 0
-        
-        uzs_payments = all_payments.filter(currency='UZS').aggregate(
-            total=Sum('amount'))['total'] or 0
-        usd_payments = all_payments.filter(currency='USD').aggregate(
-            total=Sum('amount'))['total'] or 0
+        # Calculate totals for display in table footer - respect current filter
+        if filter_type == 'uzs':
+            filtered_sales = agent.agent_sales.select_related('related_acquisition__ticket').filter(sale_currency='UZS')
+            filtered_payments = agent.payments.select_related('paid_to_account').filter(currency='UZS')
+            
+            uzs_sales = filtered_sales.aggregate(total=Sum('total_sale_amount'))['total'] or 0
+            uzs_payments = filtered_payments.aggregate(total=Sum('amount'))['total'] or 0
+            usd_sales = 0
+            usd_payments = 0
+            
+            # Calculate filtered balance for UZS only
+            filtered_balance_uzs = uzs_sales - uzs_payments + (agent.initial_balance_uzs or 0)
+            filtered_balance_usd = 0
+            
+        elif filter_type == 'usd':
+            filtered_sales = agent.agent_sales.select_related('related_acquisition__ticket').filter(sale_currency='USD')
+            filtered_payments = agent.payments.select_related('paid_to_account').filter(currency='USD')
+            
+            usd_sales = filtered_sales.aggregate(total=Sum('total_sale_amount'))['total'] or 0
+            usd_payments = filtered_payments.aggregate(total=Sum('amount'))['total'] or 0
+            uzs_sales = 0
+            uzs_payments = 0
+            
+            # Calculate filtered balance for USD only
+            filtered_balance_uzs = 0
+            filtered_balance_usd = usd_sales - usd_payments + (agent.initial_balance_usd or 0)
+            
+        elif filter_type == 'umra':
+            filtered_sales = agent.agent_sales.select_related('related_acquisition__ticket').filter(related_acquisition__ticket__ticket_type='UMRA')
+            filtered_payments = agent.payments.select_related('paid_to_account').none()  # No payments are specific to ticket type
+            
+            uzs_sales = filtered_sales.filter(sale_currency='UZS').aggregate(total=Sum('total_sale_amount'))['total'] or 0
+            usd_sales = filtered_sales.filter(sale_currency='USD').aggregate(total=Sum('total_sale_amount'))['total'] or 0
+            uzs_payments = 0
+            usd_payments = 0
+            
+            # Calculate filtered balance for UMRA only (no initial balance included for ticket-type filters)
+            filtered_balance_uzs = uzs_sales - uzs_payments
+            filtered_balance_usd = usd_sales - usd_payments
+            
+        else:  # filter_type == 'all'
+            filtered_sales = agent.agent_sales.select_related('related_acquisition__ticket')
+            filtered_payments = agent.payments.select_related('paid_to_account')
+            
+            uzs_sales = filtered_sales.filter(sale_currency='UZS').aggregate(total=Sum('total_sale_amount'))['total'] or 0
+            usd_sales = filtered_sales.filter(sale_currency='USD').aggregate(total=Sum('total_sale_amount'))['total'] or 0
+            uzs_payments = filtered_payments.filter(currency='UZS').aggregate(total=Sum('amount'))['total'] or 0
+            usd_payments = filtered_payments.filter(currency='USD').aggregate(total=Sum('amount'))['total'] or 0
+            
+            # Use actual agent balance for 'all' filter
+            filtered_balance_uzs = agent.balance_uzs
+            filtered_balance_usd = agent.balance_usd
         
         context.update({
             'transactions': paginated_transactions,
-            'sales': agent.agent_sales.select_related('related_acquisition__ticket').order_by('-sale_date'),
-            'payments': agent.payments.select_related('paid_to_account').order_by('-payment_date'),
+            'sales': sales,
+            'payments': payments,
             'payment_form': AgentPaymentForm(),
             'current_filter': filter_type,
-            # Table footer totals (always show complete totals)
             'uzs_sales': uzs_sales,
             'usd_sales': usd_sales,
             'uzs_payments': uzs_payments,
             'usd_payments': usd_payments,
+            'filtered_balance_uzs': filtered_balance_uzs,
+            'filtered_balance_usd': filtered_balance_usd,
         })
         return context
 

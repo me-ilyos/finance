@@ -100,7 +100,23 @@
                                             <i class="fas fa-shopping-cart text-success me-1"></i>
                                             <strong>Sotuv</strong>
                                             <br>
-                                            <small class="text-muted">{{ transaction.sale.related_acquisition.ticket.description|truncatewords:3 }}</small>
+                                            <small class="text-muted">
+                                                {{ transaction.sale.related_acquisition.ticket.get_ticket_type_display }} - {{ transaction.sale.related_acquisition.ticket.description|truncatewords:5 }}
+                                                <br>
+                                                Uchish: {{ transaction.sale.related_acquisition.ticket.departure_date_time|date:"d.m.y H:i" }}
+                                                <br>
+                                                Miqdor: {{ transaction.sale.quantity }} dona × {{ transaction.sale.unit_sale_price }} {{ transaction.sale.sale_currency }}
+                                                <br>
+                                                Ta'minotchi: {{ transaction.sale.related_acquisition.supplier.name }}
+                                                {% if transaction.sale.salesperson %}
+                                                <br>
+                                                Sotuvchi: {{ transaction.sale.salesperson.user.get_full_name|default:transaction.sale.salesperson.user.username }}
+                                                {% endif %}
+                                                {% if transaction.sale.notes %}
+                                                <br>
+                                                <i class="fas fa-comment text-info me-1"></i>{{ transaction.sale.notes|truncatewords:8 }}
+                                                {% endif %}
+                                            </small>
                                         </td>
                                         {% if current_filter != 'usd' %}
                                         <td class="text-end">
@@ -148,6 +164,12 @@
                                             {% else %}
                                                 <br>
                                                 <small class="text-muted">{{ transaction.payment.paid_to_account.name }}</small>
+                                            {% endif %}
+                                            {% if transaction.payment.notes %}
+                                            <br>
+                                            <small class="text-muted">
+                                                <i class="fas fa-comment text-info me-1"></i>{{ transaction.payment.notes|truncatewords:8 }}
+                                            </small>
                                             {% endif %}
                                         </td>
                                         {% if current_filter != 'usd' %}
@@ -276,27 +298,27 @@
                     {% endif %}
                     
                     <div class="d-flex justify-content-between py-1">
-                        <span>Jami Sotuvlar:</span>
+                        <span>{% if current_filter != 'all' %}{{ current_filter|upper }} {% endif %}Jami Sotuvlar:</span>
                         <strong class="text-success">{{ uzs_sales|floatformat:0|intcomma }} UZS</strong>
                     </div>
                     
                     <div class="d-flex justify-content-between py-1">
-                        <span>Jami To'lovlar:</span>
+                        <span>{% if current_filter != 'all' %}{{ current_filter|upper }} {% endif %}Jami To'lovlar:</span>
                         <strong class="text-primary">{{ uzs_payments|floatformat:0|intcomma }} UZS</strong>
                     </div>
                     
-                    <div class="mt-3 p-2 {% if agent.balance_uzs > 0 %}bg-success-subtle{% elif agent.balance_uzs < 0 %}bg-danger-subtle{% else %}bg-secondary-subtle{% endif %} rounded">
+                    <div class="mt-3 p-2 {% if filtered_balance_uzs > 0 %}bg-success-subtle{% elif filtered_balance_uzs < 0 %}bg-danger-subtle{% else %}bg-secondary-subtle{% endif %} rounded">
                         <div class="d-flex justify-content-between">
-                            <span><strong>Joriy Balans:</strong></span>
-                            <strong class="{% if agent.balance_uzs > 0 %}text-success{% elif agent.balance_uzs < 0 %}text-danger{% else %}text-muted{% endif %}">
-                                {{ agent.balance_uzs|floatformat:0|intcomma }} UZS
+                            <span><strong>{% if current_filter != 'all' %}{{ current_filter|upper }} {% endif %}Joriy Balans:</strong></span>
+                            <strong class="{% if filtered_balance_uzs > 0 %}text-success{% elif filtered_balance_uzs < 0 %}text-danger{% else %}text-muted{% endif %}">
+                                {{ filtered_balance_uzs|floatformat:0|intcomma }} UZS
                             </strong>
                         </div>
                         <div class="text-center mt-1">
-                            {% if agent.balance_uzs > 0 %}
-                                <small class="text-success"><strong>🟢 Agent sizga {{ agent.balance_uzs|floatformat:0|intcomma }} UZS qarzdor</strong></small>
-                            {% elif agent.balance_uzs < 0 %}
-                                <small class="text-danger"><strong>🔴 Siz agentga {{ agent.balance_uzs|floatformat:0|intcomma|cut:"-" }} UZS qarzdorsiz</strong></small>
+                            {% if filtered_balance_uzs > 0 %}
+                                <small class="text-success"><strong>🟢 Agent sizga {{ filtered_balance_uzs|floatformat:0|intcomma }} UZS qarzdor</strong></small>
+                            {% elif filtered_balance_uzs < 0 %}
+                                <small class="text-danger"><strong>🔴 Siz agentga {{ filtered_balance_uzs|floatformat:0|intcomma|cut:"-" }} UZS qarzdorsiz</strong></small>
                             {% else %}
                                 <small class="text-muted"><strong>⚫ Qarz yo'q</strong></small>
                             {% endif %}
@@ -318,27 +340,27 @@
                     {% endif %}
                     
                     <div class="d-flex justify-content-between py-1">
-                        <span>Jami Sotuvlar:</span>
+                        <span>{% if current_filter != 'all' %}{{ current_filter|upper }} {% endif %}Jami Sotuvlar:</span>
                         <strong class="text-success">${{ usd_sales|floatformat:2|intcomma }}</strong>
                     </div>
                     
                     <div class="d-flex justify-content-between py-1">
-                        <span>Jami To'lovlar:</span>
+                        <span>{% if current_filter != 'all' %}{{ current_filter|upper }} {% endif %}Jami To'lovlar:</span>
                         <strong class="text-primary">${{ usd_payments|floatformat:2|intcomma }}</strong>
                     </div>
                     
-                    <div class="mt-3 p-2 {% if agent.balance_usd > 0 %}bg-success-subtle{% elif agent.balance_usd < 0 %}bg-danger-subtle{% else %}bg-secondary-subtle{% endif %} rounded">
+                    <div class="mt-3 p-2 {% if filtered_balance_usd > 0 %}bg-success-subtle{% elif filtered_balance_usd < 0 %}bg-danger-subtle{% else %}bg-secondary-subtle{% endif %} rounded">
                         <div class="d-flex justify-content-between">
-                            <span><strong>Joriy Balans:</strong></span>
-                            <strong class="{% if agent.balance_usd > 0 %}text-success{% elif agent.balance_usd < 0 %}text-danger{% else %}text-muted{% endif %}">
-                                ${{ agent.balance_usd|floatformat:2|intcomma }}
+                            <span><strong>{% if current_filter != 'all' %}{{ current_filter|upper }} {% endif %}Joriy Balans:</strong></span>
+                            <strong class="{% if filtered_balance_usd > 0 %}text-success{% elif filtered_balance_usd < 0 %}text-danger{% else %}text-muted{% endif %}">
+                                ${{ filtered_balance_usd|floatformat:2|intcomma }}
                             </strong>
                         </div>
                         <div class="text-center mt-1">
-                            {% if agent.balance_usd > 0 %}
-                                <small class="text-success"><strong>🟢 Agent sizga ${{ agent.balance_usd|floatformat:2|intcomma }} qarzdor</strong></small>
-                            {% elif agent.balance_usd < 0 %}
-                                <small class="text-danger"><strong>🔴 Siz agentga ${{ agent.balance_usd|floatformat:2|intcomma|cut:"-" }} qarzdorsiz</strong></small>
+                            {% if filtered_balance_usd > 0 %}
+                                <small class="text-success"><strong>🟢 Agent sizga ${{ filtered_balance_usd|floatformat:2|intcomma }} qarzdor</strong></small>
+                            {% elif filtered_balance_usd < 0 %}
+                                <small class="text-danger"><strong>🔴 Siz agentga ${{ filtered_balance_usd|floatformat:2|intcomma|cut:"-" }} qarzdorsiz</strong></small>
                             {% else %}
                                 <small class="text-muted"><strong>⚫ Qarz yo'q</strong></small>
                             {% endif %}

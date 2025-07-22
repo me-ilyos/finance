@@ -11,9 +11,21 @@ from django.utils import timezone
 class AcquisitionChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):
         currency_symbol = "UZS" if obj.currency == 'UZS' else "$"
-        return (f"{obj.acquisition_date.strftime('%d.%m.%y')} - "
-                f"{obj.ticket.description[:25]}... ({obj.available_quantity} dona) - "
-                f"{currency_symbol} - {obj.supplier.name[:15]}")
+        departure_date = obj.ticket.departure_date_time.strftime('%d.%m.%y %H:%M') if obj.ticket.departure_date_time else 'Noma\'lum'
+        ticket_type = obj.ticket.get_ticket_type_display()
+        
+        return (f"[{departure_date}] {ticket_type} - {obj.ticket.description[:40]} | "
+                f"Mavjud: {obj.available_quantity}/{obj.initial_quantity} | "
+                f"Narx: {obj.unit_price} {currency_symbol} | "
+                f"Ta'minotchi: {obj.supplier.name}")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Make the select field wider to accommodate more information
+        if 'widget' in kwargs:
+            kwargs['widget'].attrs.update({'style': 'min-width: 600px;'})
+        else:
+            self.widget.attrs.update({'style': 'min-width: 600px;'})
 
 
 class SaleForm(forms.ModelForm):
@@ -79,7 +91,7 @@ class SaleForm(forms.ModelForm):
             label=original_field.label,
             help_text=original_field.help_text,
             required=original_field.required,
-            widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+            widget=forms.Select(attrs={'class': 'form-select form-select-sm', 'style': 'min-width: 600px;'})
         )
         
         # Set up other fields

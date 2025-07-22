@@ -7,6 +7,9 @@
             <tr class="border-bottom border-2">
                 <th class="py-3 px-3 fw-semibold">Sana</th>
                 <th class="py-3 px-3 fw-semibold">Ta'minotchi</th>
+                {% if user.is_superuser %}
+                <th class="py-3 px-3 fw-semibold">Sotuvchi</th>
+                {% endif %}
                 <th class="py-3 px-3 fw-semibold">Chipta turi</th>
                 <th class="py-3 px-3 fw-semibold">Chipta manzili</th>
                 <th class="py-3 px-3 fw-semibold">Mavjud/Boshl</th>
@@ -23,6 +26,15 @@
             <tr>
                 <td class="py-2 px-3">{{ acq.acquisition_date|date:"d.m.Y" }}</td>
                 <td class="py-2 px-3">{{ acq.supplier.name }}</td>
+                {% if user.is_superuser %}
+                <td class="py-2 px-3">
+                    {% if acq.salesperson %}
+                        {{ acq.salesperson.user.get_full_name|default:acq.salesperson.user.username }}
+                    {% else %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+                {% endif %}
                 <td class="py-2 px-3">{{ acq.ticket.get_ticket_type_display }}</td>
                 <td class="py-2 px-3">{{ acq.ticket.description|truncatewords:10 }}</td>
                 <td class="py-2 px-3">{{ acq|format_quantity_display }}</td>
@@ -46,7 +58,7 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="{% if user.is_superuser %}9{% else %}8{% endif %}" class="text-center py-3 px-3">
+                <td colspan="{% if user.is_superuser %}10{% else %}8{% endif %}" class="text-center py-3 px-3">
                     Hozircha xaridlar mavjud emas yoki tanlangan filtrga mos kelmadi.
                 </td>
             </tr>

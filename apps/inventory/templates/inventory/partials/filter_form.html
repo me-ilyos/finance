@@ -35,13 +35,47 @@
             <button type="submit" name="filter_period" value="custom" class="btn btn-sm btn-outline-secondary">Oraliq</button>
         </div>
         
-        <!-- Add New Acquisition Button -->
+        {% if user.is_superuser %}
+        <!-- Admin-only filters: Salesperson and Supplier -->
+        <div class="col-md-2">
+            <label for="salesperson_filter" class="form-label mb-1"><small>Sotuvchi:</small></label>
+            <select name="salesperson" id="salesperson_filter" class="form-select form-select-sm">
+                <option value="">Barcha sotuvchilar</option>
+                {% for salesperson in salespeople %}
+                    <option value="{{ salesperson.id }}" {% if salesperson.id|stringformat:"s" == current_salesperson_filter %}selected{% endif %}>
+                        {{ salesperson.user.get_full_name|default:salesperson.user.username }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="col-md-2">
+            <label for="supplier_filter" class="form-label mb-1"><small>Ta'minotchi:</small></label>
+            <select name="supplier" id="supplier_filter" class="form-select form-select-sm">
+                <option value="">Barcha ta'minotchilar</option>
+                {% for supplier in suppliers %}
+                    <option value="{{ supplier.id }}" {% if supplier.id|stringformat:"s" == current_supplier_filter %}selected{% endif %}>
+                        {{ supplier.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="col-md-auto">
+            <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
+            <button type="submit" class="btn btn-sm btn-outline-primary">Filter</button>
+        </div>
+        {% endif %}
+        
+        {% if not user.is_superuser %}
+        <!-- Add New Acquisition Button - Only for non-admin users (salespeople) -->
         <div class="col-md-auto">
             <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
             <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addAcquisitionModal">
                 <i class="fas fa-plus me-1"></i> Yangi Xarid
             </button>
         </div>
+        {% endif %}
 
         <!-- Clear Filter -->
         <div class="col-md-auto ms-md-auto"> <!-- Push to the right on medium screens and up -->

@@ -8,6 +8,7 @@ from .forms import AcquisitionForm
 from .services import AcquisitionService
 from apps.core.services import DateFilterService
 from apps.core.models import Salesperson
+from apps.contacts.models import Supplier
 from django.utils import timezone
 
 
@@ -21,19 +22,38 @@ class AcquisitionListView(ListView):
         return self._get_filtered_queryset()
 
     def _get_filtered_queryset(self):
-        """Centralized queryset filtering to avoid duplication - only show active acquisitions"""
+        """Centralized queryset filtering with optimized queries"""
         queryset = self.model.objects.filter(is_active=True).select_related(
             'supplier', 'ticket', 'paid_from_account', 'salesperson', 'salesperson__user'
         ).order_by('-acquisition_date', '-created_at')
         
-        # Filter by current salesperson - only show acquisitions made by this salesperson
-        try:
-            current_salesperson = self.request.user.salesperson_profile
-            queryset = queryset.filter(salesperson=current_salesperson)
-        except Salesperson.DoesNotExist:
-            # If user is not a salesperson but is superuser, show all acquisitions
-            if not self.request.user.is_superuser:
+        # Apply salesperson filtering based on user role
+        if self.request.user.is_superuser:
+            # Admin can see all acquisitions, but can filter by specific salesperson
+            salesperson_filter = self.request.GET.get('salesperson')
+            if salesperson_filter:
+                try:
+                    salesperson_id = int(salesperson_filter)
+                    queryset = queryset.filter(salesperson_id=salesperson_id)
+                except (ValueError, TypeError):
+                    pass
+        else:
+            # Non-admin users only see their own acquisitions
+            try:
+                current_salesperson = self.request.user.salesperson_profile
+                queryset = queryset.filter(salesperson=current_salesperson)
+            except Salesperson.DoesNotExist:
                 queryset = queryset.none()
+        
+        # Apply supplier filtering (admin only)
+        if self.request.user.is_superuser:
+            supplier_filter = self.request.GET.get('supplier')
+            if supplier_filter:
+                try:
+                    supplier_id = int(supplier_filter)
+                    queryset = queryset.filter(supplier_id=supplier_id)
+                except (ValueError, TypeError):
+                    pass
         
         # Apply date filtering
         try:
@@ -54,6 +74,22 @@ class AcquisitionListView(ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['acquisition_form'] = AcquisitionForm(current_user=self.request.user)
+        
+        # Add filter options for admin users
+        if self.request.user.is_superuser:
+            # Get salespeople for dropdown (optimized query)
+            context['salespeople'] = Salesperson.objects.select_related('user').filter(
+                is_active=True
+            ).order_by('user__first_name', 'user__last_name')
+            
+            # Get suppliers for dropdown (optimized query)
+            context['suppliers'] = Supplier.objects.filter(
+                is_active=True
+            ).order_by('name')
+            
+            # Add current filter values
+            context['current_salesperson_filter'] = self.request.GET.get('salesperson', '')
+            context['current_supplier_filter'] = self.request.GET.get('supplier', '')
         
         # Preserve query parameters for pagination
         query_params = self.request.GET.copy()
@@ -84,7 +120,7 @@ class AcquisitionListView(ListView):
 
 @login_required(login_url='/core/login/')
 def api_acquisitions_list(request):
-    """API endpoint to get list of available acquisitions for dropdowns - only active ones"""
+    """API endpoint to get list of available acquisitions for dropdowns - optimized queries"""
     queryset = Acquisition.objects.filter(
         available_quantity__gt=0, 
         is_active=True

@@ -13,6 +13,7 @@ from .utils import calculate_sales_totals
 from apps.inventory.models import Acquisition
 from apps.accounting.models import FinancialAccount
 from apps.core.models import Salesperson
+from apps.contacts.models import Agent, Supplier
 from apps.core.services import DateFilterService
 
 
@@ -28,19 +29,48 @@ class SaleListView(LoginRequiredMixin, ListView):
         queryset = self.model.objects.select_related(
             'related_acquisition', 
             'related_acquisition__ticket',
+            'related_acquisition__supplier',
             'agent', 
             'paid_to_account',
             'salesperson',
             'salesperson__user'
         ).order_by('-sale_date', '-created_at')
         
-        # Filter by current salesperson
-        try:
-            current_salesperson = self.request.user.salesperson_profile
-            queryset = queryset.filter(salesperson=current_salesperson)
-        except Salesperson.DoesNotExist:
-            if not self.request.user.is_superuser:
+        # Apply salesperson filtering based on user role
+        if self.request.user.is_superuser:
+            # Admin can see all sales, but can filter by specific salesperson
+            salesperson_filter = self.request.GET.get('salesperson')
+            if salesperson_filter:
+                try:
+                    salesperson_id = int(salesperson_filter)
+                    queryset = queryset.filter(salesperson_id=salesperson_id)
+                except (ValueError, TypeError):
+                    pass
+        else:
+            # Non-admin users only see their own sales
+            try:
+                current_salesperson = self.request.user.salesperson_profile
+                queryset = queryset.filter(salesperson=current_salesperson)
+            except Salesperson.DoesNotExist:
                 queryset = queryset.none()
+        
+        # Apply agent filtering (available for both admin and salesperson)
+        agent_filter = self.request.GET.get('agent')
+        if agent_filter:
+            try:
+                agent_id = int(agent_filter)
+                queryset = queryset.filter(agent_id=agent_id)
+            except (ValueError, TypeError):
+                pass
+        
+        # Apply supplier filtering (available for both admin and salesperson)
+        supplier_filter = self.request.GET.get('supplier')
+        if supplier_filter:
+            try:
+                supplier_id = int(supplier_filter)
+                queryset = queryset.filter(related_acquisition__supplier_id=supplier_id)
+            except (ValueError, TypeError):
+                pass
         
         # Apply date filtering
         try:
@@ -63,6 +93,27 @@ class SaleListView(LoginRequiredMixin, ListView):
         if 'sale_form' not in context:
             context['sale_form'] = SaleForm(current_user=self.request.user)
         
+        # Add filter options for both admin and salesperson users
+        # Get agents for dropdown (optimized query)
+        context['agents'] = Agent.objects.filter().order_by('name')
+        
+        # Get suppliers for dropdown (optimized query) 
+        context['suppliers'] = Supplier.objects.filter(is_active=True).order_by('name')
+        
+        # Add filter options for admin users only
+        if self.request.user.is_superuser:
+            # Get salespeople for dropdown (optimized query)
+            context['salespeople'] = Salesperson.objects.select_related('user').filter(
+                is_active=True
+            ).order_by('user__first_name', 'user__last_name')
+            
+            # Add current filter values for admin
+            context['current_salesperson_filter'] = self.request.GET.get('salesperson', '')
+        
+        # Add current filter values
+        context['current_agent_filter'] = self.request.GET.get('agent', '')
+        context['current_supplier_filter'] = self.request.GET.get('supplier', '')
+        
         # Get filter context
         filter_context = DateFilterService.get_filter_context(
             self.request.GET.get('filter_period'),
@@ -82,8 +133,6 @@ class SaleListView(LoginRequiredMixin, ListView):
         context['query_params'] = query_params.urlencode()
         
         return context
-
-
 
     def post(self, request, *args, **kwargs):
         """Handle sale creation"""
