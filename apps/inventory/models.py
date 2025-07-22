@@ -32,6 +32,15 @@ class Acquisition(models.Model):
     ticket = models.ForeignKey(Ticket, on_delete=models.PROTECT, related_name='acquisitions')
     acquisition_date = models.DateTimeField(default=timezone.now)
     
+    salesperson = models.ForeignKey(
+        'core.Salesperson',
+        on_delete=models.PROTECT,
+        related_name='acquisitions_made',
+        null=True,
+        blank=True,
+        help_text="Bu xaridni amalga oshirgan sotuvchi"
+    )
+    
     # Simplified quantity tracking
     initial_quantity = models.PositiveIntegerField(help_text="Initial quantity acquired")
     available_quantity = models.PositiveIntegerField(help_text="Available quantity for sale", default=0, editable=False)

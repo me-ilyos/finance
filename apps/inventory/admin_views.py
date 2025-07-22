@@ -85,7 +85,7 @@ def _get_acquisition_data(acquisition):
 
 def _update_acquisition_data(acquisition, request):
     """Handle acquisition update"""
-    form = AcquisitionForm(request.POST, instance=acquisition)
+    form = AcquisitionForm(request.POST, instance=acquisition, current_user=request.user)
     
     if form.is_valid():
         try:

@@ -88,12 +88,14 @@
                                 </span>
                             </td>
                             <td class="amount-col standout-col align-middle">
-                                <div class="container-fluid gx-0"><div class="row gx-0">
-                                    <div class="col text-end small border-end">
-                                        {% if account.currency == 'UZS' %}{{ account.current_balance|floatformat:0|intcomma }}{% else %}-{% endif %}
-                                    </div>
-                                    <div class="col text-end small">
-                                        {% if account.currency == 'USD' %}\${{ account.current_balance|floatformat:2|intcomma }}{% else %}-{% endif %}
+                                <div class="container-fluid gx-0">
+                                    <div class="row gx-0">
+                                        <div class="col text-end small border-end">
+                                            {% if account.currency == 'UZS' %}{{ account.current_balance|floatformat:0|intcomma }}{% else %}-{% endif %}
+                                        </div>
+                                        <div class="col text-end small">
+                                            {% if account.currency == 'USD' %}\${{ account.current_balance|floatformat:2|intcomma }}{% else %}-{% endif %}
+                                        </div>
                                     </div>
                                 </div></div>
                             </td>

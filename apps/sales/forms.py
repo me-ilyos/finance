@@ -59,12 +59,23 @@ class SaleForm(forms.ModelForm):
         self.current_user = kwargs.pop('current_user', None)
         super().__init__(*args, **kwargs)
 
+        # Get base queryset for acquisitions
+        base_queryset = Acquisition.objects.filter(available_quantity__gt=0).select_related('ticket', 'supplier')
+        
+        # Filter by current salesperson - only show acquisitions made by this salesperson
+        if self.current_user:
+            try:
+                current_salesperson = self.current_user.salesperson_profile
+                base_queryset = base_queryset.filter(salesperson=current_salesperson)
+            except Salesperson.DoesNotExist:
+                # If user is not a salesperson but is superuser, show all acquisitions
+                if not self.current_user.is_superuser:
+                    base_queryset = base_queryset.none()
+
         # Custom acquisition field with better display
         original_field = self.fields['related_acquisition']
         self.fields['related_acquisition'] = AcquisitionChoiceField(
-            queryset=Acquisition.objects.filter(available_quantity__gt=0)
-                                      .select_related('ticket', 'supplier')
-                                      .order_by('-acquisition_date', '-created_at'),
+            queryset=base_queryset.order_by('-acquisition_date', '-created_at'),
             label=original_field.label,
             help_text=original_field.help_text,
             required=original_field.required,

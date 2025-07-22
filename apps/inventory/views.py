@@ -7,6 +7,7 @@ from .models import Acquisition
 from .forms import AcquisitionForm
 from .services import AcquisitionService
 from apps.core.services import DateFilterService
+from apps.core.models import Salesperson
 from django.utils import timezone
 
 
@@ -22,8 +23,17 @@ class AcquisitionListView(ListView):
     def _get_filtered_queryset(self):
         """Centralized queryset filtering to avoid duplication - only show active acquisitions"""
         queryset = self.model.objects.filter(is_active=True).select_related(
-            'supplier', 'ticket', 'paid_from_account'
+            'supplier', 'ticket', 'paid_from_account', 'salesperson', 'salesperson__user'
         ).order_by('-acquisition_date', '-created_at')
+        
+        # Filter by current salesperson - only show acquisitions made by this salesperson
+        try:
+            current_salesperson = self.request.user.salesperson_profile
+            queryset = queryset.filter(salesperson=current_salesperson)
+        except Salesperson.DoesNotExist:
+            # If user is not a salesperson but is superuser, show all acquisitions
+            if not self.request.user.is_superuser:
+                queryset = queryset.none()
         
         # Apply date filtering
         try:
@@ -43,7 +53,7 @@ class AcquisitionListView(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['acquisition_form'] = AcquisitionForm()
+        context['acquisition_form'] = AcquisitionForm(current_user=self.request.user)
         
         # Preserve query parameters for pagination
         query_params = self.request.GET.copy()
@@ -60,7 +70,7 @@ class AcquisitionListView(ListView):
 
     def post(self, request, *args, **kwargs):
         """Handle acquisition creation using service layer"""
-        form = AcquisitionForm(request.POST)
+        form = AcquisitionForm(request.POST, current_user=request.user)
         if form.is_valid():
             try:
                 AcquisitionService.create_acquisition(form)
@@ -75,12 +85,23 @@ class AcquisitionListView(ListView):
 @login_required(login_url='/core/login/')
 def api_acquisitions_list(request):
     """API endpoint to get list of available acquisitions for dropdowns - only active ones"""
-    acquisitions = Acquisition.objects.filter(
+    queryset = Acquisition.objects.filter(
         available_quantity__gt=0, 
         is_active=True
     ).select_related(
         'ticket', 'supplier'
-    ).values(
+    )
+    
+    # Filter by current salesperson - only show acquisitions made by this salesperson
+    try:
+        current_salesperson = request.user.salesperson_profile
+        queryset = queryset.filter(salesperson=current_salesperson)
+    except Salesperson.DoesNotExist:
+        # If user is not a salesperson but is superuser, show all acquisitions
+        if not request.user.is_superuser:
+            queryset = queryset.none()
+    
+    acquisitions = queryset.values(
         'id', 'ticket__description', 'available_quantity', 'currency', 
         'supplier__name', 'acquisition_date'
     ).order_by('-acquisition_date')

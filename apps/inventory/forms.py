@@ -1,5 +1,7 @@
 from django import forms
 from .models import Acquisition, Ticket
+from apps.core.models import Salesperson
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 
@@ -45,8 +47,24 @@ class AcquisitionForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        self.current_user = kwargs.pop('current_user', None)
         super().__init__(*args, **kwargs)
         # Set current datetime as default for both acquisition and ticket departure
         current_time = timezone.now().strftime('%Y-%m-%dT%H:%M')
         self.fields['acquisition_date'].initial = current_time
         self.fields['ticket_departure_date_time'].initial = current_time
+
+    def clean(self):
+        """Add salesperson validation"""
+        cleaned_data = super().clean()
+        
+        # Add salesperson for validation
+        if self.current_user:
+            try:
+                current_salesperson = self.current_user.salesperson_profile
+                cleaned_data['salesperson'] = current_salesperson
+            except Salesperson.DoesNotExist:
+                if not self.current_user.is_superuser:
+                    raise ValidationError("Faqat sotuvchilar xarid amalga oshira oladi.")
+        
+        return cleaned_data

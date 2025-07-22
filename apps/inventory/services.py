@@ -23,6 +23,11 @@ class AcquisitionService:
             # Create acquisition
             acquisition = form.save(commit=False)
             acquisition.ticket = ticket
+            
+            # Add salesperson if available
+            if 'salesperson' in form.cleaned_data:
+                acquisition.salesperson = form.cleaned_data['salesperson']
+            
             acquisition.save()
             
             # Add debt to supplier
@@ -82,6 +87,10 @@ class AcquisitionService:
             updated_acquisition = form.save(commit=False)
             updated_acquisition.id = original_acquisition.id
             updated_acquisition.ticket = ticket
+            
+            # Update salesperson if provided
+            if 'salesperson' in form.cleaned_data:
+                updated_acquisition.salesperson = form.cleaned_data['salesperson']
             
             # Adjust available quantity based on new initial quantity
             quantity_diff = new_quantity - original_quantity
