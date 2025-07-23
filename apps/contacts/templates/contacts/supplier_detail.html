@@ -11,15 +11,20 @@
     width: 18%;
 }
 .table-header-currency {
-    width: 16%;
+    width: 15%;
 }
-.filter-uzs .table-header-date, .filter-uzs .table-header-type,
+.filter-uzs .table-header-date, .filter-uzs .table-header-type {
+    width: 30%;
+}
 .filter-usd .table-header-date, .filter-usd .table-header-type {
-    width: 33%;
+    width: 30%;
 }
 .filter-uzs .table-header-currency-uzs,
 .filter-usd .table-header-currency-usd {
-    width: 17%;
+    width: 20%;
+}
+.filter-all .table-header-currency {
+    width: 12.5%;
 }
 </style>
 {% endblock %}
@@ -32,11 +37,14 @@
             <h5 class="text-primary mb-0">
                 <i class="fas fa-history me-2"></i>Tranzaksiyalar Tarixi
             </h5>
-            <small class="text-muted">Jami: {{ acquisitions|length }} xarid, {{ payments|length }} to'lov</small>
+            <small class="text-muted">Jami: {{ acquisitions|length }} xarid, {{ payments|length }} to'lov, {{ commissions|length }} komissiya</small>
         </div>
         <div>
             <button class="btn btn-success btn-sm me-2" data-bs-toggle="modal" data-bs-target="#paymentModal">
                 <i class="fas fa-plus me-1"></i>To'lov qilish
+            </button>
+            <button class="btn btn-info btn-sm me-2" data-bs-toggle="modal" data-bs-target="#commissionModal">
+                <i class="fas fa-percent me-1"></i>Komissiya qo'shish
             </button>
             {% if can_deactivate and supplier.can_be_deactivated %}
             <button class="btn btn-warning btn-sm me-2" onclick="deactivateSupplier('{{ supplier.pk }}')">
@@ -84,6 +92,7 @@
                                 <th class="table-header-currency table-header-currency-usd text-end">Qarz (USD)</th>
                                 <th class="table-header-currency table-header-currency-usd text-end">To'lov (USD)</th>
                                 {% endif %}
+                                <th class="table-header-currency text-end">Komissiya</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -135,6 +144,7 @@
                                         </td>
                                         <td class="text-end">-</td>
                                         {% endif %}
+                                        <td class="text-end">-</td>
                                     </tr>
                                 {% elif transaction.type == 'payment' %}
                                     <tr>
@@ -174,6 +184,46 @@
                                             {% endif %}
                                         </td>
                                         {% endif %}
+                                        <td class="text-end">-</td>
+                                    </tr>
+                                {% elif transaction.type == 'commission' %}
+                                    <tr>
+                                        <td>
+                                            {{ transaction.date|date:"d.m.Y" }}
+                                            <br>
+                                            <small class="text-muted">{{ transaction.date|date:"H:i" }}</small>
+                                        </td>
+                                        <td>
+                                            <i class="fas fa-percent text-info me-1"></i>
+                                            <strong>Komissiya</strong>
+                                            <br>
+                                            <small class="text-muted">
+                                                {{ transaction.commission.acquisition.ticket.get_ticket_type_display }} - {{ transaction.commission.acquisition.ticket.description|truncatewords:5 }}
+                                                <br>
+                                                Xarid: {{ transaction.commission.acquisition.acquisition_date|date:"d.m.y" }}
+                                                {% if transaction.commission.notes %}
+                                                <br>
+                                                <i class="fas fa-comment text-info me-1"></i>{{ transaction.commission.notes|truncatewords:8 }}
+                                                {% endif %}
+                                            </small>
+                                        </td>
+                                        {% if current_filter != 'usd' %}
+                                        <td class="text-end">-</td>
+                                        <td class="text-end">-</td>
+                                        {% endif %}
+                                        {% if current_filter != 'uzs' %}
+                                        <td class="text-end">-</td>
+                                        <td class="text-end">-</td>
+                                        {% endif %}
+                                        <td class="text-end">
+                                            <span class="text-info">
+                                                {% if transaction.commission.currency == 'UZS' %}
+                                                    {{ transaction.commission.amount|floatformat:0|intcomma }} (UZS)
+                                                {% else %}
+                                                    ${{ transaction.commission.amount|floatformat:2|intcomma }} (USD)
+                                                {% endif %}
+                                            </span>
+                                        </td>
                                     </tr>
                                 {% endif %}
                             {% endfor %}
@@ -207,6 +257,20 @@
                                     </strong>
                                 </th>
                                 {% endif %}
+                                <th class="text-end py-3">
+                                    <strong class="text-info">
+                                        {% if current_filter == 'uzs' %}
+                                            {{ uzs_commissions|floatformat:0|intcomma }} (UZS)
+                                        {% elif current_filter == 'usd' %}
+                                            {% if usd_commissions > 0 %} ${{ usd_commissions|floatformat:2|intcomma }} (USD){% else %}- {% endif %}
+                                        {% else %}
+                                            {% if uzs_commissions > 0 %}{{ uzs_commissions|floatformat:0|intcomma }} (UZS){% endif %}
+                                            {% if uzs_commissions > 0 and usd_commissions > 0 %}<br/>{% endif %}
+                                            {% if usd_commissions > 0 %} ${{ usd_commissions|floatformat:2|intcomma }} (USD){% endif %}
+                                            {% if uzs_commissions == 0 and usd_commissions == 0 %}-{% endif %}
+                                        {% endif %}
+                                    </strong>
+                                </th>
                             </tr>
                         </tfoot>
                     </table>
@@ -289,6 +353,11 @@
                         <strong class="text-success">{{ uzs_payments|floatformat:0|intcomma }} UZS</strong>
                     </div>
                     
+                    <div class="d-flex justify-content-between py-1">
+                        <span>{% if current_filter != 'all' %}{{ current_filter|upper }} {% endif %}Jami Komissiyalar:</span>
+                        <strong class="text-info">{{ uzs_commissions|floatformat:0|intcomma }} UZS</strong>
+                    </div>
+                    
                     <div class="mt-3 p-2 {% if filtered_balance_uzs > 0 %}bg-danger-subtle{% elif filtered_balance_uzs < 0 %}bg-success-subtle{% else %}bg-secondary-subtle{% endif %} rounded">
                         <div class="d-flex justify-content-between">
                             <span><strong>{% if current_filter != 'all' %}{{ current_filter|upper }} {% endif %}Joriy Balans:</strong></span>
@@ -329,6 +398,11 @@
                     <div class="d-flex justify-content-between py-1">
                         <span>{% if current_filter != 'all' %}{{ current_filter|upper }} {% endif %}Jami To'lovlar:</span>
                         <strong class="text-success">${{ usd_payments|floatformat:2|intcomma }}</strong>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between py-1">
+                        <span>{% if current_filter != 'all' %}{{ current_filter|upper }} {% endif %}Jami Komissiyalar:</span>
+                        <strong class="text-info">${{ usd_commissions|floatformat:2|intcomma }}</strong>
                     </div>
                     
                     <div class="mt-3 p-2 {% if filtered_balance_usd > 0 %}bg-danger-subtle{% elif filtered_balance_usd < 0 %}bg-success-subtle{% else %}bg-secondary-subtle{% endif %} rounded">
@@ -381,6 +455,39 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Bekor Qilish</button>
                     <button type="submit" class="btn btn-success">To'lov Qilish</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Commission Modal -->
+<div class="modal fade" id="commissionModal" tabindex="-1" aria-labelledby="commissionModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'contacts:supplier-add-commission' supplier.pk %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="commissionModalLabel">Komissiya Qo'shish - {{ supplier.name }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {% for field in commission_form %}
+                        <div class="mb-3">
+                            <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.help_text %}
+                                <small class="form-text text-muted">{{ field.help_text }}</small>
+                            {% endif %}
+                            {% for error in field.errors %}
+                                <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Bekor Qilish</button>
+                    <button type="submit" class="btn btn-info">Komissiya Qo'shish</button>
                 </div>
             </form>
         </div>

@@ -1,6 +1,13 @@
 from django import forms
-from .models import Agent, Supplier, AgentPayment, SupplierPayment
+from .models import Agent, Supplier, AgentPayment, SupplierPayment, Commission
 from apps.accounting.models import FinancialAccount
+from django.utils import timezone
+
+
+class AcquisitionChoiceField(forms.ModelChoiceField):
+    """Custom choice field for acquisitions with better display"""
+    def label_from_instance(self, obj):
+        return obj.get_commission_display()
 
 
 class BaseContactForm(forms.ModelForm):
@@ -30,14 +37,17 @@ class BaseContactForm(forms.ModelForm):
             }),
         }
 
+    def clean_balance_uzs(self):
+        value = self.cleaned_data.get('balance_uzs')
+        if value is None:
+            return 0
+        return value
 
-class AgentForm(BaseContactForm):
-    class Meta(BaseContactForm.Meta):
-        model = Agent
-        help_texts = {
-            'balance_uzs': "Musbat: Agent qarzdor | Manfiy: Siz qarzdorsiz",
-            'balance_usd': "Musbat: Agent qarzdor | Manfiy: Siz qarzdorsiz",
-        }
+    def clean_balance_usd(self):
+        value = self.cleaned_data.get('balance_usd')
+        if value is None:
+            return 0
+        return value
 
 
 class SupplierForm(BaseContactForm):
@@ -46,6 +56,68 @@ class SupplierForm(BaseContactForm):
         help_texts = {
             'balance_uzs': "Musbat: Siz qarzdorsiz | Manfiy: Ta'minotchi qarzdor",
             'balance_usd': "Musbat: Siz qarzdorsiz | Manfiy: Ta'minotchi qarzdor",
+        }
+
+
+class CommissionForm(forms.ModelForm):
+    acquisition = AcquisitionChoiceField(
+        queryset=None,
+        empty_label="Xaridni tanlang...",
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
+        label="Xarid"
+    )
+    
+    class Meta:
+        model = Commission
+        fields = ['acquisition', 'commission_date', 'amount', 'notes']
+        labels = {
+            'acquisition': "Xarid",
+            'commission_date': "Komissiya Sanasi",
+            'amount': "Komissiya Miqdori",
+            'notes': "Izohlar",
+        }
+        widgets = {
+            'commission_date': forms.DateTimeInput(attrs={'class': 'form-control form-control-sm', 'type': 'datetime-local'}),
+            'amount': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'step': '0.01', 'placeholder': '0.00'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control form-control-sm', 'rows': 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        supplier = kwargs.pop('supplier', None)
+        super().__init__(*args, **kwargs)
+        
+        if supplier:
+            # Only show acquisitions for this specific supplier that don't have commissions yet
+            self.fields['acquisition'].queryset = supplier.acquisitions.filter(
+                is_active=True,
+                commissions__isnull=True  # Exclude acquisitions that already have commissions
+            ).select_related('ticket').order_by('-acquisition_date')
+        else:
+            self.fields['acquisition'].queryset = self.fields['acquisition'].queryset.none()
+            
+        # Set current datetime as default
+        current_time = timezone.now().strftime('%Y-%m-%dT%H:%M')
+        self.fields['commission_date'].initial = current_time
+
+    def clean(self):
+        cleaned_data = super().clean()
+        acquisition = cleaned_data.get('acquisition')
+        
+        if acquisition:
+            # Automatically set currency to match acquisition currency
+            cleaned_data['currency'] = acquisition.currency
+            # Set supplier to match acquisition supplier
+            cleaned_data['supplier'] = acquisition.supplier
+        
+        return cleaned_data
+
+
+class AgentForm(BaseContactForm):
+    class Meta(BaseContactForm.Meta):
+        model = Agent
+        help_texts = {
+            'balance_uzs': "Musbat: Agent qarzdor | Manfiy: Siz qarzdorsiz",
+            'balance_usd': "Musbat: Agent qarzdor | Manfiy: Siz qarzdorsiz",
         }
 
 
@@ -140,20 +212,26 @@ class AgentPaymentForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         payment_type = cleaned_data.get('payment_type')
-        conversion_direction = cleaned_data.get('conversion_direction')
-        exchange_rate = cleaned_data.get('exchange_rate')
-        original_amount = cleaned_data.get('original_amount')
-        amount = cleaned_data.get('amount')
-        paid_to_account = cleaned_data.get('paid_to_account')
-
-        if payment_type == 'cross_currency':
-            # For cross-currency payments, validate exchange rate and original amount
-            if not exchange_rate:
-                raise forms.ValidationError("Valyuta konvertatsiyasi uchun kurs zarur.")
-            if not original_amount:
-                raise forms.ValidationError("Valyuta konvertatsiyasi uchun olib kelgan miqdor zarur.")
+        
+        if payment_type == 'same_currency':
+            # For same currency, ensure required fields are present
+            if not cleaned_data.get('amount'):
+                raise forms.ValidationError("To'lov miqdori kiritilishi kerak.")
+            if not cleaned_data.get('currency'):
+                raise forms.ValidationError("Valyuta tanlanishi kerak.")
+        else:
+            # Cross-currency validation
+            conversion_direction = cleaned_data.get('conversion_direction')
+            exchange_rate = cleaned_data.get('exchange_rate')
+            original_amount = cleaned_data.get('original_amount')
+            paid_to_account = cleaned_data.get('paid_to_account')
+            
+            if not all([conversion_direction, exchange_rate, original_amount]):
+                raise forms.ValidationError("Valyuta konvertatsiyasi uchun barcha maydonlar to'ldirilishi kerak.")
+            
             if exchange_rate <= 0:
                 raise forms.ValidationError("Kurs musbat bo'lishi kerak.")
+            
             if original_amount <= 0:
                 raise forms.ValidationError("Olib kelgan miqdor musbat bo'lishi kerak.")
             
@@ -183,19 +261,7 @@ class AgentPaymentForm(forms.ModelForm):
                     f"Tanlangan hisob {expected_account_currency} valyutasida bo'lishi kerak, "
                     f"chunki agent {expected_account_currency} olib keldi."
                 )
-            
-        else:
-            # For same currency payments, clear cross-currency fields
-            cleaned_data['exchange_rate'] = None
-            cleaned_data['original_amount'] = None
-            cleaned_data['conversion_direction'] = None
-            
-            # Ensure currency and amount are provided for normal payments
-            if not cleaned_data.get('currency'):
-                raise forms.ValidationError("Oddiy to'lov uchun valyuta tanlash zarur.")
-            if not cleaned_data.get('amount'):
-                raise forms.ValidationError("Oddiy to'lov uchun to'lov miqdori zarur.")
-
+        
         return cleaned_data
 
 

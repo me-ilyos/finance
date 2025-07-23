@@ -56,6 +56,33 @@ class Supplier(BaseContact):
     def can_be_deactivated(self):
         """Check if supplier can be deactivated (when there's no debt on both sides)"""
         return self.balance_uzs == 0 and self.balance_usd == 0
+    
+    def recalculate_balance(self):
+        """Recalculate supplier balance based on all transactions"""
+        from django.db.models import Sum
+        
+        # Calculate UZS balance
+        uzs_acquisitions = self.acquisitions.filter(currency='UZS', is_active=True).aggregate(
+            total=Sum('total_amount'))['total'] or 0
+        uzs_payments = self.payments.filter(currency='UZS').aggregate(
+            total=Sum('amount'))['total'] or 0
+        uzs_commissions = self.commissions.filter(currency='UZS').aggregate(
+            total=Sum('amount'))['total'] or 0
+        
+        # Calculate USD balance  
+        usd_acquisitions = self.acquisitions.filter(currency='USD', is_active=True).aggregate(
+            total=Sum('total_amount'))['total'] or 0
+        usd_payments = self.payments.filter(currency='USD').aggregate(
+            total=Sum('amount'))['total'] or 0
+        usd_commissions = self.commissions.filter(currency='USD').aggregate(
+            total=Sum('amount'))['total'] or 0
+        
+        # Update balances: Initial + Acquisitions - Commissions - Payments
+        self.balance_uzs = (self.initial_balance_uzs or 0) + uzs_acquisitions - uzs_commissions - uzs_payments
+        self.balance_usd = (self.initial_balance_usd or 0) + usd_acquisitions - usd_commissions - usd_payments
+        
+        self.save(update_fields=['balance_uzs', 'balance_usd', 'updated_at'])
+        return self.balance_uzs, self.balance_usd
 
 
 class Agent(BaseContact):
@@ -63,6 +90,44 @@ class Agent(BaseContact):
         verbose_name = "Agent"
         verbose_name_plural = "Agentlar"
         ordering = ['name']
+
+
+class Commission(models.Model):
+    supplier = models.ForeignKey(
+        Supplier, 
+        on_delete=models.CASCADE, 
+        related_name='commissions',
+        verbose_name="Ta'minotchi"
+    )
+    acquisition = models.ForeignKey(
+        'inventory.Acquisition',
+        on_delete=models.CASCADE,
+        related_name='commissions',
+        verbose_name="Xarid"
+    )
+    commission_date = models.DateTimeField(default=timezone.now, verbose_name="Komissiya Sanasi")
+    amount = models.DecimalField(max_digits=15, decimal_places=2, verbose_name="Komissiya Miqdori")
+    currency = models.CharField(max_length=3, choices=CurrencyChoices.choices, verbose_name="Valyuta")
+    notes = models.TextField(blank=True, null=True, verbose_name="Izohlar")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Komissiya"
+        verbose_name_plural = "Komissiyalar"
+        ordering = ['-commission_date']
+
+    def clean(self):
+        super().clean()
+        if self.amount <= 0:
+            raise ValidationError("Komissiya miqdori musbat bo'lishi kerak.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.supplier.name} - {self.amount:,.2f} {self.currency} - {self.commission_date.strftime('%d-%m-%Y')}"
 
 
 class BasePayment(models.Model):

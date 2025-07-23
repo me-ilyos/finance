@@ -3,6 +3,7 @@ from django.views.generic import ListView, CreateView
 from django.urls import reverse_lazy
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db.models import Sum, Q, Value, DecimalField
 from django.db.models.functions import Coalesce
 from .models import Expenditure, FinancialAccount
@@ -21,7 +22,10 @@ class FinancialAccountListView(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['account_form'] = FinancialAccountForm()
+        
+        # Only provide account form to superusers (admins)
+        if self.request.user.is_superuser:
+            context['account_form'] = FinancialAccountForm()
         
         queryset = self.get_queryset()
         totals = queryset.aggregate(
@@ -33,10 +37,15 @@ class FinancialAccountListView(ListView):
         return context
 
 
-class FinancialAccountCreateView(CreateView):
+class FinancialAccountCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = FinancialAccount
     form_class = FinancialAccountForm
     success_url = reverse_lazy('accounting:financial-account-list')
+    login_url = '/core/login/'
+    
+    def test_func(self):
+        """Only allow superusers (admins) to create financial accounts"""
+        return self.request.user.is_superuser
     
     def form_valid(self, form):
         try:

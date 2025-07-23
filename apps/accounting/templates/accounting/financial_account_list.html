@@ -25,9 +25,11 @@
     <div class="card shadow mb-4">
         <div class="card-header py-3 d-flex justify-content-between align-items-center">
             <h6 class="m-0 font-weight-bold text-primary">Barcha Moliyaviy Hisoblar</h6>
+            {% if user.is_superuser %}
             <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addAccountModal">
                 <i class="fas fa-plus-circle me-1"></i> Yangi Hisob
             </button>
+            {% endif %}
         </div>
         <div class="card-body">
 
@@ -94,7 +96,7 @@
                                             {% if account.currency == 'UZS' %}{{ account.current_balance|floatformat:0|intcomma }}{% else %}-{% endif %}
                                         </div>
                                         <div class="col text-end small">
-                                            {% if account.currency == 'USD' %}\${{ account.current_balance|floatformat:2|intcomma }}{% else %}-{% endif %}
+                                            {% if account.currency == 'USD' %} ${{ account.current_balance|floatformat:2|intcomma }}{% else %}-{% endif %}
                                         </div>
                                     </div>
                                 </div></div>
@@ -226,6 +228,61 @@
         </div>
     </div>
 </div>
+
+{% if user.is_superuser and account_form %}
+<!-- Only show modal for admin users -->
+<div class="modal fade" id="addAccountModal" tabindex="-1" aria-labelledby="addAccountModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="post" action="{% url 'accounting:financial-account-create' %}" id="accountModalForm">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addAccountModalLabel">Yangi Moliyaviy Hisob Qo'shish</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {% if account_form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in account_form.non_field_errors %}
+                                <p class="mb-0">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    {% for field in account_form %}
+                        <div class="mb-3 row" id="wrapper_{{ field.id_for_label }}">
+                            <label for="{{ field.id_for_label }}" class="col-sm-4 col-form-label col-form-label-sm text-sm-end">
+                                {{ field.label }}
+                                {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+                            <div class="col-sm-8">
+                                {{ field }} 
+                                {% if field.help_text %}
+                                    <small class="form-text text-muted d-block mt-1">{{ field.help_text }}</small>
+                                {% endif %}
+                                {% for error in field.errors %}
+                                    <div class="invalid-feedback d-block">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                    
+                    <div class="alert alert-info mt-3">
+                        <small>
+                            <i class="fas fa-info-circle me-1"></i>
+                            <strong>Eslatma:</strong> Balans yaratilganda belgilanadi va keyin to'lovlar hamda xarajatlar orqali avtomatik yangilanadi.
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Bekor Qilish</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Yaratish</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}

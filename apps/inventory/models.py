@@ -75,6 +75,13 @@ class Acquisition(models.Model):
 
     def __str__(self):
         return f"{self.supplier.name} - {self.ticket.description} ({self.available_quantity}/{self.initial_quantity})"
+    
+    def get_commission_display(self):
+        """Return formatted string for commission form dropdown"""
+        currency_symbol = "UZS" if self.currency == 'UZS' else "$"
+        return (f"{self.acquisition_date.strftime('%d.%m.%Y')} - "
+                f"{self.ticket.description[:40]}... - "
+                f"{currency_symbol} {self.total_amount:,.2f}")
 
     def reduce_stock(self, quantity_sold):
         """Reduce available quantity when tickets are sold"""
