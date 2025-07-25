@@ -4,6 +4,9 @@ from django.shortcuts import get_object_or_404
 from .models import Sale
 from .forms import SaleForm
 from apps.contacts.models import AgentPayment
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class SaleService:
@@ -55,25 +58,42 @@ class SaleService:
             raise ValidationError("Faqat administratorlar sotuvni o'chira oladi.")
         
         sale = get_object_or_404(Sale, pk=sale_id)
+        logger.info(f"Starting deletion of sale {sale_id}")
+        logger.info(f"Sale details: Agent={sale.agent}, Amount={sale.total_sale_amount}, Currency={sale.sale_currency}")
         
         with transaction.atomic():
             # Restore inventory quantity
             acquisition = sale.related_acquisition
             acquisition.available_quantity += sale.quantity
             acquisition.save(update_fields=['available_quantity', 'updated_at'])
+            logger.info(f"Restored {sale.quantity} units to acquisition {acquisition.id}")
             
             # Handle agent debt reversal (no initial payment to remove)
             if sale.agent:
+                logger.info(f"Agent {sale.agent.id} ({sale.agent.name}) balance before debt reduction:")
+                logger.info(f"  UZS: {sale.agent.balance_uzs}")
+                logger.info(f"  USD: {sale.agent.balance_usd}")
+                logger.info(f"Reducing debt by {sale.total_sale_amount} {sale.sale_currency}")
+                
                 sale.agent.reduce_debt(sale.total_sale_amount, sale.sale_currency)
+                
+                # Refresh from database to get updated values
+                sale.agent.refresh_from_db()
+                logger.info(f"Agent {sale.agent.id} balance after debt reduction:")
+                logger.info(f"  UZS: {sale.agent.balance_uzs}")
+                logger.info(f"  USD: {sale.agent.balance_usd}")
             
             # Handle client payment reversal
             elif sale.paid_to_account:
+                logger.info(f"Reversing client payment from account {sale.paid_to_account.name}")
                 account = sale.paid_to_account
                 account.current_balance -= sale.total_sale_amount
                 account.save(update_fields=['current_balance', 'updated_at'])
             
             # Delete the sale
+            logger.info(f"Deleting sale {sale_id} from database")
             sale.delete()
+            logger.info(f"Sale {sale_id} successfully deleted")
             
             return True
 

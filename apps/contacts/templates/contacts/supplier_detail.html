@@ -26,6 +26,22 @@
 .filter-all .table-header-currency {
     width: 12.5%;
 }
+
+/* Collapsible table features */
+.comments-column {
+    transition: all 0.3s ease;
+}
+.comments-hidden .comments-column {
+    display: none;
+}
+.compact-view .table td,
+.compact-view .table th {
+    padding: 0.25rem 0.5rem !important;
+    font-size: 0.875rem;
+}
+.compact-view .table td small {
+    font-size: 0.75rem;
+}
 </style>
 {% endblock %}
 
@@ -72,6 +88,17 @@
                 <option value="umra" {% if current_filter == 'umra' %}selected{% endif %}>Umra</option>
             </select>
         </div>
+        <div class="col-md-8 text-end">
+            <label class="form-label">&nbsp;</label><br>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="toggleComments">
+                <i class="fas fa-comment me-1"></i>
+                <span id="toggleCommentsText">Izohlarni yashirish</span>
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm ms-2" id="toggleCompact">
+                <i class="fas fa-compress me-1"></i>
+                <span id="toggleCompactText">Ixcham ko'rinish</span>
+            </button>
+        </div>
     </div>
 
     <!-- Transaction Table -->
@@ -79,7 +106,7 @@
         <div class="card-body">
             {% if transactions %}
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle filter-{{ current_filter }}">
+                    <table class="table table-hover align-middle filter-{{ current_filter }}" id="transactionTable">
                         <thead class="table-light">
                             <tr>
                                 <th class="table-header-date">Sana va Vaqt</th>
@@ -93,6 +120,7 @@
                                 <th class="table-header-currency table-header-currency-usd text-end">To'lov (USD)</th>
                                 {% endif %}
                                 <th class="table-header-currency text-end">Komissiya</th>
+                                <th class="table-header-currency comments-column">Izohlar</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -118,10 +146,6 @@
                                                 <br>
                                                 Sotuvchi: {{ transaction.acquisition.salesperson.user.get_full_name|default:transaction.acquisition.salesperson.user.username }}
                                                 {% endif %}
-                                                {% if transaction.acquisition.notes %}
-                                                <br>
-                                                <i class="fas fa-comment text-info me-1"></i>{{ transaction.acquisition.notes|truncatewords:8 }}
-                                                {% endif %}
                                             </small>
                                         </td>
                                         {% if current_filter != 'usd' %}
@@ -145,6 +169,15 @@
                                         <td class="text-end">-</td>
                                         {% endif %}
                                         <td class="text-end">-</td>
+                                                                                 <td class="text-muted comments-column">
+                                             {% if transaction.acquisition.notes %}
+                                             <small>
+                                                 <i class="fas fa-comment text-info me-1"></i>{{ transaction.acquisition.notes|truncatewords:8 }}
+                                             </small>
+                                             {% else %}
+                                             <small class="text-muted">-</small>
+                                             {% endif %}
+                                         </td>
                                     </tr>
                                 {% elif transaction.type == 'payment' %}
                                     <tr>
@@ -157,12 +190,7 @@
                                             <i class="fas fa-credit-card text-success me-1"></i>
                                             <strong>To'lov</strong>
                                             <br>
-                                            <small class="text-muted">{{ transaction.payment.paid_from_account.name }}
-                                                {% if transaction.payment.notes %}
-                                                <br>
-                                                <i class="fas fa-comment text-info me-1"></i>{{ transaction.payment.notes|truncatewords:8 }}
-                                                {% endif %}
-                                            </small>
+                                            <small class="text-muted">{{ transaction.payment.paid_from_account.name }}</small>
                                         </td>
                                         {% if current_filter != 'usd' %}
                                         <td class="text-end">-</td>
@@ -185,6 +213,15 @@
                                         </td>
                                         {% endif %}
                                         <td class="text-end">-</td>
+                                                                                 <td class="text-muted comments-column">
+                                             {% if transaction.payment.notes %}
+                                             <small>
+                                                 <i class="fas fa-comment text-info me-1"></i>{{ transaction.payment.notes|truncatewords:8 }}
+                                             </small>
+                                             {% else %}
+                                             <small class="text-muted">-</small>
+                                             {% endif %}
+                                         </td>
                                     </tr>
                                 {% elif transaction.type == 'commission' %}
                                     <tr>
@@ -201,10 +238,6 @@
                                                 {{ transaction.commission.acquisition.ticket.get_ticket_type_display }} - {{ transaction.commission.acquisition.ticket.description|truncatewords:5 }}
                                                 <br>
                                                 Xarid: {{ transaction.commission.acquisition.acquisition_date|date:"d.m.y" }}
-                                                {% if transaction.commission.notes %}
-                                                <br>
-                                                <i class="fas fa-comment text-info me-1"></i>{{ transaction.commission.notes|truncatewords:8 }}
-                                                {% endif %}
                                             </small>
                                         </td>
                                         {% if current_filter != 'usd' %}
@@ -224,6 +257,15 @@
                                                 {% endif %}
                                             </span>
                                         </td>
+                                                                                 <td class="text-muted comments-column">
+                                             {% if transaction.commission.notes %}
+                                             <small>
+                                                 <i class="fas fa-comment text-info me-1"></i>{{ transaction.commission.notes|truncatewords:8 }}
+                                             </small>
+                                             {% else %}
+                                             <small class="text-muted">-</small>
+                                             {% endif %}
+                                         </td>
                                     </tr>
                                 {% endif %}
                             {% endfor %}
@@ -271,6 +313,11 @@
                                         {% endif %}
                                     </strong>
                                 </th>
+                                                                 <th class="text-end py-3 comments-column">
+                                     <strong class="text-muted">
+                                         -
+                                     </strong>
+                                 </th>
                             </tr>
                         </tfoot>
                     </table>
@@ -543,6 +590,43 @@ document.addEventListener('DOMContentLoaded', function() {
         url.searchParams.delete('page');
         
         window.location.href = url.toString();
+    });
+
+    // Toggle comments column
+    const toggleCommentsBtn = document.getElementById('toggleComments');
+    const toggleCommentsText = document.getElementById('toggleCommentsText');
+    const table = document.getElementById('transactionTable');
+    let commentsVisible = true;
+
+    toggleCommentsBtn.addEventListener('click', function() {
+        if (commentsVisible) {
+            table.classList.add('comments-hidden');
+            toggleCommentsText.textContent = 'Izohlarni ko\'rsatish';
+            this.querySelector('i').className = 'fas fa-comment-slash me-1';
+        } else {
+            table.classList.remove('comments-hidden');
+            toggleCommentsText.textContent = 'Izohlarni yashirish';
+            this.querySelector('i').className = 'fas fa-comment me-1';
+        }
+        commentsVisible = !commentsVisible;
+    });
+
+    // Toggle compact view
+    const toggleCompactBtn = document.getElementById('toggleCompact');
+    const toggleCompactText = document.getElementById('toggleCompactText');
+    let compactView = false;
+
+    toggleCompactBtn.addEventListener('click', function() {
+        if (compactView) {
+            table.classList.remove('compact-view');
+            toggleCompactText.textContent = 'Ixcham ko\'rinish';
+            this.querySelector('i').className = 'fas fa-compress me-1';
+        } else {
+            table.classList.add('compact-view');
+            toggleCompactText.textContent = 'Oddiy ko\'rinish';
+            this.querySelector('i').className = 'fas fa-expand me-1';
+        }
+        compactView = !compactView;
     });
 });
 </script>

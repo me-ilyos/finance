@@ -2,6 +2,9 @@ from django.db import models
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from apps.core.constants import CurrencyChoices
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class BaseContact(models.Model):
@@ -28,18 +31,38 @@ class BaseContact(models.Model):
         super().save(*args, **kwargs)
 
     def add_debt(self, amount, currency):
+        logger.info(f"add_debt called for {self.__class__.__name__} {self.id} ({self.name})")
+        logger.info(f"  Adding {amount} {currency}")
+        logger.info(f"  Balance before: UZS={self.balance_uzs}, USD={self.balance_usd}")
+        
         if currency == CurrencyChoices.UZS:
+            old_balance = self.balance_uzs
             self.balance_uzs += amount
+            logger.info(f"  UZS balance changed from {old_balance} to {self.balance_uzs}")
         elif currency == CurrencyChoices.USD:
+            old_balance = self.balance_usd
             self.balance_usd += amount
+            logger.info(f"  USD balance changed from {old_balance} to {self.balance_usd}")
+        
         self.save(update_fields=['balance_uzs', 'balance_usd', 'updated_at'])
+        logger.info(f"  Balance after save: UZS={self.balance_uzs}, USD={self.balance_usd}")
 
     def reduce_debt(self, amount, currency):
+        logger.info(f"reduce_debt called for {self.__class__.__name__} {self.id} ({self.name})")
+        logger.info(f"  Reducing {amount} {currency}")
+        logger.info(f"  Balance before: UZS={self.balance_uzs}, USD={self.balance_usd}")
+        
         if currency == CurrencyChoices.UZS:
+            old_balance = self.balance_uzs
             self.balance_uzs -= amount
+            logger.info(f"  UZS balance changed from {old_balance} to {self.balance_uzs}")
         elif currency == CurrencyChoices.USD:
+            old_balance = self.balance_usd
             self.balance_usd -= amount
+            logger.info(f"  USD balance changed from {old_balance} to {self.balance_usd}")
+        
         self.save(update_fields=['balance_uzs', 'balance_usd', 'updated_at'])
+        logger.info(f"  Balance after save: UZS={self.balance_uzs}, USD={self.balance_usd}")
 
     def __str__(self):
         return self.name

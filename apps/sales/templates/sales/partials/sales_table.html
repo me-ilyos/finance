@@ -9,6 +9,7 @@
                 <th class="py-3 px-3 fw-semibold">Sana</th>
                 <th class="py-3 px-3 fw-semibold">Chipta (Turi/Manzil)</th>
                 <th class="py-3 px-3 fw-semibold">Xaridor</th>
+                <th class="py-3 px-3 fw-semibold">Sotuvchi</th>
                 <th class="py-3 px-3 fw-semibold text-center">Miqdori</th>
                 <th class="text-center fw-semibold price-col standout-col align-middle">
                     <div>Birlik Narxi</div>
@@ -43,6 +44,13 @@
                     <small class="text-muted">{{ sale.related_acquisition|ticket_description_short }}</small>
                 </td>
                 <td class="py-2 px-3">{{ sale|buyer_display }}</td>
+                <td class="py-2 px-3">
+                    {% if sale.salesperson %}
+                        {{ sale.salesperson.user.get_full_name|default:sale.salesperson.user.username }}
+                    {% else %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
                 <td class="py-2 px-3 text-center">{{ sale.quantity|floatformat:0 }}</td>
                 
                 <!-- Unit Price Column -->
@@ -97,7 +105,7 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="8" class="text-center py-3 px-3">Sotuvlar mavjud emas yoki filtrga mos kelmadi.</td>
+                <td colspan="9" class="text-center py-3 px-3">Sotuvlar mavjud emas yoki filtrga mos kelmadi.</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -105,7 +113,7 @@
         {% if sales %} {# Show totals row only if there are sales #}
         <tfoot class="totals-row">
             <tr>
-                <td colspan="3" class="text-end fw-bold">Jami:</td>
+                <td colspan="4" class="text-end fw-bold">Jami:</td>
                 <td class="text-center fw-bold">{{ totals.total_quantity|default:0|floatformat:0 }}</td>
                 <td class="price-col standout-col align-middle"></td> {# Empty Unit Price Total #}
                 <td class="price-col standout-col align-middle">
