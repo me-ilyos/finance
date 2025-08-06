@@ -97,9 +97,12 @@
             <button type="button" class="btn btn-primary btn-sm me-2" id="applyFilters">
                 <i class="fas fa-filter me-1"></i>Filtrlash
             </button>
-            <button type="button" class="btn btn-outline-secondary btn-sm" id="toggleComments">
+            <button type="button" class="btn btn-outline-secondary btn-sm me-2" id="toggleComments">
                 <i class="fas fa-comment me-1"></i>
                 <span id="toggleCommentsText">Izohlarni yashirish</span>
+            </button>
+            <button type="button" class="btn btn-success btn-sm" id="exportToExcel">
+                <i class="fas fa-file-excel me-1"></i>Excel Yuklab Olish
             </button>
         </div>
     </div>
@@ -685,6 +688,119 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         commentsVisible = !commentsVisible;
     });
+
+    // Excel Export functionality
+    const exportBtn = document.getElementById('exportToExcel');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', function() {
+            exportTableToExcel();
+        });
+    }
+
+    function exportTableToExcel() {
+        const table = document.getElementById('transactionTable');
+        if (!table) {
+            alert('Jadval topilmadi!');
+            return;
+        }
+
+        // Create a copy of the table to modify for export
+        const tableClone = table.cloneNode(true);
+        
+        // Remove comments column if hidden
+        if (table.classList.contains('comments-hidden')) {
+            const commentsHeaders = tableClone.querySelectorAll('.comments-column');
+            commentsHeaders.forEach(cell => cell.remove());
+        }
+
+        // Clean up the table data for export
+        const rows = tableClone.querySelectorAll('tr');
+        const exportData = [];
+
+        rows.forEach((row, rowIndex) => {
+            const cells = row.querySelectorAll('th, td');
+            const rowData = [];
+            
+            cells.forEach(cell => {
+                // Skip if this is a comments column and it should be hidden
+                if (table.classList.contains('comments-hidden') && cell.classList.contains('comments-column')) {
+                    return;
+                }
+                
+                let cellText = cell.textContent.trim();
+                
+                // Clean up text content
+                cellText = cellText.replace(/\s+/g, ' '); // Replace multiple spaces with single space
+                cellText = cellText.replace(/\n/g, ' '); // Replace newlines with spaces
+                
+                rowData.push(cellText);
+            });
+            
+            if (rowData.length > 0) {
+                exportData.push(rowData);
+            }
+        });
+
+        // Create workbook
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(exportData);
+
+        // Set column widths
+        const colWidths = [
+            { wch: 12 }, // Date
+            { wch: 50 }, // Type
+            { wch: 18 }, // Debit
+            { wch: 18 }, // Credit
+            { wch: 15 }, // Commission
+            { wch: 20 }, // Balance
+        ];
+        
+        if (commentsVisible) {
+            colWidths.push({ wch: 25 }); // Comments
+        }
+        
+        ws['!cols'] = colWidths;
+
+        // Add worksheet to workbook
+        XLSX.utils.book_append_sheet(wb, ws, 'Tranzaksiyalar');
+
+        // Generate filename with current date and filter info
+        const now = new Date();
+        const dateStr = now.toISOString().split('T')[0];
+        const supplierName = '{{ supplier.name|escapejs }}';
+        const filterInfo = getFilterInfo();
+        
+        let filename = `${supplierName}_tranzaksiyalar_${dateStr}`;
+        if (filterInfo) {
+            filename += `_${filterInfo}`;
+        }
+        filename += '.xlsx';
+
+        // Save file
+        XLSX.writeFile(wb, filename);
+    }
+
+    function getFilterInfo() {
+        const filter = document.getElementById('transactionFilter').value;
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        
+        let filterParts = [];
+        
+        if (filter !== 'all') {
+            filterParts.push(filter.toUpperCase());
+        }
+        
+        if (startDate && endDate) {
+            filterParts.push(`${startDate}_${endDate}`);
+        } else if (startDate) {
+            filterParts.push(`${startDate}_bugun`);
+        } else if (endDate) {
+            filterParts.push(`boshidan_${endDate}`);
+        }
+        
+        return filterParts.join('_');
+    }
 });
 </script>
 {% endblock %} 
