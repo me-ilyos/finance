@@ -73,7 +73,7 @@
 
     <!-- Filter Controls -->
     <div class="row mb-3">
-        <div class="col-md-4">
+        <div class="col-md-3">
             <label for="transactionFilter" class="form-label">Tranzaksiya turi:</label>
             <select id="transactionFilter" class="form-select form-select-sm">
                 <option value="all" {% if current_filter == 'all' %}selected{% endif %}>Barcha tranzaksiyalar</option>
@@ -82,8 +82,19 @@
                 <option value="umra" {% if current_filter == 'umra' %}selected{% endif %}>Umra</option>
             </select>
         </div>
-        <div class="col-md-8 text-end">
+        <div class="col-md-3">
+            <label for="startDate" class="form-label">Boshlang'ich sana:</label>
+            <input type="date" id="startDate" class="form-control form-control-sm" value="{{ start_date }}">
+        </div>
+        <div class="col-md-3">
+            <label for="endDate" class="form-label">Tugash sana:</label>
+            <input type="date" id="endDate" class="form-control form-control-sm" value="{{ end_date }}">
+        </div>
+        <div class="col-md-3 text-end">
             <label class="form-label">&nbsp;</label><br>
+            <button type="button" class="btn btn-primary btn-sm me-2" id="applyFilters">
+                <i class="fas fa-filter me-1"></i>Filtrlash
+            </button>
             <button type="button" class="btn btn-outline-secondary btn-sm" id="toggleComments">
                 <i class="fas fa-comment me-1"></i>
                 <span id="toggleCommentsText">Izohlarni yashirish</span>
@@ -170,16 +181,20 @@
                                             {% if transaction.balance_uzs != 0 %}
                                                 <div>
                                                     {{ transaction.balance_uzs|floatformat:0|intcomma }} UZS
-                                                    {% if forloop.first and agent.initial_balance_uzs != 0 %}
-                                                        <br><small class="text-muted">({{ agent.initial_balance_uzs|floatformat:0|intcomma }} UZS)</small>
+                                                    {% if forloop.first %}
+                                                        {% if not start_date and agent.initial_balance_uzs != 0 %}
+                                                            <br><small class="text-muted">({{ agent.initial_balance_uzs|floatformat:0|intcomma }} UZS)</small>
+                                                        {% endif %}
                                                     {% endif %}
                                                 </div>
                                             {% endif %}
                                             {% if transaction.balance_usd != 0 %}
                                                 <div>
                                                     ${{ transaction.balance_usd|floatformat:2|intcomma }} USD
-                                                    {% if forloop.first and agent.initial_balance_usd != 0 %}
-                                                        <br><small class="text-muted">(${{ agent.initial_balance_usd|floatformat:2|intcomma }} USD)</small>
+                                                    {% if forloop.first %}
+                                                        {% if not start_date and agent.initial_balance_usd != 0 %}
+                                                            <br><small class="text-muted">(${{ agent.initial_balance_usd|floatformat:2|intcomma }} USD)</small>
+                                                        {% endif %}
                                                     {% endif %}
                                                 </div>
                                             {% endif %}
@@ -271,10 +286,10 @@
                     <ul class="pagination pagination-sm justify-content-center">
                         {% if transactions.has_previous %}
                             <li class="page-item">
-                                <a class="page-link" href="?page=1{% if current_filter != 'all' %}&filter={{ current_filter }}{% endif %}">&laquo; Birinchi</a>
+                                <a class="page-link" href="?page=1{% if current_filter != 'all' %}&filter={{ current_filter }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">&laquo; Birinchi</a>
                             </li>
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ transactions.previous_page_number }}{% if current_filter != 'all' %}&filter={{ current_filter }}{% endif %}">Oldingi</a>
+                                <a class="page-link" href="?page={{ transactions.previous_page_number }}{% if current_filter != 'all' %}&filter={{ current_filter }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">Oldingi</a>
                             </li>
                         {% endif %}
 
@@ -285,17 +300,17 @@
                                 </li>
                             {% elif num > transactions.number|add:'-3' and num < transactions.number|add:'3' %}
                                 <li class="page-item">
-                                    <a class="page-link" href="?page={{ num }}{% if current_filter != 'all' %}&filter={{ current_filter }}{% endif %}">{{ num }}</a>
+                                    <a class="page-link" href="?page={{ num }}{% if current_filter != 'all' %}&filter={{ current_filter }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">{{ num }}</a>
                                 </li>
                             {% endif %}
                         {% endfor %}
 
                         {% if transactions.has_next %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ transactions.next_page_number }}{% if current_filter != 'all' %}&filter={{ current_filter }}{% endif %}">Keyingi</a>
+                                <a class="page-link" href="?page={{ transactions.next_page_number }}{% if current_filter != 'all' %}&filter={{ current_filter }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">Keyingi</a>
                             </li>
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ transactions.paginator.num_pages }}{% if current_filter != 'all' %}&filter={{ current_filter }}{% endif %}">Oxirgi &raquo;</a>
+                                <a class="page-link" href="?page={{ transactions.paginator.num_pages }}{% if current_filter != 'all' %}&filter={{ current_filter }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">Oxirgi &raquo;</a>
                             </li>
                         {% endif %}
                     </ul>
@@ -315,6 +330,17 @@
         <div class="card-header" style="background-color: #3A4D8F;">
             <h6 class="mb-0 text-white">
                 <i class="fas fa-chart-bar me-2"></i>Jami Ma'lumotlar
+                {% if start_date or end_date %}
+                    <small class="text-light ms-2">
+                        {% if start_date and end_date %}
+                            ({{ start_date }} - {{ end_date }})
+                        {% elif start_date %}
+                            ({{ start_date }} - Bugun)
+                        {% elif end_date %}
+                            (Barcha - {{ end_date }})
+                        {% endif %}
+                    </small>
+                {% endif %}
             </h6>
         </div>
         <div class="card-body">
@@ -445,21 +471,59 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const filterSelect = document.getElementById('transactionFilter');
+    const startDateInput = document.getElementById('startDate');
+    const endDateInput = document.getElementById('endDate');
+    const applyFiltersBtn = document.getElementById('applyFilters');
     
-    filterSelect.addEventListener('change', function() {
-        const filterValue = this.value;
+    // Apply filters function
+    function applyFilters() {
+        const filterValue = filterSelect.value;
+        const startDate = startDateInput.value;
+        const endDate = endDateInput.value;
+        
         const url = new URL(window.location);
         
+        // Set filter parameter
         if (filterValue === 'all') {
             url.searchParams.delete('filter');
         } else {
             url.searchParams.set('filter', filterValue);
         }
         
-        // Reset to first page when filter changes
+        // Set date parameters
+        if (startDate) {
+            url.searchParams.set('start_date', startDate);
+        } else {
+            url.searchParams.delete('start_date');
+        }
+        
+        if (endDate) {
+            url.searchParams.set('end_date', endDate);
+        } else {
+            url.searchParams.delete('end_date');
+        }
+        
+        // Reset to first page when filters change
         url.searchParams.delete('page');
         
         window.location.href = url.toString();
+    }
+    
+    // Apply filters on button click
+    applyFiltersBtn.addEventListener('click', applyFilters);
+    
+    // Apply filters on Enter key in date inputs
+    [startDateInput, endDateInput].forEach(input => {
+        input.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                applyFilters();
+            }
+        });
+    });
+    
+    // Legacy filter change handler (for backward compatibility)
+    filterSelect.addEventListener('change', function() {
+        applyFilters();
     });
 
     // Toggle comments column

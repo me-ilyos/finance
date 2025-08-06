@@ -8,6 +8,8 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.contrib import messages
 from django.db import transaction
+from django.utils import timezone
+from datetime import datetime, date
 import logging
 import re
 
@@ -208,14 +210,47 @@ class SupplierDetailView(LoginRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         supplier = self.object
         
-        # Get filter parameter from request
+        # Get filter parameters from request
         filter_type = self.request.GET.get('filter', 'all')
         page = self.request.GET.get('page', 1)
+        start_date = self.request.GET.get('start_date', '')
+        end_date = self.request.GET.get('end_date', '')
+        
+        # Parse dates
+        start_date_obj = None
+        end_date_obj = None
+        
+        if start_date:
+            try:
+                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+            except ValueError:
+                start_date = ''
+        
+        if end_date:
+            try:
+                end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+            except ValueError:
+                end_date = ''
+        elif start_date and not end_date:
+            # If only start date is provided, set end date to today
+            end_date_obj = timezone.now().date()
+            end_date = end_date_obj.strftime('%Y-%m-%d')
         
         # Get base querysets
         acquisitions = supplier.acquisitions.select_related('ticket').order_by('-acquisition_date')
         payments = supplier.payments.select_related('paid_from_account').order_by('-payment_date')
         commissions = supplier.commissions.select_related('acquisition__ticket').order_by('-commission_date')
+        
+        # Apply date filtering
+        if start_date_obj:
+            acquisitions = acquisitions.filter(acquisition_date__gte=start_date_obj)
+            payments = payments.filter(payment_date__gte=start_date_obj)
+            commissions = commissions.filter(commission_date__gte=start_date_obj)
+        
+        if end_date_obj:
+            acquisitions = acquisitions.filter(acquisition_date__lte=end_date_obj)
+            payments = payments.filter(payment_date__lte=end_date_obj)
+            commissions = commissions.filter(commission_date__lte=end_date_obj)
         
         # Apply filtering based on filter_type
         if filter_type == 'uzs':
@@ -244,8 +279,18 @@ class SupplierDetailView(LoginRequiredMixin, DetailView):
         transactions.sort(key=lambda x: x['date'])
         
         # Calculate running balances
-        current_balance_uzs = supplier.initial_balance_uzs or 0
-        current_balance_usd = supplier.initial_balance_usd or 0
+        # For date filtering, we want to show the balance changes within the selected period only
+        if start_date_obj:
+            # For date period filtering, start with zero and show only changes within the period
+            starting_balance_uzs = 0
+            starting_balance_usd = 0
+            current_balance_uzs = 0
+            current_balance_usd = 0
+        else:
+            starting_balance_uzs = supplier.initial_balance_uzs or 0
+            starting_balance_usd = supplier.initial_balance_usd or 0
+            current_balance_uzs = supplier.initial_balance_uzs or 0
+            current_balance_usd = supplier.initial_balance_usd or 0
         
         for transaction in transactions:
             if transaction['type'] == 'acquisition':
@@ -283,11 +328,21 @@ class SupplierDetailView(LoginRequiredMixin, DetailView):
         except EmptyPage:
             paginated_transactions = paginator.page(paginator.num_pages)
         
-        # Calculate totals for display in table footer - respect current filter
+        # Calculate totals for display in table footer - respect current filter and date range
         if filter_type == 'uzs':
             filtered_acquisitions = supplier.acquisitions.select_related('ticket').filter(currency='UZS')
             filtered_payments = supplier.payments.select_related('paid_from_account').filter(currency='UZS')
             filtered_commissions = supplier.commissions.filter(currency='UZS')
+            
+            # Apply date filtering to totals
+            if start_date_obj:
+                filtered_acquisitions = filtered_acquisitions.filter(acquisition_date__gte=start_date_obj)
+                filtered_payments = filtered_payments.filter(payment_date__gte=start_date_obj)
+                filtered_commissions = filtered_commissions.filter(commission_date__gte=start_date_obj)
+            if end_date_obj:
+                filtered_acquisitions = filtered_acquisitions.filter(acquisition_date__lte=end_date_obj)
+                filtered_payments = filtered_payments.filter(payment_date__lte=end_date_obj)
+                filtered_commissions = filtered_commissions.filter(commission_date__lte=end_date_obj)
             
             uzs_acquisitions = filtered_acquisitions.aggregate(total=Sum('total_amount'))['total'] or 0
             uzs_payments = filtered_payments.aggregate(total=Sum('amount'))['total'] or 0
@@ -297,13 +352,26 @@ class SupplierDetailView(LoginRequiredMixin, DetailView):
             usd_commissions = 0
             
             # Calculate filtered balance for UZS only
-            filtered_balance_uzs = uzs_acquisitions - uzs_commissions - uzs_payments + (supplier.initial_balance_uzs or 0)
+            if start_date_obj:
+                filtered_balance_uzs = uzs_acquisitions - uzs_commissions - uzs_payments
+            else:
+                filtered_balance_uzs = uzs_acquisitions - uzs_commissions - uzs_payments + (supplier.initial_balance_uzs or 0)
             filtered_balance_usd = 0
             
         elif filter_type == 'usd':
             filtered_acquisitions = supplier.acquisitions.select_related('ticket').filter(currency='USD')
             filtered_payments = supplier.payments.select_related('paid_from_account').filter(currency='USD')
             filtered_commissions = supplier.commissions.filter(currency='USD')
+            
+            # Apply date filtering to totals
+            if start_date_obj:
+                filtered_acquisitions = filtered_acquisitions.filter(acquisition_date__gte=start_date_obj)
+                filtered_payments = filtered_payments.filter(payment_date__gte=start_date_obj)
+                filtered_commissions = filtered_commissions.filter(commission_date__gte=start_date_obj)
+            if end_date_obj:
+                filtered_acquisitions = filtered_acquisitions.filter(acquisition_date__lte=end_date_obj)
+                filtered_payments = filtered_payments.filter(payment_date__lte=end_date_obj)
+                filtered_commissions = filtered_commissions.filter(commission_date__lte=end_date_obj)
             
             usd_acquisitions = filtered_acquisitions.aggregate(total=Sum('total_amount'))['total'] or 0
             usd_payments = filtered_payments.aggregate(total=Sum('amount'))['total'] or 0
@@ -314,12 +382,23 @@ class SupplierDetailView(LoginRequiredMixin, DetailView):
             
             # Calculate filtered balance for USD only
             filtered_balance_uzs = 0
-            filtered_balance_usd = usd_acquisitions - usd_commissions - usd_payments + (supplier.initial_balance_usd or 0)
+            if start_date_obj:
+                filtered_balance_usd = usd_acquisitions - usd_commissions - usd_payments
+            else:
+                filtered_balance_usd = usd_acquisitions - usd_commissions - usd_payments + (supplier.initial_balance_usd or 0)
             
         elif filter_type == 'umra':
             filtered_acquisitions = supplier.acquisitions.select_related('ticket').filter(ticket__ticket_type='UMRA')
             filtered_payments = supplier.payments.select_related('paid_from_account').none()  # No payments are specific to ticket type
             filtered_commissions = supplier.commissions.filter(acquisition__ticket__ticket_type='UMRA')
+            
+            # Apply date filtering to totals
+            if start_date_obj:
+                filtered_acquisitions = filtered_acquisitions.filter(acquisition_date__gte=start_date_obj)
+                filtered_commissions = filtered_commissions.filter(commission_date__gte=start_date_obj)
+            if end_date_obj:
+                filtered_acquisitions = filtered_acquisitions.filter(acquisition_date__lte=end_date_obj)
+                filtered_commissions = filtered_commissions.filter(commission_date__lte=end_date_obj)
             
             uzs_acquisitions = filtered_acquisitions.filter(currency='UZS').aggregate(total=Sum('total_amount'))['total'] or 0
             usd_acquisitions = filtered_acquisitions.filter(currency='USD').aggregate(total=Sum('total_amount'))['total'] or 0
@@ -328,14 +407,28 @@ class SupplierDetailView(LoginRequiredMixin, DetailView):
             uzs_commissions = filtered_commissions.filter(currency='UZS').aggregate(total=Sum('amount'))['total'] or 0
             usd_commissions = filtered_commissions.filter(currency='USD').aggregate(total=Sum('amount'))['total'] or 0
             
-            # Calculate filtered balance for UMRA only (no initial balance included for ticket-type filters)
-            filtered_balance_uzs = uzs_acquisitions - uzs_commissions - uzs_payments
-            filtered_balance_usd = usd_acquisitions - usd_commissions - usd_payments
+            # Calculate filtered balance for UMRA only
+            if start_date_obj:
+                filtered_balance_uzs = uzs_acquisitions - uzs_commissions - uzs_payments
+                filtered_balance_usd = usd_acquisitions - usd_commissions - usd_payments
+            else:
+                filtered_balance_uzs = uzs_acquisitions - uzs_commissions - uzs_payments
+                filtered_balance_usd = usd_acquisitions - usd_commissions - usd_payments
             
         else:  # filter_type == 'all'
             filtered_acquisitions = supplier.acquisitions.select_related('ticket')
             filtered_payments = supplier.payments.select_related('paid_from_account')
             filtered_commissions = supplier.commissions
+            
+            # Apply date filtering to totals
+            if start_date_obj:
+                filtered_acquisitions = filtered_acquisitions.filter(acquisition_date__gte=start_date_obj)
+                filtered_payments = filtered_payments.filter(payment_date__gte=start_date_obj)
+                filtered_commissions = filtered_commissions.filter(commission_date__gte=start_date_obj)
+            if end_date_obj:
+                filtered_acquisitions = filtered_acquisitions.filter(acquisition_date__lte=end_date_obj)
+                filtered_payments = filtered_payments.filter(payment_date__lte=end_date_obj)
+                filtered_commissions = filtered_commissions.filter(commission_date__lte=end_date_obj)
             
             uzs_acquisitions = filtered_acquisitions.filter(currency='UZS').aggregate(total=Sum('total_amount'))['total'] or 0
             usd_acquisitions = filtered_acquisitions.filter(currency='USD').aggregate(total=Sum('total_amount'))['total'] or 0
@@ -345,8 +438,12 @@ class SupplierDetailView(LoginRequiredMixin, DetailView):
             usd_commissions = filtered_commissions.filter(currency='USD').aggregate(total=Sum('amount'))['total'] or 0
             
             # Calculate total balance including commissions for 'all' filter
-            filtered_balance_uzs = uzs_acquisitions - uzs_commissions - uzs_payments + (supplier.initial_balance_uzs or 0)
-            filtered_balance_usd = usd_acquisitions - usd_commissions - usd_payments + (supplier.initial_balance_usd or 0)
+            if start_date_obj:
+                filtered_balance_uzs = uzs_acquisitions - uzs_commissions - uzs_payments
+                filtered_balance_usd = usd_acquisitions - usd_commissions - usd_payments
+            else:
+                filtered_balance_uzs = uzs_acquisitions - uzs_commissions - uzs_payments + (supplier.initial_balance_uzs or 0)
+                filtered_balance_usd = usd_acquisitions - usd_commissions - usd_payments + (supplier.initial_balance_usd or 0)
         
         context.update({
             'transactions': paginated_transactions,
@@ -356,6 +453,10 @@ class SupplierDetailView(LoginRequiredMixin, DetailView):
             'payment_form': SupplierPaymentForm(),
             'commission_form': CommissionForm(supplier=supplier),
             'current_filter': filter_type,
+            'start_date': start_date,
+            'end_date': end_date,
+            'starting_balance_uzs': starting_balance_uzs,
+            'starting_balance_usd': starting_balance_usd,
             # Table footer totals (always show complete totals)
             'uzs_acquisitions': uzs_acquisitions,
             'usd_acquisitions': usd_acquisitions,
@@ -446,13 +547,44 @@ class AgentDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         agent = self.object
         
-        # Get filter parameter from request
+        # Get filter parameters from request
         filter_type = self.request.GET.get('filter', 'all')
         page = self.request.GET.get('page', 1)
+        start_date = self.request.GET.get('start_date', '')
+        end_date = self.request.GET.get('end_date', '')
+        
+        # Parse dates
+        start_date_obj = None
+        end_date_obj = None
+        
+        if start_date:
+            try:
+                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+            except ValueError:
+                start_date = ''
+        
+        if end_date:
+            try:
+                end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+            except ValueError:
+                end_date = ''
+        elif start_date and not end_date:
+            # If only start date is provided, set end date to today
+            end_date_obj = timezone.now().date()
+            end_date = end_date_obj.strftime('%Y-%m-%d')
         
         # Get base querysets
         sales = agent.agent_sales.select_related('related_acquisition__ticket').order_by('-sale_date')
         payments = agent.payments.select_related('paid_to_account').order_by('-payment_date')
+        
+        # Apply date filtering
+        if start_date_obj:
+            sales = sales.filter(sale_date__gte=start_date_obj)
+            payments = payments.filter(payment_date__gte=start_date_obj)
+        
+        if end_date_obj:
+            sales = sales.filter(sale_date__lte=end_date_obj)
+            payments = payments.filter(payment_date__lte=end_date_obj)
         
         # Apply filtering based on filter_type
         if filter_type == 'uzs':
@@ -476,8 +608,18 @@ class AgentDetailView(DetailView):
         transactions.sort(key=lambda x: x['date'])
         
         # Calculate running balances
-        current_balance_uzs = agent.initial_balance_uzs or 0
-        current_balance_usd = agent.initial_balance_usd or 0
+        # For date filtering, we want to show the balance changes within the selected period only
+        if start_date_obj:
+            # For date period filtering, start with zero and show only changes within the period
+            starting_balance_uzs = 0
+            starting_balance_usd = 0
+            current_balance_uzs = 0
+            current_balance_usd = 0
+        else:
+            starting_balance_uzs = agent.initial_balance_uzs or 0
+            starting_balance_usd = agent.initial_balance_usd or 0
+            current_balance_uzs = agent.initial_balance_uzs or 0
+            current_balance_usd = agent.initial_balance_usd or 0
         
         for transaction in transactions:
             if transaction['type'] == 'sale':
@@ -509,10 +651,18 @@ class AgentDetailView(DetailView):
         except EmptyPage:
             paginated_transactions = paginator.page(paginator.num_pages)
         
-        # Calculate totals for display in table footer - respect current filter
+        # Calculate totals for display in table footer - respect current filter and date range
         if filter_type == 'uzs':
             filtered_sales = agent.agent_sales.filter(sale_currency='UZS')
             filtered_payments = agent.payments.filter(currency='UZS')
+            
+            # Apply date filtering to totals
+            if start_date_obj:
+                filtered_sales = filtered_sales.filter(sale_date__gte=start_date_obj)
+                filtered_payments = filtered_payments.filter(payment_date__gte=start_date_obj)
+            if end_date_obj:
+                filtered_sales = filtered_sales.filter(sale_date__lte=end_date_obj)
+                filtered_payments = filtered_payments.filter(payment_date__lte=end_date_obj)
             
             uzs_sales = filtered_sales.aggregate(
                 total=Sum('total_sale_amount')
@@ -522,12 +672,23 @@ class AgentDetailView(DetailView):
             usd_payments = 0
             
             # Calculate filtered balance for UZS only
-            filtered_balance_uzs = uzs_sales - uzs_payments + (agent.initial_balance_uzs or 0)
+            if start_date_obj:
+                filtered_balance_uzs = uzs_sales - uzs_payments
+            else:
+                filtered_balance_uzs = uzs_sales - uzs_payments + (agent.initial_balance_uzs or 0)
             filtered_balance_usd = 0
             
         elif filter_type == 'usd':
             filtered_sales = agent.agent_sales.filter(sale_currency='USD')
             filtered_payments = agent.payments.filter(currency='USD')
+            
+            # Apply date filtering to totals
+            if start_date_obj:
+                filtered_sales = filtered_sales.filter(sale_date__gte=start_date_obj)
+                filtered_payments = filtered_payments.filter(payment_date__gte=start_date_obj)
+            if end_date_obj:
+                filtered_sales = filtered_sales.filter(sale_date__lte=end_date_obj)
+                filtered_payments = filtered_payments.filter(payment_date__lte=end_date_obj)
             
             usd_sales = filtered_sales.aggregate(
                 total=Sum('total_sale_amount')
@@ -538,11 +699,20 @@ class AgentDetailView(DetailView):
             
             # Calculate filtered balance for USD only
             filtered_balance_uzs = 0
-            filtered_balance_usd = usd_sales - usd_payments + (agent.initial_balance_usd or 0)
+            if start_date_obj:
+                filtered_balance_usd = usd_sales - usd_payments
+            else:
+                filtered_balance_usd = usd_sales - usd_payments + (agent.initial_balance_usd or 0)
             
         elif filter_type == 'umra':
             filtered_sales = agent.agent_sales.filter(related_acquisition__ticket__ticket_type='UMRA')
             filtered_payments = agent.payments.none()  # No payments are specific to ticket type
+            
+            # Apply date filtering to totals
+            if start_date_obj:
+                filtered_sales = filtered_sales.filter(sale_date__gte=start_date_obj)
+            if end_date_obj:
+                filtered_sales = filtered_sales.filter(sale_date__lte=end_date_obj)
             
             uzs_sales = filtered_sales.filter(sale_currency='UZS').aggregate(
                 total=Sum('total_sale_amount')
@@ -553,13 +723,25 @@ class AgentDetailView(DetailView):
             uzs_payments = 0
             usd_payments = 0
             
-            # Calculate filtered balance for UMRA only (no initial balance included for ticket-type filters)
-            filtered_balance_uzs = uzs_sales - uzs_payments
-            filtered_balance_usd = usd_sales - usd_payments
+            # Calculate filtered balance for UMRA only
+            if start_date_obj:
+                filtered_balance_uzs = uzs_sales - uzs_payments
+                filtered_balance_usd = usd_sales - usd_payments
+            else:
+                filtered_balance_uzs = uzs_sales - uzs_payments
+                filtered_balance_usd = usd_sales - usd_payments
             
         else:  # filter_type == 'all'
             filtered_sales = agent.agent_sales
             filtered_payments = agent.payments
+            
+            # Apply date filtering to totals
+            if start_date_obj:
+                filtered_sales = filtered_sales.filter(sale_date__gte=start_date_obj)
+                filtered_payments = filtered_payments.filter(payment_date__gte=start_date_obj)
+            if end_date_obj:
+                filtered_sales = filtered_sales.filter(sale_date__lte=end_date_obj)
+                filtered_payments = filtered_payments.filter(payment_date__lte=end_date_obj)
             
             uzs_sales = filtered_sales.filter(sale_currency='UZS').aggregate(
                 total=Sum('total_sale_amount')
@@ -571,8 +753,12 @@ class AgentDetailView(DetailView):
             usd_payments = filtered_payments.filter(currency='USD').aggregate(total=Sum('amount'))['total'] or 0
             
             # Use actual agent balance for 'all' filter
-            filtered_balance_uzs = agent.balance_uzs
-            filtered_balance_usd = agent.balance_usd
+            if start_date_obj:
+                filtered_balance_uzs = uzs_sales - uzs_payments
+                filtered_balance_usd = usd_sales - usd_payments
+            else:
+                filtered_balance_uzs = agent.balance_uzs
+                filtered_balance_usd = agent.balance_usd
         
         context.update({
             'transactions': paginated_transactions,
@@ -580,6 +766,10 @@ class AgentDetailView(DetailView):
             'payments': agent.payments.select_related('paid_to_account').order_by('-payment_date'),
             'payment_form': AgentPaymentForm(),
             'current_filter': filter_type,
+            'start_date': start_date,
+            'end_date': end_date,
+            'starting_balance_uzs': starting_balance_uzs,
+            'starting_balance_usd': starting_balance_usd,
             # Table footer totals (always show complete totals)
             'uzs_sales': uzs_sales,
             'usd_sales': usd_sales,
