@@ -1,11 +1,12 @@
 from django import forms
-from .models import Sale
-from apps.inventory.models import Acquisition
-from apps.contacts.models import Agent
-from apps.accounting.models import FinancialAccount
-from apps.core.models import Salesperson
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+from .models import Sale, TicketReturn
+from apps.inventory.models import Acquisition
+from apps.accounting.models import FinancialAccount
+from apps.contacts.models import Agent
+from apps.core.models import Salesperson
+from decimal import Decimal
 
 
 class AcquisitionChoiceField(forms.ModelChoiceField):
@@ -28,17 +29,19 @@ class AcquisitionChoiceField(forms.ModelChoiceField):
             self.widget.attrs.update({'style': 'min-width: 600px;'})
 
 
+class SaleChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        buyer = obj.agent.name if obj.agent else obj.client_full_name
+        return f"#{obj.id} - {obj.related_acquisition.ticket.description} - {buyer} ({obj.remaining_quantity} dona qolgan)"
+
+
 class SaleForm(forms.ModelForm):
     class Meta:
         model = Sale
         fields = [
-            'sale_date', 
-            'related_acquisition',
-            'quantity', 
-            'agent', 'client_full_name', 'client_id_number',
-            'unit_sale_price', 
-            'paid_to_account', 
-            'notes'
+            'sale_date', 'quantity', 'related_acquisition',
+            'agent', 'client_full_name', 'client_id_number', 'unit_sale_price',
+            'paid_to_account', 'notes'
         ]
         labels = {
             'sale_date': "Sotuv Sanasi va Vaqti",
@@ -59,6 +62,7 @@ class SaleForm(forms.ModelForm):
         widgets = {
             'sale_date': forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control form-control-sm'}),
             'quantity': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'min': '1'}),
+            'related_acquisition': forms.Select(attrs={'class': 'form-select form-select-sm', 'style': 'min-width: 600px;'}),
             'agent': forms.Select(attrs={'class': 'form-select form-select-sm'}),
             'client_full_name': forms.TextInput(attrs={'class': 'form-control form-control-sm'}),
             'client_id_number': forms.TextInput(attrs={'class': 'form-control form-control-sm'}),
@@ -101,6 +105,9 @@ class SaleForm(forms.ModelForm):
         self.fields['client_full_name'].required = False
         self.fields['client_id_number'].required = False
         
+        # Store current user for later use in clean method
+        self.current_user = self.current_user
+        
         # Set current datetime as default
         self.fields['sale_date'].initial = timezone.now().strftime('%Y-%m-%dT%H:%M')
 
@@ -116,6 +123,16 @@ class SaleForm(forms.ModelForm):
         related_acquisition = cleaned_data.get('related_acquisition')
         paid_to_account = cleaned_data.get('paid_to_account')
 
+        # Auto-set salesperson based on current user
+        if self.current_user:
+            try:
+                current_salesperson = self.current_user.salesperson_profile
+                cleaned_data['salesperson'] = current_salesperson
+            except Salesperson.DoesNotExist:
+                if not self.current_user.is_superuser:
+                    raise ValidationError("Siz sotuvchi emassiz va sotuv yaratish huquqiga ega emassiz.")
+                # For superusers, we'll need to handle this differently if needed
+        
         # Basic buyer validation
         if agent and (client_full_name or client_id_number):
             raise ValidationError("Bir vaqtning o'zida ham agent, ham mijoz ma'lumotlarini kiritish mumkin emas.")
@@ -162,4 +179,78 @@ class SaleForm(forms.ModelForm):
                 if not self.current_user.is_superuser:
                     raise ValidationError("Faqat sotuvchilar sotuv amalga oshira oladi.")
 
+        return cleaned_data 
+
+
+class TicketReturnForm(forms.ModelForm):
+    # Override fine_paid_to_account field to be completely optional
+    fine_paid_to_account = forms.ModelChoiceField(
+        queryset=FinancialAccount.objects.all(),
+        required=False,
+        empty_label="---------",
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        help_text="Jarima to'lov hisobi (ixtiyoriy)"
+    )
+    
+    class Meta:
+        model = TicketReturn
+        fields = [
+            'original_sale', 'quantity_returned', 'fine_amount',
+            'supplier_fine_amount', 'fine_paid_to_account', 'notes'
+        ]
+        widgets = {
+            'original_sale': forms.Select(attrs={'class': 'form-control'}),
+            'quantity_returned': forms.NumberInput(attrs={'class': 'form-control'}),
+            'fine_amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'supplier_fine_amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Use custom choice field for better display
+        original_field = self.fields['original_sale']
+        self.fields['original_sale'] = SaleChoiceField(
+            queryset=Sale.objects.filter(
+                quantity__gt=0
+            ).select_related('agent', 'related_acquisition__ticket', 'related_acquisition__supplier').order_by('-sale_date'),
+            label=original_field.label,
+            help_text=original_field.help_text,
+            required=original_field.required,
+            widget=forms.Select(attrs={'class': 'form-control'})
+        )
+        
+        # Set initial values for fine amounts
+        if not self.instance.pk:
+            self.fields['fine_amount'].initial = 0
+            self.fields['supplier_fine_amount'].initial = 0
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        print(f"Form clean - fine_paid_to_account: {cleaned_data.get('fine_paid_to_account')}")
+        
+        original_sale = cleaned_data.get('original_sale')
+        quantity_returned = cleaned_data.get('quantity_returned')
+        fine_amount = cleaned_data.get('fine_amount')
+        supplier_fine_amount = cleaned_data.get('supplier_fine_amount')
+        
+        if original_sale and quantity_returned:
+            # Check if quantity is valid
+            if quantity_returned > original_sale.remaining_quantity:
+                raise ValidationError(
+                    f"Qaytarilgan miqdor ({quantity_returned}) qolgan miqdordan ({original_sale.remaining_quantity}) ko'p bo'lishi mumkin emas."
+                )
+            
+            # Set currency fields based on original sale
+            cleaned_data['fine_currency'] = original_sale.sale_currency
+            cleaned_data['supplier_fine_currency'] = original_sale.sale_currency
+        
+        # Validate fine amounts
+        if fine_amount is not None and fine_amount < 0:
+            raise ValidationError("Jarima miqdori manfiy bo'lishi mumkin emas.")
+        
+        if supplier_fine_amount is not None and supplier_fine_amount < 0:
+            raise ValidationError("Ta'minotchi jarima miqdori manfiy bo'lishi mumkin emas.")
+        
         return cleaned_data 

@@ -82,15 +82,13 @@
             <button type="submit" class="btn btn-sm btn-outline-primary">Filter</button>
         </div>
         
-        {% if not user.is_superuser %}
-        <!-- Add New Sale Button - Only for non-admin users (salespeople) -->
+        <!-- Add New Sale Button - Available for all users -->
         <div class="col-md-auto">
             <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
             <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addSaleModal">
                 <i class="fas fa-plus me-1"></i> Yangi Sotuv
             </button>
         </div>
-        {% endif %}
 
         <!-- Clear Filter -->
         <div class="col-md-auto ms-md-auto"> <!-- Push to the right on medium screens and up -->

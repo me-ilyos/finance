@@ -13,15 +13,7 @@
 {% block content %}
 <div class="container-fluid">
     
-    {% comment %} Display Django Messages {% endcomment %}
-    {% if messages %}
-        {% for message in messages %}
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        {% endfor %}
-    {% endif %}
+
 
     <div class="card shadow mb-4">
         <div class="card-header py-3">
@@ -92,8 +84,11 @@
 
 {% include 'sales/partials/sale_modal.html' %}
 
+
+
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'sales/js/sale_form.js' %}"></script>
+<script src="{% static 'sales/js/sale_form.js' %}?v=2.0"></script>
+
 {% endblock %} 

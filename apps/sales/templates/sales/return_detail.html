@@ -1,0 +1,262 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Chipta Qaytarishi #{{ return_instance.id }}{% endblock %}
+
+{% block page_title %}Chipta Qaytarishi #{{ return_instance.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8">
+            <!-- Return Details Card -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Qaytarish Ma'lumotlari</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-primary">Asosiy Ma'lumotlar</h6>
+                            <table class="table table-borderless">
+                                <tr>
+                                    <td><strong>Qaytarish ID:</strong></td>
+                                    <td>#{{ return_instance.id }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Qaytarish sanasi:</strong></td>
+                                    <td>{{ return_instance.return_date|date:"d.m.Y H:i" }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Qaytarilgan miqdor:</strong></td>
+                                    <td>{{ return_instance.quantity_returned }} dona</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Qaytarish turi:</strong></td>
+                                    <td>
+                                        {% if return_instance.is_agent_return %}
+                                            <span class="badge bg-warning text-dark">Agent qaytarishi</span>
+                                        {% else %}
+                                            <span class="badge bg-info">Mijoz qaytarishi</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-primary">Jarima Ma'lumotlari</h6>
+                            <table class="table table-borderless">
+                                <tr>
+                                    <td><strong>Jarima miqdori:</strong></td>
+                                    <td>{{ return_instance.fine_amount|floatformat:2|intcomma }} {{ return_instance.fine_currency }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Jami jarima:</strong></td>
+                                    <td>{{ return_instance.total_fine_amount|floatformat:2|intcomma }} {{ return_instance.fine_currency }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Ta'minotchi jarimasi:</strong></td>
+                                    <td>{{ return_instance.supplier_fine_amount|floatformat:2|intcomma }} {{ return_instance.supplier_fine_currency }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Jami ta'minotchi jarimasi:</strong></td>
+                                    <td>{{ return_instance.total_supplier_fine_amount|floatformat:2|intcomma }} {{ return_instance.supplier_fine_currency }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    {% if return_instance.notes %}
+                    <div class="mt-3">
+                        <h6 class="text-primary">Izohlar</h6>
+                        <p class="text-muted">{{ return_instance.notes }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Original Sale Details Card -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Asosiy Sotuv Ma'lumotlari</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <td><strong>Sotuv ID:</strong></td>
+                                    <td>#{{ return_instance.original_sale.id }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Chipta:</strong></td>
+                                    <td>{{ return_instance.original_sale.related_acquisition.ticket.description }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Ta'minotchi:</strong></td>
+                                    <td>{{ return_instance.original_sale.related_acquisition.supplier.name }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Jami miqdor:</strong></td>
+                                    <td>{{ return_instance.original_sale.quantity }} dona</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Qolgan miqdor:</strong></td>
+                                    <td>{{ return_instance.original_sale.remaining_quantity }} dona</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <td><strong>Narx:</strong></td>
+                                    <td>{{ return_instance.original_sale.unit_sale_price|floatformat:2|intcomma }} {{ return_instance.original_sale.sale_currency }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Jami summa:</strong></td>
+                                    <td>{{ return_instance.original_sale.total_sale_amount|floatformat:2|intcomma }} {{ return_instance.original_sale.sale_currency }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Xaridor:</strong></td>
+                                    <td>
+                                        {% if return_instance.original_sale.agent %}
+                                            {{ return_instance.original_sale.agent.name }}
+                                        {% else %}
+                                            {{ return_instance.original_sale.client_full_name }}
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Sotuvchi:</strong></td>
+                                    <td>
+                                        {% if return_instance.original_sale.salesperson %}
+                                            {{ return_instance.original_sale.salesperson.user.get_full_name }}
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Sotuv sanasi:</strong></td>
+                                    <td>{{ return_instance.original_sale.sale_date|date:"d.m.Y H:i" }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <!-- Financial Impact Card -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Moliyaviy Ta'sir</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h6 class="text-success">Qaytarilgan summa:</h6>
+                        <p class="h5 text-success">
+                            {{ return_instance.returned_sale_amount|floatformat:2|intcomma }} {{ return_instance.original_sale.sale_currency }}
+                        </p>
+                        <small class="text-muted">Mijoz/Agent to'lovi qaytarildi</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <h6 class="text-danger">Jarima:</h6>
+                        <p class="h5 text-danger">
+                            {{ return_instance.total_fine_amount|floatformat:2|intcomma }} {{ return_instance.fine_currency }}
+                        </p>
+                        <small class="text-muted">
+                            {% if return_instance.is_agent_return %}
+                                Agent qarzi qo'shildi
+                            {% else %}
+                                {% if return_instance.fine_paid_to_account %}
+                                    {{ return_instance.fine_paid_to_account.name }} hisobiga qo'shildi
+                                {% else %}
+                                    To'lanmagan
+                                {% endif %}
+                            {% endif %}
+                        </small>
+                    </div>
+
+                    <div class="mb-3">
+                        <h6 class="text-warning">Ta'minotchi qarzi kamaytirildi:</h6>
+                        <p class="h5 text-warning">
+                            {{ return_instance.returned_acquisition_amount|floatformat:2|intcomma }} {{ return_instance.original_sale.related_acquisition.currency }}
+                        </p>
+                        <small class="text-muted">Qaytarilgan chiptalar uchun</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <h6 class="text-danger">Ta'minotchi jarimasi:</h6>
+                        <p class="h5 text-danger">
+                            {{ return_instance.total_supplier_fine_amount|floatformat:2|intcomma }} {{ return_instance.supplier_fine_currency }}
+                        </p>
+                        <small class="text-muted">Ta'minotchi qarzi qo'shildi</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions Card -->
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Amallar</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'sales:return_list' %}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-1"></i>Qaytarishlar ro'yxatiga qaytish
+                        </a>
+                        
+                        {% if user.is_superuser %}
+                        <button class="btn btn-danger" onclick="deleteReturn({{ return_instance.id }})">
+                            <i class="fas fa-trash me-1"></i>Qaytarishni o'chirish
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+{% if user.is_superuser %}
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Qaytarishni o'chirish</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Rostdan ham bu qaytarishni o'chirishni xohlaysizmi?</p>
+                <p class="text-danger"><strong>Bu amalni bekor qilib bo'lmaydi!</strong></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Bekor qilish</button>
+                <form id="deleteForm" method="post" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">O'chirish</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if user.is_superuser %}
+<script>
+function deleteReturn(returnId) {
+    if (confirm("Rostdan ham bu qaytarishni o'chirishni xohlaysizmi? Bu amalni bekor qilib bo'lmaydi.")) {
+        const form = document.getElementById('deleteForm');
+        form.action = `/sales/returns/${returnId}/delete/`;
+        form.submit();
+    }
+}
+</script>
+{% endif %}
+{% endblock %} 

@@ -33,6 +33,7 @@
                     </div></div>
                 </th>
                 <th class="py-3 px-3 fw-semibold">To'lov Hisobi</th>
+                <th class="py-3 px-3 fw-semibold">Qaytarishlar</th>
             </tr>
         </thead>
         <tbody>
@@ -102,10 +103,24 @@
                         <span class="badge bg-danger">To'lanmagan</span>
                     {% endif %}
                 </td>
+                
+                <!-- Returns Column -->
+                <td class="py-2 px-3">
+                    {% if sale.has_returns %}
+                        <span class="badge bg-info">{{ sale.returned_quantity }} dona qaytarilgan</span>
+                        {% if sale.remaining_quantity > 0 %}
+                            <br><small class="text-muted">{{ sale.remaining_quantity }} dona qolgan</small>
+                        {% endif %}
+                    {% else %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+                
+
             </tr>
             {% empty %}
             <tr>
-                <td colspan="9" class="text-center py-3 px-3">Sotuvlar mavjud emas yoki filtrga mos kelmadi.</td>
+                <td colspan="10" class="text-center py-3 px-3">Sotuvlar mavjud emas yoki filtrga mos kelmadi.</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -129,6 +144,7 @@
                     </div></div>
                 </td>
                 <td></td> {# Empty cell for payment status total #}
+                <td></td> {# Empty cell for returns total #}
             </tr>
         </tfoot>
         {% endif %}

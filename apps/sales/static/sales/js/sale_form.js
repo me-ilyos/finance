@@ -1,9 +1,12 @@
 /**
- * Sale Form JavaScript
+ * Sale Form JavaScript - Version 2.0
  * Handles modal form interactions, field dependencies, and AJAX calls
+ * Updated: Fixed financial accounts loading
  */
 
 document.addEventListener('DOMContentLoaded', function () {
+    console.log('Sale Form JavaScript v2.0 loaded - Financial accounts fix applied');
+    
     // Form elements
     const agentSelectModal = document.getElementById('id_agent');
     const clientFullNameModal = document.getElementById('id_client_full_name');
@@ -74,7 +77,10 @@ document.addEventListener('DOMContentLoaded', function () {
      * Update payment account options based on acquisition currency
      */
     async function updatePaymentAccountOptions() {
+        console.log('updatePaymentAccountOptions called');
+        
         if (!relatedAcquisitionSelectModal || !paidToAccountSelectModal) {
+            console.log('Required elements not found');
             return;
         }
 
@@ -95,7 +101,36 @@ document.addEventListener('DOMContentLoaded', function () {
         paidToAccountSelectModal.disabled = false;
 
         try {
-            const url = `/sales/ajax/get-accounts-for-acquisition/${acquisitionId}/`;
+            // Get the acquisition to find its currency
+            const acquisitionSelect = document.getElementById('id_related_acquisition');
+            
+            if (!acquisitionSelect) {
+                console.log('Acquisition select element not found');
+                return;
+            }
+            
+            const selectedOption = acquisitionSelect.options[acquisitionSelect.selectedIndex];
+            
+            if (!selectedOption || !selectedOption.textContent) {
+                console.log('No acquisition selected or no text content');
+                return;
+            }
+            
+            // Better currency detection from acquisition text
+            const text = selectedOption.textContent;
+            console.log('Acquisition text:', text);
+            
+            let currency = 'USD'; // Default
+            if (text.includes('UZS')) {
+                currency = 'UZS';
+            } else if (text.includes('USD') || text.includes('$')) {
+                currency = 'USD';
+            }
+            
+            console.log('Detected currency:', currency);
+            
+            const url = `/sales/get-accounts/?currency=${currency}`;
+            console.log('Fetching URL:', url);
             const response = await fetch(url);
             
             if (!response.ok) {
@@ -103,17 +138,37 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
             
-            const accounts = await response.json();
+            const data = await response.json();
+            console.log('Response data:', data);
             
-            if (accounts.error) {
-                paidToAccountSelectModal.innerHTML = '<option value="">Xatolik: ' + accounts.error + '</option>';
+            if (data.error) {
+                console.log('API error:', data.error);
+                paidToAccountSelectModal.innerHTML = '<option value="">Xatolik: ' + data.error + '</option>';
                 return;
             }
 
-            if (accounts.length === 0) {
-                paidToAccountSelectModal.innerHTML = '<option value="">Mos hisob topilmadi</option>';
+            if (!data.accounts || data.accounts.length === 0) {
+                console.log('No accounts found for currency:', currency);
+                // Try loading all accounts as fallback
+                const fallbackUrl = `/sales/get-accounts/?currency=UZS`;
+                console.log('Trying fallback URL:', fallbackUrl);
+                const fallbackResponse = await fetch(fallbackUrl);
+                const fallbackData = await fallbackResponse.json();
+                
+                if (fallbackData.accounts && fallbackData.accounts.length > 0) {
+                    console.log('Found fallback accounts:', fallbackData.accounts.length);
+                    fallbackData.accounts.forEach(account => {
+                        const option = document.createElement('option');
+                        option.value = account.id;
+                        option.textContent = account.name;
+                        paidToAccountSelectModal.appendChild(option);
+                    });
+                } else {
+                    paidToAccountSelectModal.innerHTML = '<option value="">Mos hisob topilmadi</option>';
+                }
             } else {
-                accounts.forEach(account => {
+                console.log('Found accounts:', data.accounts.length);
+                data.accounts.forEach(account => {
                     const option = document.createElement('option');
                     option.value = account.id;
                     option.textContent = account.name;
@@ -130,6 +185,8 @@ document.addEventListener('DOMContentLoaded', function () {
      * Initialize modal when shown
      */
     function initializeModal() {
+        console.log('initializeModal called');
+        
         // Ensure proper initial alignment
         if (paidToAccountWrapper) {
             paidToAccountWrapper.classList.remove('d-none');
@@ -137,7 +194,10 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         
         if (agentSelectModal) toggleClientAgentFields();
-        if (relatedAcquisitionSelectModal.value) updatePaymentAccountOptions();
+        if (relatedAcquisitionSelectModal && relatedAcquisitionSelectModal.value) {
+            console.log('Calling updatePaymentAccountOptions from initializeModal');
+            updatePaymentAccountOptions();
+        }
         // Fix z-index issues
         fixSelectDropdownZIndex();
     }
@@ -165,11 +225,16 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (relatedAcquisitionSelectModal) {
+        console.log('Adding event listener to acquisition select');
         relatedAcquisitionSelectModal.addEventListener('change', updatePaymentAccountOptions);
+    } else {
+        console.log('Acquisition select element not found for event listener');
     }
 
     const addSaleModalElement = document.getElementById('addSaleModal');
+    console.log('Sale modal element found:', !!addSaleModalElement);
     if (addSaleModalElement) {
+        console.log('Adding modal event listeners');
         addSaleModalElement.addEventListener('shown.bs.modal', initializeModal);
         
         // Additional modal event handlers for z-index fixes
@@ -188,9 +253,13 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Show modal if there are form errors
-    showModalIfErrors();
+    // Show modal if there are form errors (only if sale modal exists)
+    if (addSaleModalElement) {
+        showModalIfErrors();
+    }
     
-    // Initialize z-index fixes on page load
-    fixSelectDropdownZIndex();
+    // Initialize z-index fixes on page load (only if sale modal exists)
+    if (addSaleModalElement) {
+        fixSelectDropdownZIndex();
+    }
 }); 

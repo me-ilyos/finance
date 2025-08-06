@@ -1,0 +1,327 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Yangi Chipta Qaytarishi{% endblock %}
+
+{% block page_title %}Yangi Chipta Qaytarishi{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Yangi Chipta Qaytarishi</h6>
+        </div>
+        <div class="card-body">
+            <form method="post" id="returnForm">
+                {% csrf_token %}
+                
+                <div class="row">
+                    <!-- Original Sale Selection -->
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="{{ form.original_sale.id_for_label }}" class="form-label">
+                                {{ form.original_sale.label }}
+                            </label>
+                            {{ form.original_sale }}
+                            {% if form.original_sale.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.original_sale.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Quantity Returned -->
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="{{ form.quantity_returned.id_for_label }}" class="form-label">
+                                {{ form.quantity_returned.label }}
+                            </label>
+                            {{ form.quantity_returned }}
+                            {% if form.quantity_returned.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.quantity_returned.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <!-- Fine Amount -->
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="{{ form.fine_amount.id_for_label }}" class="form-label">
+                                {{ form.fine_amount.label }}
+                            </label>
+                            {{ form.fine_amount }}
+                            <small class="form-text text-muted">Har bir chipta uchun jarima miqdori</small>
+                            {% if form.fine_amount.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.fine_amount.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Supplier Fine Amount -->
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="{{ form.supplier_fine_amount.id_for_label }}" class="form-label">
+                                {{ form.supplier_fine_amount.label }}
+                            </label>
+                            {{ form.supplier_fine_amount }}
+                            <small class="form-text text-muted">Har bir chipta uchun ta'minotchi jarimasi</small>
+                            {% if form.supplier_fine_amount.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.supplier_fine_amount.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <!-- Fine Payment Account -->
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="{{ form.fine_paid_to_account.id_for_label }}" class="form-label">
+                                {{ form.fine_paid_to_account.label }}
+                            </label>
+                            {{ form.fine_paid_to_account }}
+                            <small class="form-text text-muted">Jarima to'lov hisobi (mijoz qaytarishlari uchun, ixtiyoriy)</small>
+                            {% if form.fine_paid_to_account.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.fine_paid_to_account.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Notes -->
+                <div class="mb-3">
+                    <label for="{{ form.notes.id_for_label }}" class="form-label">
+                        {{ form.notes.label }}
+                    </label>
+                    {{ form.notes }}
+                    {% if form.notes.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.notes.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Sale Information Display -->
+                <div id="saleInfo" class="alert alert-info" style="display: none;">
+                    <h6>Tanlangan sotuv ma'lumotlari:</h6>
+                    <div id="saleDetails"></div>
+                </div>
+                
+                <!-- Return Summary -->
+                <div id="returnSummary" class="alert alert-warning" style="display: none;">
+                    <h6>Qaytarish hisoboti:</h6>
+                    <div id="returnDetails"></div>
+                </div>
+                
+                <!-- Form Actions -->
+                <div class="d-flex justify-content-between">
+                    <a href="{% url 'sales:return_list' %}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left me-1"></i>Ortga
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>Qaytarishni saqlash
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const originalSaleSelect = document.getElementById('{{ form.original_sale.id_for_label }}');
+    const quantityReturnedInput = document.getElementById('{{ form.quantity_returned.id_for_label }}');
+    const fineAmountInput = document.getElementById('{{ form.fine_amount.id_for_label }}');
+    const supplierFineAmountInput = document.getElementById('{{ form.supplier_fine_amount.id_for_label }}');
+    const finePaidToAccountSelect = document.getElementById('{{ form.fine_paid_to_account.id_for_label }}');
+    
+    const saleInfoDiv = document.getElementById('saleInfo');
+    const saleDetailsDiv = document.getElementById('saleDetails');
+    const returnSummaryDiv = document.getElementById('returnSummary');
+    const returnDetailsDiv = document.getElementById('returnDetails');
+    
+    // Store all account options for filtering
+    let allAccountOptions = [];
+    if (finePaidToAccountSelect) {
+        allAccountOptions = Array.from(finePaidToAccountSelect.options);
+    }
+    
+    function updateSaleInfo() {
+        const selectedOption = originalSaleSelect.options[originalSaleSelect.selectedIndex];
+        if (selectedOption && selectedOption.value) {
+            // Fetch sale data via AJAX
+            fetch(`/sales/get-sale-info/?sale_id=${selectedOption.value}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sale) {
+                        const saleData = data.sale;
+                        
+                        saleDetailsDiv.innerHTML = `
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong>Sotuv ID:</strong> ${saleData.id || 'N/A'}<br>
+                                    <strong>Chipta:</strong> ${saleData.ticket_description || 'N/A'}<br>
+                                    <strong>Ta'minotchi:</strong> ${saleData.supplier_name || 'N/A'}<br>
+                                    <strong>Jami miqdor:</strong> ${saleData.quantity || 'N/A'} dona<br>
+                                    <strong>Qolgan miqdor:</strong> ${saleData.remaining_quantity || 'N/A'} dona
+                                </div>
+                                <div class="col-md-6">
+                                    <strong>Narx:</strong> ${saleData.unit_price || 'N/A'} ${saleData.currency || 'N/A'}<br>
+                                    <strong>Jami summa:</strong> ${saleData.total_amount || 'N/A'} ${saleData.currency || 'N/A'}<br>
+                                    <strong>Xaridor:</strong> ${saleData.buyer || 'N/A'}<br>
+                                    <strong>Sotuvchi:</strong> ${saleData.salesperson || 'N/A'}
+                                </div>
+                            </div>
+                        `;
+                        saleInfoDiv.style.display = 'block';
+                        
+                        // Update account options based on sale currency
+                        updateAccountOptions(saleData.currency);
+                        
+                        // Set max quantity for return
+                        if (quantityReturnedInput) {
+                            quantityReturnedInput.max = saleData.remaining_quantity;
+                            quantityReturnedInput.value = saleData.remaining_quantity;
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching sale info:', error);
+                });
+        } else {
+            saleInfoDiv.style.display = 'none';
+            returnSummaryDiv.style.display = 'none';
+        }
+    }
+    
+    function updateAccountOptions(currency) {
+        if (!finePaidToAccountSelect) return;
+        
+        // Fetch accounts for the currency
+        fetch(`/sales/get-accounts/?currency=${currency}`)
+            .then(response => response.json())
+            .then(data => {
+                // Clear current options
+                finePaidToAccountSelect.innerHTML = '';
+                
+                // Add empty option
+                const emptyOption = document.createElement('option');
+                emptyOption.value = '';
+                emptyOption.textContent = '---------';
+                finePaidToAccountSelect.appendChild(emptyOption);
+                
+                // Add account options
+                if (data.accounts && data.accounts.length > 0) {
+                    data.accounts.forEach(account => {
+                        const option = document.createElement('option');
+                        option.value = account.id;
+                        option.textContent = account.name;
+                        finePaidToAccountSelect.appendChild(option);
+                    });
+                } else {
+                    // Add a message if no accounts found
+                    const noAccountOption = document.createElement('option');
+                    noAccountOption.value = '';
+                    noAccountOption.textContent = 'Bu valyuta uchun hisoblar mavjud emas';
+                    noAccountOption.disabled = true;
+                    finePaidToAccountSelect.appendChild(noAccountOption);
+                }
+                
+                // Reset to empty selection
+                finePaidToAccountSelect.value = '';
+            })
+            .catch(error => {
+                console.error('Error fetching accounts:', error);
+                // Add error message
+                finePaidToAccountSelect.innerHTML = '';
+                const errorOption = document.createElement('option');
+                errorOption.value = '';
+                errorOption.textContent = 'Hisoblarni yuklashda xatolik';
+                errorOption.disabled = true;
+                finePaidToAccountSelect.appendChild(errorOption);
+            });
+    }
+    
+    function updateReturnSummary() {
+        const quantity = parseInt(quantityReturnedInput.value) || 0;
+        const fineAmount = parseFloat(fineAmountInput.value) || 0;
+        const supplierFineAmount = parseFloat(supplierFineAmountInput.value) || 0;
+        
+        if (quantity > 0) {
+            const totalFine = quantity * fineAmount;
+            const totalSupplierFine = quantity * supplierFineAmount;
+            
+            returnDetailsDiv.innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>Qaytarilgan miqdor:</strong> ${quantity} dona<br>
+                        <strong>Jami jarima:</strong> ${totalFine.toFixed(2)} ${getSelectedCurrency()}<br>
+                        <strong>Jami ta'minotchi jarimasi:</strong> ${totalSupplierFine.toFixed(2)} ${getSelectedCurrency()}
+                    </div>
+                </div>
+            `;
+            returnSummaryDiv.style.display = 'block';
+        } else {
+            returnSummaryDiv.style.display = 'none';
+        }
+    }
+    
+    function getSelectedCurrency() {
+        const selectedOption = originalSaleSelect.options[originalSaleSelect.selectedIndex];
+        if (selectedOption && selectedOption.value) {
+            // For now, return a default currency - this will be updated when sale is selected
+            return 'UZS';
+        }
+        return 'N/A';
+    }
+    
+    // Event listeners
+    originalSaleSelect.addEventListener('change', updateSaleInfo);
+    quantityReturnedInput.addEventListener('input', updateReturnSummary);
+    fineAmountInput.addEventListener('input', updateReturnSummary);
+    supplierFineAmountInput.addEventListener('input', updateReturnSummary);
+    
+    // Form submission handler
+    document.getElementById('returnForm').addEventListener('submit', function(e) {
+        // Clear any validation errors for fine_paid_to_account
+        const finePaidToAccountField = document.getElementById('{{ form.fine_paid_to_account.id_for_label }}');
+        if (finePaidToAccountField) {
+            finePaidToAccountField.classList.remove('is-invalid');
+            const errorDiv = finePaidToAccountField.parentNode.querySelector('.invalid-feedback');
+            if (errorDiv) {
+                errorDiv.style.display = 'none';
+            }
+        }
+    });
+    
+    // Initialize on page load
+    updateSaleInfo();
+    updateReturnSummary();
+});
+</script>
+{% endblock %} 

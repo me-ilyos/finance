@@ -1,12 +1,21 @@
 from django.urls import path
-from .views import SaleListView, get_accounts_for_acquisition_currency
+from .views import (
+    SaleListView, get_accounts_for_acquisition_currency, get_sale_info,
+    TicketReturnListView, TicketReturnCreateView, TicketReturnDetailView
+)
 from .admin_views import delete_sale, edit_sale
 
 app_name = 'sales'
 
 urlpatterns = [
     path('', SaleListView.as_view(), name='sale-list'),
-    path('ajax/get-accounts-for-acquisition/<int:acquisition_id>/', get_accounts_for_acquisition_currency, name='ajax_get_accounts_for_acquisition_currency'),
+    path('get-accounts/', get_accounts_for_acquisition_currency, name='get-accounts'),
+    path('get-sale-info/', get_sale_info, name='get-sale-info'),
     path('<int:sale_id>/delete/', delete_sale, name='sale-delete'),
     path('<int:sale_id>/edit/', edit_sale, name='sale-edit'),
+    
+    # Ticket returns
+    path('returns/', TicketReturnListView.as_view(), name='return_list'),
+    path('returns/create/', TicketReturnCreateView.as_view(), name='return_create'),
+    path('returns/<int:pk>/', TicketReturnDetailView.as_view(), name='return_detail'),
 ] 

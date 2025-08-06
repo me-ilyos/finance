@@ -1,0 +1,203 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Chipta Qaytarishlari{% endblock %}
+
+{% block page_title %}Chipta Qaytarishlari{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">Barcha Qaytarishlar</h6>
+            <a href="{% url 'sales:return_create' %}" class="btn btn-primary btn-sm">
+                <i class="fas fa-plus me-1"></i>Yangi Qaytarish
+            </a>
+        </div>
+        <div class="card-body">
+            
+            <!-- Filter Form -->
+            <form method="get" class="mb-4">
+                <div class="row">
+                    <div class="col-md-2">
+                        <label for="agent" class="form-label">Agent:</label>
+                        <select name="agent" id="agent" class="form-select form-select-sm">
+                            <option value="">Barcha</option>
+                            <option value="none" {% if current_filters.agent == 'none' %}selected{% endif %}>Mijoz qaytarishlari</option>
+                            {% for agent in agents %}
+                                <option value="{{ agent.id }}" {% if current_filters.agent == agent.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ agent.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="currency" class="form-label">Valyuta:</label>
+                        <select name="currency" id="currency" class="form-select form-select-sm">
+                            <option value="">Barcha</option>
+                            {% for code, name in currencies %}
+                                <option value="{{ code }}" {% if current_filters.currency == code %}selected{% endif %}>
+                                    {{ name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="start_date" class="form-label">Boshlang'ich sana:</label>
+                        <input type="date" name="start_date" id="start_date" class="form-control form-control-sm" 
+                               value="{{ current_filters.start_date }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="end_date" class="form-label">Tugash sana:</label>
+                        <input type="date" name="end_date" id="end_date" class="form-control form-control-sm" 
+                               value="{{ current_filters.end_date }}">
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary btn-sm me-2">
+                            <i class="fas fa-filter me-1"></i>Filtrlash
+                        </button>
+                        <a href="{% url 'sales:return_list' %}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-times me-1"></i>Tozalash
+                        </a>
+                    </div>
+                </div>
+            </form>
+
+            <!-- Returns Table -->
+            {% if returns %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>Sana</th>
+                                <th>Asosiy Sotuv</th>
+                                <th>Qaytarilgan</th>
+                                <th>Jarima</th>
+                                <th>Ta'minotchi Jarimasi</th>
+                                <th>To'lov Hisobi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for return in returns %}
+                                <tr>
+                                    <td>{{ return.id }}</td>
+                                    <td>{{ return.return_date|date:"d.m.Y H:i" }}</td>
+                                    <td>
+                                        <strong>Sotuv #{{ return.original_sale.id }}</strong><br>
+                                        <small class="text-muted">
+                                            {% if return.is_agent_return %}
+                                                Agent: {{ return.original_sale.agent.name }}
+                                            {% else %}
+                                                Mijoz: {{ return.original_sale.client_full_name }}
+                                            {% endif %}
+                                            <br>
+                                            {{ return.original_sale.related_acquisition.ticket.description|truncatewords:3 }}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ return.quantity_returned }} dona</span>
+                                    </td>
+                                    <td>
+                                        {% if return.fine_currency == 'UZS' %}
+                                            {{ return.total_fine_amount|floatformat:0|intcomma }} UZS
+                                        {% else %}
+                                            ${{ return.total_fine_amount|floatformat:2|intcomma }} USD
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if return.supplier_fine_currency == 'UZS' %}
+                                            {{ return.total_supplier_fine_amount|floatformat:0|intcomma }} UZS
+                                        {% else %}
+                                            ${{ return.total_supplier_fine_amount|floatformat:2|intcomma }} USD
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if return.fine_paid_to_account %}
+                                            {{ return.fine_paid_to_account.name }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                {% if is_paginated %}
+                <nav aria-label="Page navigation" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page=1{% if query_params %}&{{ query_params }}{% endif %}" aria-label="First">
+                                    <span aria-hidden="true">&laquo;&laquo;</span>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if query_params %}&{{ query_params }}{% endif %}" aria-label="Previous">
+                                    <span aria-hidden="true">&laquo;</span>
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">&laquo;&laquo;</span>
+                            </li>
+                            <li class="page-item disabled">
+                                <span class="page-link">&laquo;</span>
+                            </li>
+                        {% endif %}
+
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                                <li class="page-item active" aria-current="page"><span class="page-link">{{ num }}</span></li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                <li class="page-item"><a class="page-link" href="?page={{ num }}{% if query_params %}&{{ query_params }}{% endif %}">{{ num }}</a></li>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if query_params %}&{{ query_params }}{% endif %}" aria-label="Next">
+                                    <span aria-hidden="true">&raquo;</span>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if query_params %}&{{ query_params }}{% endif %}" aria-label="Last">
+                                    <span aria-hidden="true">&raquo;&raquo;</span>
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">&raquo;</span>
+                            </li>
+                            <li class="page-item disabled">
+                                <span class="page-link">&raquo;&raquo;</span>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+            {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-inbox fa-2x text-muted mb-3"></i>
+                    <h6 class="text-muted">Hech qanday qaytarish mavjud emas</h6>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+
+{% endblock %} 
