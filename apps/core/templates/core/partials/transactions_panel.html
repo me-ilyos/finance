@@ -49,6 +49,26 @@
                         </small>
                     </div>
                 {% endif %}
+                
+                {% if transaction.is_cross_currency and transaction.conversion_rate %}
+                    <div class="conversion-info mt-2">
+                        <small class="text-muted">
+                            <i class="fas fa-calculator me-1"></i>
+                            Konversiya kursi: 1 USD = {{ transaction.conversion_rate|floatformat:4 }} UZS
+                        </small>
+                    </div>
+                {% endif %}
+                
+                {% if transaction.is_cross_currency and transaction.converted_amount %}
+                    <div class="conversion-details mt-1">
+                        <small class="text-info">
+                            <i class="fas fa-arrows-alt-h me-1"></i>
+                            {{ transaction.amount|format_currency:transaction.currency }} 
+                            {{ transaction.currency }} → 
+                            {{ transaction.converted_amount|format_currency:transaction.converted_currency }} {{ transaction.converted_currency }}
+                        </small>
+                    </div>
+                {% endif %}
             </div>
             <div class="transaction-amount">
                 <div class="amount-value {{ transaction.balance_effect|transaction_amount_class }}">

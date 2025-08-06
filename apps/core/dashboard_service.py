@@ -37,13 +37,33 @@ class DashboardService:
         ).select_related('agent')
         
         for payment in agent_payments:
+            # For cross-currency payments, show the original amount that was actually received by the account
+            if payment.is_cross_currency_payment():
+                display_amount = payment.original_amount
+                display_currency = payment.original_currency
+                is_cross_currency = True
+                conversion_rate = payment.exchange_rate
+                converted_amount = payment.amount
+                converted_currency = payment.currency
+            else:
+                display_amount = payment.amount
+                display_currency = payment.currency
+                is_cross_currency = False
+                conversion_rate = None
+                converted_amount = None
+                converted_currency = None
+            
             transactions.append({
                 'date': payment.payment_date,
                 'type': 'Agent To\'lovi',
                 'description': f"Agent: {payment.agent.name}",
-                'amount': payment.amount,
-                'currency': payment.currency,
-                'balance_effect': 'income'
+                'amount': display_amount,
+                'currency': display_currency,
+                'balance_effect': 'income',
+                'is_cross_currency': is_cross_currency,
+                'conversion_rate': conversion_rate,
+                'converted_amount': converted_amount,
+                'converted_currency': converted_currency
             })
         
         # Get supplier payments from this account
@@ -157,14 +177,34 @@ class DashboardService:
         ).select_related('agent', 'paid_to_account')
         
         for payment in agent_payments:
+            # For cross-currency payments, show the original amount that was actually received by the account
+            if payment.is_cross_currency_payment():
+                display_amount = payment.original_amount
+                display_currency = payment.original_currency
+                is_cross_currency = True
+                conversion_rate = payment.exchange_rate
+                converted_amount = payment.amount
+                converted_currency = payment.currency
+            else:
+                display_amount = payment.amount
+                display_currency = payment.currency
+                is_cross_currency = False
+                conversion_rate = None
+                converted_amount = None
+                converted_currency = None
+            
             transactions.append({
                 'date': payment.payment_date,
                 'type': 'Agent To\'lovi',
                 'description': f"Agent: {payment.agent.name}",
-                'amount': payment.amount,
-                'currency': payment.currency,
+                'amount': display_amount,
+                'currency': display_currency,
                 'balance_effect': 'income',
-                'account': payment.paid_to_account.name if payment.paid_to_account else 'N/A'
+                'account': payment.paid_to_account.name if payment.paid_to_account else 'N/A',
+                'is_cross_currency': is_cross_currency,
+                'conversion_rate': conversion_rate,
+                'converted_amount': converted_amount,
+                'converted_currency': converted_currency
             })
         
         # Get recent supplier payments
