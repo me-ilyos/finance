@@ -2,18 +2,104 @@ from django.shortcuts import get_object_or_404, redirect
 from django.views.generic import DetailView, CreateView
 from django.urls import reverse_lazy
 from django.http import HttpResponseRedirect, JsonResponse
-from django.db.models import Sum, Q
+from django.db.models import Sum, Q, Case, When, Value, IntegerField
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.contrib import messages
 from django.db import transaction
 import logging
+import re
 
 from .models import Agent, Supplier, AgentPayment, SupplierPayment, Commission
 from .forms import AgentForm, SupplierForm, AgentPaymentForm, SupplierPaymentForm, CommissionForm
 
 logger = logging.getLogger(__name__)
+
+
+def enhanced_search_queryset(queryset, search_query, name_field='name'):
+    """
+    Enhanced search function that provides better matching for names.
+    
+    This function implements multiple search strategies:
+    1. Exact match (highest priority)
+    2. Starts with match (high priority)
+    3. Contains match (medium priority)
+    4. Word boundary matches (for partial names)
+    5. Similar word matches (for typos like Son/Sol)
+    
+    Args:
+        queryset: Django queryset to search in
+        search_query: Search string from user
+        name_field: Field name to search in (default: 'name')
+    
+    Returns:
+        Filtered queryset with results ordered by relevance
+    """
+    if not search_query.strip():
+        return queryset
+    
+    search_query = search_query.strip()
+    search_terms = search_query.split()
+    
+    # Build Q objects for different search strategies
+    q_objects = []
+    
+    # Strategy 1: Exact match (highest priority)
+    exact_q = Q(**{f"{name_field}__iexact": search_query})
+    q_objects.append(exact_q)
+    
+    # Strategy 2: Starts with match (high priority)
+    starts_with_q = Q(**{f"{name_field}__istartswith": search_query})
+    q_objects.append(starts_with_q)
+    
+    # Strategy 3: Contains match (medium priority)
+    contains_q = Q(**{f"{name_field}__icontains": search_query})
+    q_objects.append(contains_q)
+    
+    # Strategy 4: Word boundary matches (for partial names)
+    # This helps with cases like "Sol" matching "Sol Campbell"
+    word_boundary_terms = []
+    for term in search_terms:
+        if len(term) >= 2:  # Only search for terms with 2+ characters
+            word_boundary_terms.append(term)
+    
+    if word_boundary_terms:
+        word_q = Q()
+        for term in word_boundary_terms:
+            # Use regex to match word boundaries
+            word_q |= Q(**{f"{name_field}__iregex": rf'\b{re.escape(term)}'})
+        q_objects.append(word_q)
+    
+    # Strategy 5: Similar word matches (for typos and abbreviations)
+    # This helps with cases like "Son" matching "Sol Campbell"
+    partial_q = Q()
+    for term in search_terms:
+        if len(term) >= 2:
+            partial_q |= Q(**{f"{name_field}__icontains": term})
+    q_objects.append(partial_q)
+    
+    # Combine all strategies with OR
+    combined_q = q_objects[0]
+    for q_obj in q_objects[1:]:
+        combined_q |= q_obj
+    
+    # Apply the filter
+    filtered_queryset = queryset.filter(combined_q)
+    
+    # Create a relevance annotation for better ordering
+    relevance_annotation = Case(
+        When(**{f"{name_field}__iexact": search_query}, then=Value(5)),  # Exact match
+        When(**{f"{name_field}__istartswith": search_query}, then=Value(4)),  # Starts with
+        When(**{f"{name_field}__icontains": search_query}, then=Value(3)),  # Contains match
+        default=Value(1),  # Other matches
+        output_field=IntegerField(),
+    )
+    
+    # Apply annotation and order by relevance, then by name
+    return filtered_queryset.annotate(
+        relevance=relevance_annotation
+    ).order_by('-relevance', name_field)
 
 
 class AgentListView(CreateView):
@@ -24,7 +110,32 @@ class AgentListView(CreateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['agents'] = Agent.objects.all().order_by('-created_at')
+        
+        # Get search parameter
+        search_query = self.request.GET.get('search', '')
+        
+        # Filter agents using enhanced search
+        agents = Agent.objects.all().order_by('-created_at')
+        if search_query:
+            agents = enhanced_search_queryset(agents, search_query, 'name')
+        else:
+            agents = agents.order_by('-created_at')
+        
+        # Pagination
+        paginator = Paginator(agents, 20)  # 20 agents per page
+        page = self.request.GET.get('page')
+        
+        try:
+            agents_page = paginator.page(page)
+        except PageNotAnInteger:
+            agents_page = paginator.page(1)
+        except EmptyPage:
+            agents_page = paginator.page(paginator.num_pages)
+        
+        context['agents'] = agents_page
+        context['is_paginated'] = paginator.num_pages > 1
+        context['page_obj'] = agents_page
+        context['search_query'] = search_query
         return context
 
     def form_valid(self, form):
@@ -44,8 +155,32 @@ class SupplierListView(LoginRequiredMixin, CreateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Show only active suppliers
-        context['suppliers'] = Supplier.objects.filter(is_active=True).order_by('-created_at')
+        
+        # Get search parameter
+        search_query = self.request.GET.get('search', '')
+        
+        # Show only active suppliers and filter using enhanced search
+        suppliers = Supplier.objects.filter(is_active=True).order_by('-created_at')
+        if search_query:
+            suppliers = enhanced_search_queryset(suppliers, search_query, 'name')
+        else:
+            suppliers = suppliers.order_by('-created_at')
+        
+        # Pagination
+        paginator = Paginator(suppliers, 20)  # 20 suppliers per page
+        page = self.request.GET.get('page')
+        
+        try:
+            suppliers_page = paginator.page(page)
+        except PageNotAnInteger:
+            suppliers_page = paginator.page(1)
+        except EmptyPage:
+            suppliers_page = paginator.page(paginator.num_pages)
+        
+        context['suppliers'] = suppliers_page
+        context['is_paginated'] = paginator.num_pages > 1
+        context['page_obj'] = suppliers_page
+        context['search_query'] = search_query
         # Check if user can add suppliers (only admins)
         context['can_add_supplier'] = self.request.user.is_superuser
         return context
