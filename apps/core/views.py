@@ -94,6 +94,30 @@ class SalespersonListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
                         default=Value(0),
                         output_field=DecimalField()
                     )
+                ),
+                total_commission_uzs=Sum(
+                    Case(
+                        When(
+                            acquisitions_made__commissions__commission_date__date__range=[start_date, end_date],
+                            acquisitions_made__commissions__currency='UZS',
+                            then='acquisitions_made__commissions__amount'
+                        ),
+                        default=Value(0),
+                        output_field=DecimalField()
+                    ),
+                    distinct=True
+                ),
+                total_commission_usd=Sum(
+                    Case(
+                        When(
+                            acquisitions_made__commissions__commission_date__date__range=[start_date, end_date],
+                            acquisitions_made__commissions__currency='USD',
+                            then='acquisitions_made__commissions__amount'
+                        ),
+                        default=Value(0),
+                        output_field=DecimalField()
+                    ),
+                    distinct=True
                 )
             )
         except ValueError:
@@ -102,7 +126,9 @@ class SalespersonListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
             queryset = queryset.annotate(
                 total_sales_count=Value(0),
                 total_sales_uzs=Value(0),
-                total_sales_usd=Value(0)
+                total_sales_usd=Value(0),
+                total_commission_uzs=Value(0),
+                total_commission_usd=Value(0)
             )
         
         return queryset
@@ -126,6 +152,8 @@ class SalespersonListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         total_sales_uzs = sum(sp.total_sales_uzs or 0 for sp in filtered_queryset)
         total_sales_usd = sum(sp.total_sales_usd or 0 for sp in filtered_queryset)
         total_sales_count = sum(sp.total_sales_count or 0 for sp in filtered_queryset)
+        total_commission_uzs = sum(sp.total_commission_uzs or 0 for sp in filtered_queryset)
+        total_commission_usd = sum(sp.total_commission_usd or 0 for sp in filtered_queryset)
         
         context['stats'] = {
             'total_salespeople': filtered_queryset.count(),
@@ -134,6 +162,8 @@ class SalespersonListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
             'total_sales_uzs': total_sales_uzs,
             'total_sales_usd': total_sales_usd,
             'total_sales_count': total_sales_count,
+            'total_commission_uzs': total_commission_uzs,
+            'total_commission_usd': total_commission_usd,
         }
         
         context['sales_date_range'] = f"{self.sales_start_date.strftime('%d.%m.%Y')} - {self.sales_end_date.strftime('%d.%m.%Y')}"
@@ -267,6 +297,30 @@ def salesperson_export_excel(request):
                     default=Value(0),
                     output_field=DecimalField()
                 )
+            ),
+            total_commission_uzs=Sum(
+                Case(
+                    When(
+                        acquisitions_made__commissions__commission_date__date__range=[start_date_obj, end_date_obj],
+                        acquisitions_made__commissions__currency='UZS',
+                        then='acquisitions_made__commissions__amount'
+                    ),
+                    default=Value(0),
+                    output_field=DecimalField()
+                ),
+                distinct=True
+            ),
+            total_commission_usd=Sum(
+                Case(
+                    When(
+                        acquisitions_made__commissions__commission_date__date__range=[start_date_obj, end_date_obj],
+                        acquisitions_made__commissions__currency='USD',
+                        then='acquisitions_made__commissions__amount'
+                    ),
+                    default=Value(0),
+                    output_field=DecimalField()
+                ),
+                distinct=True
             )
         )
 

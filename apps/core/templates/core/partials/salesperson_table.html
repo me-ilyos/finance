@@ -13,6 +13,13 @@
                         <div class="col text-center small py-1">USD</div>
                     </div></div>
                 </th>
+                <th class="text-center fw-semibold price-col standout-col align-middle">
+                    <div>Jami Komissiya</div>
+                    <div class="container-fluid gx-0"><div class="row gx-0">
+                        <div class="col text-center small border-end py-1">UZS</div>
+                        <div class="col text-center small py-1">USD</div>
+                    </div></div>
+                </th>
                 <th class="py-3 px-3 fw-semibold text-center">Amallar</th>
             </tr>
         </thead>
@@ -63,6 +70,26 @@
                     </div></div>
                 </td>
                 
+                <!-- Total Commission Column -->
+                <td class="price-col standout-col align-middle">
+                    <div class="container-fluid gx-0"><div class="row gx-0">
+                        <div class="col text-end small border-end">
+                            {% if salesperson.total_commission_uzs %}
+                                {{ salesperson.total_commission_uzs|floatformat:0 }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </div>
+                        <div class="col text-end small">
+                            {% if salesperson.total_commission_usd %}
+                                {{ salesperson.total_commission_usd|floatformat:2 }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </div>
+                    </div></div>
+                </td>
+                
                 <!-- Actions Column -->
                 <td class="py-2 px-3 text-center">
                     <div class="btn-group btn-group-sm" role="group">
@@ -102,7 +129,7 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="5" class="text-center py-3 px-3">Sotuvchilar mavjud emas yoki filtrga mos kelmadi.</td>
+                <td colspan="6" class="text-center py-3 px-3">Sotuvchilar mavjud emas yoki filtrga mos kelmadi.</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -124,6 +151,24 @@
                         <div class="col text-end small fw-bold">
                             {% if stats.total_sales_usd %}
                                 {{ stats.total_sales_usd|floatformat:2 }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </div>
+                    </div></div>
+                </td>
+                <td class="price-col standout-col align-middle">
+                    <div class="container-fluid gx-0"><div class="row gx-0">
+                        <div class="col text-end small border-end fw-bold">
+                            {% if stats.total_commission_uzs %}
+                                {{ stats.total_commission_uzs|floatformat:0 }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </div>
+                        <div class="col text-end small fw-bold">
+                            {% if stats.total_commission_usd %}
+                                {{ stats.total_commission_usd|floatformat:2 }}
                             {% else %}
                                 -
                             {% endif %}
