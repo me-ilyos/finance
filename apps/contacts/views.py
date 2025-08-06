@@ -240,7 +240,39 @@ class SupplierDetailView(LoginRequiredMixin, DetailView):
         for commission in commissions:
             transactions.append({'date': commission.commission_date, 'type': 'commission', 'commission': commission})
         
-        transactions.sort(key=lambda x: x['date'], reverse=True)
+        # Sort by date (oldest first for balance calculation)
+        transactions.sort(key=lambda x: x['date'])
+        
+        # Calculate running balances
+        current_balance_uzs = supplier.initial_balance_uzs or 0
+        current_balance_usd = supplier.initial_balance_usd or 0
+        
+        for transaction in transactions:
+            if transaction['type'] == 'acquisition':
+                # Acquisition increases our debt to supplier (positive balance)
+                if transaction['acquisition'].currency == 'UZS':
+                    current_balance_uzs += transaction['acquisition'].total_amount
+                else:
+                    current_balance_usd += transaction['acquisition'].total_amount
+            elif transaction['type'] == 'payment':
+                # Payment decreases our debt to supplier (negative balance)
+                if transaction['payment'].currency == 'UZS':
+                    current_balance_uzs -= transaction['payment'].amount
+                else:
+                    current_balance_usd -= transaction['payment'].amount
+            elif transaction['type'] == 'commission':
+                # Commission decreases our debt to supplier (negative balance)
+                if transaction['commission'].currency == 'UZS':
+                    current_balance_uzs -= transaction['commission'].amount
+                else:
+                    current_balance_usd -= transaction['commission'].amount
+            
+            # Store the balance after this transaction
+            transaction['balance_uzs'] = current_balance_uzs
+            transaction['balance_usd'] = current_balance_usd
+        
+        # Keep transactions sorted by oldest first for display
+        # transactions.sort(key=lambda x: x['date'], reverse=True)  # Remove this line
         
         # Paginate transactions
         paginator = Paginator(transactions, 20)  # 20 transactions per page
@@ -440,7 +472,33 @@ class AgentDetailView(DetailView):
         for payment in payments:
             transactions.append({'date': payment.payment_date, 'type': 'payment', 'payment': payment})
         
-        transactions.sort(key=lambda x: x['date'], reverse=True)
+        # Sort by date (oldest first for balance calculation)
+        transactions.sort(key=lambda x: x['date'])
+        
+        # Calculate running balances
+        current_balance_uzs = agent.initial_balance_uzs or 0
+        current_balance_usd = agent.initial_balance_usd or 0
+        
+        for transaction in transactions:
+            if transaction['type'] == 'sale':
+                # Sale increases our receivable from agent (positive balance)
+                if transaction['sale'].sale_currency == 'UZS':
+                    current_balance_uzs += transaction['sale'].total_sale_amount
+                else:
+                    current_balance_usd += transaction['sale'].total_sale_amount
+            elif transaction['type'] == 'payment':
+                # Payment decreases our receivable from agent (negative balance)
+                if transaction['payment'].currency == 'UZS':
+                    current_balance_uzs -= transaction['payment'].amount
+                else:
+                    current_balance_usd -= transaction['payment'].amount
+            
+            # Store the balance after this transaction
+            transaction['balance_uzs'] = current_balance_uzs
+            transaction['balance_usd'] = current_balance_usd
+        
+        # Keep transactions sorted by oldest first for display
+        # transactions.sort(key=lambda x: x['date'], reverse=True)  # Remove this line
         
         # Paginate transactions
         paginator = Paginator(transactions, 20)  # 20 transactions per page

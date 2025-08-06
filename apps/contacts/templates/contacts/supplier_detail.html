@@ -7,26 +7,6 @@
 
 {% block extra_css %}
 <style>
-.table-header-date, .table-header-type {
-    width: 18%;
-}
-.table-header-currency {
-    width: 15%;
-}
-.filter-uzs .table-header-date, .filter-uzs .table-header-type {
-    width: 30%;
-}
-.filter-usd .table-header-date, .filter-usd .table-header-type {
-    width: 30%;
-}
-.filter-uzs .table-header-currency-uzs,
-.filter-usd .table-header-currency-usd {
-    width: 20%;
-}
-.filter-all .table-header-currency {
-    width: 12.5%;
-}
-
 /* Collapsible table features */
 .comments-column {
     transition: all 0.3s ease;
@@ -34,13 +14,29 @@
 .comments-hidden .comments-column {
     display: none;
 }
-.compact-view .table td,
-.compact-view .table th {
-    padding: 0.25rem 0.5rem !important;
-    font-size: 0.875rem;
+
+/* Table styling */
+.table {
+    border-collapse: collapse;
 }
-.compact-view .table td small {
-    font-size: 0.75rem;
+.table th,
+.table td {
+    border: 1px solid #dee2e6;
+    padding: 0.5rem;
+    word-wrap: break-word;
+    white-space: normal;
+    vertical-align: top;
+}
+.table th {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+}
+
+/* Enhanced text wrapping for Type column */
+.table td:nth-child(2) {
+    word-break: break-word;
+    hyphens: auto;
+    max-width: 0; /* Forces text wrapping */
 }
 </style>
 {% endblock %}
@@ -94,10 +90,6 @@
                 <i class="fas fa-comment me-1"></i>
                 <span id="toggleCommentsText">Izohlarni yashirish</span>
             </button>
-            <button type="button" class="btn btn-outline-secondary btn-sm ms-2" id="toggleCompact">
-                <i class="fas fa-compress me-1"></i>
-                <span id="toggleCompactText">Ixcham ko'rinish</span>
-            </button>
         </div>
     </div>
 
@@ -106,168 +98,116 @@
         <div class="card-body">
             {% if transactions %}
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle filter-{{ current_filter }}" id="transactionTable">
+                    <table class="table table-hover align-middle" id="transactionTable">
                         <thead class="table-light">
                             <tr>
-                                <th class="table-header-date">Sana va Vaqt</th>
-                                <th class="table-header-type">Tip</th>
-                                {% if current_filter != 'usd' %}
-                                <th class="table-header-currency table-header-currency-uzs text-end">Qarz (UZS)</th>
-                                <th class="table-header-currency table-header-currency-uzs text-end">To'lov (UZS)</th>
-                                {% endif %}
-                                {% if current_filter != 'uzs' %}
-                                <th class="table-header-currency table-header-currency-usd text-end">Qarz (USD)</th>
-                                <th class="table-header-currency table-header-currency-usd text-end">To'lov (USD)</th>
-                                {% endif %}
-                                <th class="table-header-currency text-end">Komissiya</th>
-                                <th class="table-header-currency comments-column">Izohlar</th>
+                                <th class="text-center" style="width: 8%;">Sana</th>
+                                <th style="width: 35%;">Tip</th>
+                                <th class="text-end" style="width: 12%;">Dебет (Долг)</th>
+                                <th class="text-end" style="width: 12%;">Кредит (Оплата)</th>
+                                <th class="text-end" style="width: 10%;">Комиссия</th>
+                                <th class="text-end" style="width: 12%;">Промежуточный баланс</th>
+                                <th class="comments-column" style="width: 11%;">Комментарий</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for transaction in transactions %}
-                                {% if transaction.type == 'acquisition' %}
-                                    <tr>
-                                        <td>
-                                            {{ transaction.date|date:"d.m.Y" }}
-                                            <br>
-                                            <small class="text-muted">{{ transaction.date|date:"H:i" }}</small>
-                                        </td>
-                                        <td>
-                                            <i class="fas fa-shopping-cart text-primary me-1"></i>
-                                            <strong>Xarid</strong>
+                                <tr>
+                                    <td class="text-center">
+                                        {{ transaction.date|date:"d.m.Y" }}
+                                    </td>
+                                    <td>
+                                        {% if transaction.type == 'acquisition' %}
+                                            <strong>Заказ</strong>
                                             <br>
                                             <small class="text-muted">
-                                                {{ transaction.acquisition.ticket.get_ticket_type_display }} - {{ transaction.acquisition.ticket.description|truncatewords:5 }}
+                                                {{ transaction.acquisition.ticket.get_ticket_type_display }} - {{ transaction.acquisition.ticket.description|truncatewords:3 }}
                                                 <br>
                                                 Uchish: {{ transaction.acquisition.ticket.departure_date_time|date:"d.m.y H:i" }}
                                                 <br>
                                                 Miqdor: {{ transaction.acquisition.initial_quantity }} dona × {{ transaction.acquisition.unit_price }} {{ transaction.acquisition.currency }}
-                                                {% if transaction.acquisition.salesperson %}
-                                                <br>
-                                                Sotuvchi: {{ transaction.acquisition.salesperson.user.get_full_name|default:transaction.acquisition.salesperson.user.username }}
-                                                {% endif %}
                                             </small>
-                                        </td>
-                                        {% if current_filter != 'usd' %}
-                                        <td class="text-end">
-                                            {% if transaction.acquisition.currency == 'UZS' %}
-                                                <span class="text-danger">-{{ transaction.acquisition.total_amount|floatformat:0|intcomma }}</span>
-                                            {% else %}
-                                                -
-                                            {% endif %}
-                                        </td>
-                                        <td class="text-end">-</td>
-                                        {% endif %}
-                                        {% if current_filter != 'uzs' %}
-                                        <td class="text-end">
-                                            {% if transaction.acquisition.currency == 'USD' %}
-                                                <span class="text-danger">-${{ transaction.acquisition.total_amount|floatformat:2|intcomma }}</span>
-                                            {% else %}
-                                                -
-                                            {% endif %}
-                                        </td>
-                                        <td class="text-end">-</td>
-                                        {% endif %}
-                                        <td class="text-end">-</td>
-                                                                                 <td class="text-muted comments-column">
-                                             {% if transaction.acquisition.notes %}
-                                             <small>
-                                                 <i class="fas fa-comment text-info me-1"></i>{{ transaction.acquisition.notes|truncatewords:8 }}
-                                             </small>
-                                             {% else %}
-                                             <small class="text-muted">-</small>
-                                             {% endif %}
-                                         </td>
-                                    </tr>
-                                {% elif transaction.type == 'payment' %}
-                                    <tr>
-                                        <td>
-                                            {{ transaction.date|date:"d.m.Y" }}
-                                            <br>
-                                            <small class="text-muted">{{ transaction.date|date:"H:i" }}</small>
-                                        </td>
-                                        <td>
-                                            <i class="fas fa-credit-card text-success me-1"></i>
-                                            <strong>To'lov</strong>
+                                        {% elif transaction.type == 'payment' %}
+                                            <strong>Оплата</strong>
                                             <br>
                                             <small class="text-muted">{{ transaction.payment.paid_from_account.name }}</small>
-                                        </td>
-                                        {% if current_filter != 'usd' %}
-                                        <td class="text-end">-</td>
-                                        <td class="text-end">
-                                            {% if transaction.payment.currency == 'UZS' %}
-                                                <span class="text-success">{{ transaction.payment.amount|floatformat:0|intcomma }}</span>
-                                            {% else %}
-                                                -
-                                            {% endif %}
-                                        </td>
-                                        {% endif %}
-                                        {% if current_filter != 'uzs' %}
-                                        <td class="text-end">-</td>
-                                        <td class="text-end">
-                                            {% if transaction.payment.currency == 'USD' %}
-                                                <span class="text-success">${{ transaction.payment.amount|floatformat:2|intcomma }}</span>
-                                            {% else %}
-                                                -
-                                            {% endif %}
-                                        </td>
-                                        {% endif %}
-                                        <td class="text-end">-</td>
-                                                                                 <td class="text-muted comments-column">
-                                             {% if transaction.payment.notes %}
-                                             <small>
-                                                 <i class="fas fa-comment text-info me-1"></i>{{ transaction.payment.notes|truncatewords:8 }}
-                                             </small>
-                                             {% else %}
-                                             <small class="text-muted">-</small>
-                                             {% endif %}
-                                         </td>
-                                    </tr>
-                                {% elif transaction.type == 'commission' %}
-                                    <tr>
-                                        <td>
-                                            {{ transaction.date|date:"d.m.Y" }}
-                                            <br>
-                                            <small class="text-muted">{{ transaction.date|date:"H:i" }}</small>
-                                        </td>
-                                        <td>
-                                            <i class="fas fa-percent text-info me-1"></i>
-                                            <strong>Komissiya</strong>
+                                        {% elif transaction.type == 'commission' %}
+                                            <strong>Комиссия</strong>
                                             <br>
                                             <small class="text-muted">
-                                                {{ transaction.commission.acquisition.ticket.get_ticket_type_display }} - {{ transaction.commission.acquisition.ticket.description|truncatewords:5 }}
+                                                {{ transaction.commission.acquisition.ticket.get_ticket_type_display }} - {{ transaction.commission.acquisition.ticket.description|truncatewords:3 }}
                                                 <br>
                                                 Xarid: {{ transaction.commission.acquisition.acquisition_date|date:"d.m.y" }}
                                             </small>
-                                        </td>
-                                        {% if current_filter != 'usd' %}
-                                        <td class="text-end">-</td>
-                                        <td class="text-end">-</td>
                                         {% endif %}
-                                        {% if current_filter != 'uzs' %}
-                                        <td class="text-end">-</td>
-                                        <td class="text-end">-</td>
+                                    </td>
+                                    <td class="text-end">
+                                        {% if transaction.type == 'acquisition' %}
+                                            {% if transaction.acquisition.currency == 'UZS' %}
+                                                {{ transaction.acquisition.total_amount|floatformat:0|intcomma }} UZS
+                                            {% else %}
+                                                ${{ transaction.acquisition.total_amount|floatformat:2|intcomma }} USD
+                                            {% endif %}
+                                        {% else %}
+                                            -
                                         {% endif %}
-                                        <td class="text-end">
-                                            <span class="text-info">
-                                                {% if transaction.commission.currency == 'UZS' %}
-                                                    {{ transaction.commission.amount|floatformat:0|intcomma }} (UZS)
-                                                {% else %}
-                                                    ${{ transaction.commission.amount|floatformat:2|intcomma }} (USD)
-                                                {% endif %}
-                                            </span>
-                                        </td>
-                                                                                 <td class="text-muted comments-column">
-                                             {% if transaction.commission.notes %}
-                                             <small>
-                                                 <i class="fas fa-comment text-info me-1"></i>{{ transaction.commission.notes|truncatewords:8 }}
-                                             </small>
-                                             {% else %}
-                                             <small class="text-muted">-</small>
-                                             {% endif %}
-                                         </td>
-                                    </tr>
-                                {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        {% if transaction.type == 'payment' %}
+                                            {% if transaction.payment.currency == 'UZS' %}
+                                                {{ transaction.payment.amount|floatformat:0|intcomma }} UZS
+                                            {% else %}
+                                                ${{ transaction.payment.amount|floatformat:2|intcomma }} USD
+                                            {% endif %}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        {% if transaction.type == 'commission' %}
+                                            {% if transaction.commission.currency == 'UZS' %}
+                                                {{ transaction.commission.amount|floatformat:0|intcomma }} UZS
+                                            {% else %}
+                                                ${{ transaction.commission.amount|floatformat:2|intcomma }} USD
+                                            {% endif %}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        {% if transaction.balance_uzs != 0 or transaction.balance_usd != 0 %}
+                                            {% if transaction.balance_uzs != 0 %}
+                                                <div>
+                                                    {{ transaction.balance_uzs|floatformat:0|intcomma }} UZS
+                                                    {% if forloop.first and supplier.initial_balance_uzs != 0 %}
+                                                        <br><small class="text-muted">({{ supplier.initial_balance_uzs|floatformat:0|intcomma }} UZS)</small>
+                                                    {% endif %}
+                                                </div>
+                                            {% endif %}
+                                            {% if transaction.balance_usd != 0 %}
+                                                <div>
+                                                    ${{ transaction.balance_usd|floatformat:2|intcomma }} USD
+                                                    {% if forloop.first and supplier.initial_balance_usd != 0 %}
+                                                        <br><small class="text-muted">(${{ supplier.initial_balance_usd|floatformat:2|intcomma }} USD)</small>
+                                                    {% endif %}
+                                                </div>
+                                            {% endif %}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-muted comments-column">
+                                        {% if transaction.type == 'acquisition' and transaction.acquisition.notes %}
+                                            <small>{{ transaction.acquisition.notes|truncatewords:5 }}</small>
+                                        {% elif transaction.type == 'payment' and transaction.payment.notes %}
+                                            <small>{{ transaction.payment.notes|truncatewords:5 }}</small>
+                                        {% elif transaction.type == 'commission' and transaction.commission.notes %}
+                                            <small>{{ transaction.commission.notes|truncatewords:5 }}</small>
+                                        {% else %}
+                                            <small>-</small>
+                                        {% endif %}
+                                    </td>
+                                </tr>
                             {% endfor %}
                         </tbody>
                         <tfoot>
@@ -275,49 +215,76 @@
                                 <th colspan="2" class="text-center py-3">
                                     <strong><i class="fas fa-calculator me-2"></i>Jami</strong>
                                 </th>
-                                {% if current_filter != 'usd' %}
                                 <th class="text-end py-3">
                                     <strong class="text-danger">
-                                        -{{ uzs_acquisitions|floatformat:0|intcomma }}
+                                        {% if current_filter == 'uzs' %}
+                                            {{ uzs_acquisitions|floatformat:0|intcomma }} UZS
+                                        {% elif current_filter == 'usd' %}
+                                            ${{ usd_acquisitions|floatformat:2|intcomma }} USD
+                                        {% else %}
+                                            {% if uzs_acquisitions > 0 %}{{ uzs_acquisitions|floatformat:0|intcomma }} UZS{% endif %}
+                                            {% if uzs_acquisitions > 0 and usd_acquisitions > 0 %}<br/>{% endif %}
+                                            {% if usd_acquisitions > 0 %}${{ usd_acquisitions|floatformat:2|intcomma }} USD{% endif %}
+                                            {% if uzs_acquisitions == 0 and usd_acquisitions == 0 %}-{% endif %}
+                                        {% endif %}
                                     </strong>
                                 </th>
                                 <th class="text-end py-3">
                                     <strong class="text-success">
-                                        {{ uzs_payments|floatformat:0|intcomma }}
+                                        {% if current_filter == 'uzs' %}
+                                            {{ uzs_payments|floatformat:0|intcomma }} UZS
+                                        {% elif current_filter == 'usd' %}
+                                            ${{ usd_payments|floatformat:2|intcomma }} USD
+                                        {% else %}
+                                            {% if uzs_payments > 0 %}{{ uzs_payments|floatformat:0|intcomma }} UZS{% endif %}
+                                            {% if uzs_payments > 0 and usd_payments > 0 %}<br/>{% endif %}
+                                            {% if usd_payments > 0 %}${{ usd_payments|floatformat:2|intcomma }} USD{% endif %}
+                                            {% if uzs_payments == 0 and usd_payments == 0 %}-{% endif %}
+                                        {% endif %}
                                     </strong>
                                 </th>
-                                {% endif %}
-                                {% if current_filter != 'uzs' %}
-                                <th class="text-end py-3">
-                                    <strong class="text-danger">
-                                        {% if usd_acquisitions > 0 %}-${{ usd_acquisitions|floatformat:2|intcomma }}{% else %}-{% endif %}
-                                    </strong>
-                                </th>
-                                <th class="text-end py-3">
-                                    <strong class="text-success">
-                                        {% if usd_payments > 0 %} ${{ usd_payments|floatformat:2|intcomma }}{% else %}-{% endif %}
-                                    </strong>
-                                </th>
-                                {% endif %}
                                 <th class="text-end py-3">
                                     <strong class="text-info">
                                         {% if current_filter == 'uzs' %}
-                                            {{ uzs_commissions|floatformat:0|intcomma }} (UZS)
+                                            {{ uzs_commissions|floatformat:0|intcomma }} UZS
                                         {% elif current_filter == 'usd' %}
-                                            {% if usd_commissions > 0 %} ${{ usd_commissions|floatformat:2|intcomma }} (USD){% else %}- {% endif %}
+                                            ${{ usd_commissions|floatformat:2|intcomma }} USD
                                         {% else %}
-                                            {% if uzs_commissions > 0 %}{{ uzs_commissions|floatformat:0|intcomma }} (UZS){% endif %}
+                                            {% if uzs_commissions > 0 %}{{ uzs_commissions|floatformat:0|intcomma }} UZS{% endif %}
                                             {% if uzs_commissions > 0 and usd_commissions > 0 %}<br/>{% endif %}
-                                            {% if usd_commissions > 0 %} ${{ usd_commissions|floatformat:2|intcomma }} (USD){% endif %}
+                                            {% if usd_commissions > 0 %}${{ usd_commissions|floatformat:2|intcomma }} USD{% endif %}
                                             {% if uzs_commissions == 0 and usd_commissions == 0 %}-{% endif %}
                                         {% endif %}
                                     </strong>
                                 </th>
-                                                                 <th class="text-end py-3 comments-column">
-                                     <strong class="text-muted">
-                                         -
-                                     </strong>
-                                 </th>
+                                <th class="text-end py-3">
+                                    <strong>
+                                        {% if current_filter == 'uzs' %}
+                                            <span class="{% if filtered_balance_uzs > 0 %}text-danger{% else %}text-success{% endif %}">
+                                                {{ filtered_balance_uzs|floatformat:0|intcomma }} UZS
+                                            </span>
+                                        {% elif current_filter == 'usd' %}
+                                            <span class="{% if filtered_balance_usd > 0 %}text-danger{% else %}text-success{% endif %}">
+                                                ${{ filtered_balance_usd|floatformat:2|intcomma }} USD
+                                            </span>
+                                        {% else %}
+                                            {% if filtered_balance_uzs != 0 %}
+                                                <div class="{% if filtered_balance_uzs > 0 %}text-danger{% else %}text-success{% endif %}">
+                                                    {{ filtered_balance_uzs|floatformat:0|intcomma }} UZS
+                                                </div>
+                                            {% endif %}
+                                            {% if filtered_balance_usd != 0 %}
+                                                <div class="{% if filtered_balance_usd > 0 %}text-danger{% else %}text-success{% endif %}">
+                                                    ${{ filtered_balance_usd|floatformat:2|intcomma }} USD
+                                                </div>
+                                            {% endif %}
+                                            {% if filtered_balance_uzs == 0 and filtered_balance_usd == 0 %}-{% endif %}
+                                        {% endif %}
+                                    </strong>
+                                </th>
+                                <th class="text-end py-3 comments-column">
+                                    <strong class="text-muted">-</strong>
+                                </th>
                             </tr>
                         </tfoot>
                     </table>
@@ -609,24 +576,6 @@ document.addEventListener('DOMContentLoaded', function() {
             this.querySelector('i').className = 'fas fa-comment me-1';
         }
         commentsVisible = !commentsVisible;
-    });
-
-    // Toggle compact view
-    const toggleCompactBtn = document.getElementById('toggleCompact');
-    const toggleCompactText = document.getElementById('toggleCompactText');
-    let compactView = false;
-
-    toggleCompactBtn.addEventListener('click', function() {
-        if (compactView) {
-            table.classList.remove('compact-view');
-            toggleCompactText.textContent = 'Ixcham ko\'rinish';
-            this.querySelector('i').className = 'fas fa-compress me-1';
-        } else {
-            table.classList.add('compact-view');
-            toggleCompactText.textContent = 'Oddiy ko\'rinish';
-            this.querySelector('i').className = 'fas fa-expand me-1';
-        }
-        compactView = !compactView;
     });
 });
 </script>
