@@ -141,6 +141,72 @@ class Transfer(models.Model):
         ordering = ['-transfer_date']
 
 
+class Deposit(models.Model):
+    deposit_date = models.DateTimeField(default=timezone.now)
+    to_account = models.ForeignKey(
+        FinancialAccount,
+        on_delete=models.PROTECT,
+        related_name='deposits_received'
+    )
+    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    currency = models.CharField(max_length=3, choices=CurrencyChoices.choices)
+    description = models.CharField(max_length=255, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        super().clean()
+        if self.amount is None or self.amount <= 0:
+            raise ValidationError({
+                'amount': "Deposit amount must be positive"
+            })
+        if self.to_account and self.currency and self.to_account.currency != self.currency:
+            raise ValidationError({
+                'currency': f"Currency mismatch: account uses {self.to_account.currency}, deposit uses {self.currency}."
+            })
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        is_new = self.pk is None
+        previous_amount = None
+        previous_account_id = None
+        if not is_new:
+            try:
+                original = Deposit.objects.get(pk=self.pk)
+                previous_amount = original.amount
+                previous_account_id = original.to_account_id
+            except Deposit.DoesNotExist:
+                pass
+
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+
+            if is_new:
+                self.to_account.current_balance += self.amount
+                self.to_account.save(update_fields=['current_balance', 'updated_at'])
+            else:
+                if previous_account_id == self.to_account_id:
+                    amount_diff = self.amount - (previous_amount or 0)
+                    self.to_account.current_balance += amount_diff
+                    self.to_account.save(update_fields=['current_balance', 'updated_at'])
+                else:
+                    if previous_account_id:
+                        original_account = FinancialAccount.objects.get(pk=previous_account_id)
+                        original_account.current_balance -= (previous_amount or 0)
+                        original_account.save(update_fields=['current_balance', 'updated_at'])
+                    self.to_account.current_balance += self.amount
+                    self.to_account.save(update_fields=['current_balance', 'updated_at'])
+
+    def __str__(self):
+        return f"Deposit: {self.amount} {self.currency} to {self.to_account.name}"
+
+    class Meta:
+        verbose_name = "Deposit"
+        verbose_name_plural = "Deposits"
+        ordering = ['-deposit_date']
+
+
 class Expenditure(models.Model):
     expenditure_date = models.DateTimeField(default=timezone.now)
     description = models.CharField(max_length=255)

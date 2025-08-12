@@ -4,7 +4,7 @@ from .views import (
     SalespersonListView, SalespersonDetailView, 
     salesperson_export_excel, salesperson_edit, 
     salesperson_toggle_status, transfer_money, 
-    get_transfer_form
+    get_transfer_form, deposit_money
 )
 
 app_name = 'core'
@@ -17,6 +17,7 @@ urlpatterns = [
     # Transfer URLs
     path('transfer/', transfer_money, name='transfer-money'),
     path('transfer/form/', get_transfer_form, name='transfer-form'),
+    path('deposit/', deposit_money, name='deposit-money'),
     
     # Salesperson URLs
     path('salesperson/', SalespersonListView.as_view(), name='salesperson-list'),

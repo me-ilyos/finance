@@ -7,9 +7,11 @@
 
 document.addEventListener('DOMContentLoaded', function() {
     const transferModal = document.getElementById('transferModal');
+    const depositModal = document.getElementById('depositModal');
     
     initializeAccountSelection();
     initializeTransferModal();
+    initializeDepositModal();
     
     // Real-time clock update
     function updateTime() {
@@ -440,6 +442,95 @@ function initializeTransferModal() {
             });
         }
     }
+}
+
+function initializeDepositModal() {
+    const depositModal = document.getElementById('depositModal');
+    const depositForm = document.getElementById('depositForm');
+    const depositAmountInput = document.getElementById('deposit_amount');
+    const depositDateInput = document.getElementById('deposit_date');
+    const depositBtnText = document.getElementById('deposit-btn-text');
+
+    if (!depositModal || !depositForm) {
+        return;
+    }
+
+    depositModal.addEventListener('show.bs.modal', function() {
+        const now = new Date();
+        if (depositDateInput) {
+            depositDateInput.value = now.toISOString();
+        }
+        if (depositAmountInput) {
+            depositAmountInput.value = '';
+            depositAmountInput.focus();
+        }
+    });
+
+    depositForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const amount = parseFloat(depositAmountInput.value);
+        if (!amount || amount <= 0) {
+            showAlert('Iltimos, to\'g\'ri summani kiriting.', 'danger');
+            return;
+        }
+
+        const submitButton = depositForm.querySelector('button[type="submit"]');
+        const originalText = depositBtnText ? depositBtnText.textContent : 'Kiritish';
+        if (submitButton) {
+            submitButton.disabled = true;
+        }
+        if (depositBtnText) {
+            depositBtnText.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Jarayon...';
+        }
+
+        const formData = new FormData(depositForm);
+
+        fetch('/core/deposit/', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                showAlert('Kirim muvaffaqiyatli qo\'shildi!', 'success');
+                const modal = bootstrap.Modal.getInstance(depositModal);
+                if (modal) {
+                    modal.hide();
+                }
+                setTimeout(() => {
+                    location.reload();
+                }, 800);
+            } else {
+                let errorMessage = 'Kirimni saqlashda xatolik.';
+                if (data.errors && data.errors.length > 0) {
+                    errorMessage = data.errors.join('<br>');
+                } else if (data.error) {
+                    errorMessage = data.error;
+                }
+                showAlert(errorMessage, 'danger');
+            }
+        })
+        .catch(() => {
+            showAlert('Xatolik yuz berdi. Iltimos, qayta urinib ko\'ring.', 'danger');
+        })
+        .finally(() => {
+            if (submitButton) {
+                submitButton.disabled = false;
+            }
+            if (depositBtnText) {
+                depositBtnText.textContent = originalText;
+            }
+        });
+    });
 }
 
 function showAlert(message, type = 'info') {

@@ -3,7 +3,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import ListView
 from django.http import JsonResponse
-from django.db.models import Q, Sum
+from django.db.models import Q, Sum, Value, DecimalField, OuterRef, Subquery, F, Case, When, Window
+from django.db.models.functions import Coalesce, RowNumber
 from django.core.paginator import Paginator
 from django.contrib import messages
 
@@ -42,6 +43,24 @@ class SaleListView(LoginRequiredMixin, ListView):
 
         # Apply filters
         queryset = self.apply_filters(queryset)
+
+        # Annotate commission per acquisition and display total profit (profit + commission only once per acquisition)
+        from apps.contacts.models import Commission
+        commission_amount_subq = Commission.objects.filter(
+            acquisition_id=OuterRef('related_acquisition_id')
+        ).values('amount')[:1]
+
+        queryset = queryset.annotate(
+            acq_commission_amount=Coalesce(Subquery(commission_amount_subq), Value(0), output_field=DecimalField(max_digits=15, decimal_places=2)),
+            rn=Window(expression=RowNumber(), partition_by=[F('related_acquisition_id')], order_by=F('sale_date').asc()),
+        ).annotate(
+            commission_for_row=Case(
+                When(rn=1, then=F('acq_commission_amount')),
+                default=Value(0),
+                output_field=DecimalField(max_digits=15, decimal_places=2)
+            ),
+            total_profit_display=F('profit') + F('commission_for_row')
+        )
         return queryset
 
     def post(self, request, *args, **kwargs):
@@ -72,20 +91,51 @@ class SaleListView(LoginRequiredMixin, ListView):
                 queryset = queryset.filter(agent__isnull=True)
             else:
                 queryset = queryset.filter(agent_id=agent_id)
+        # Salesperson filter
+        salesperson_id = self.request.GET.get('salesperson')
+        if salesperson_id:
+            queryset = queryset.filter(salesperson_id=salesperson_id)
+        # Supplier filter
+        supplier_id = self.request.GET.get('supplier')
+        if supplier_id:
+            queryset = queryset.filter(related_acquisition__supplier_id=supplier_id)
 
         # Currency filter
         currency = self.request.GET.get('currency')
         if currency:
             queryset = queryset.filter(sale_currency=currency)
 
-        # Date range filter
+        # Date filters (canonical: filter_period + date_filter/start_date/end_date)
+        filter_period = self.request.GET.get('filter_period')
+        date_filter = self.request.GET.get('date_filter')
         start_date = self.request.GET.get('start_date')
         end_date = self.request.GET.get('end_date')
-        if start_date or end_date:
-            start_date_obj, end_date_obj = DateFilterService.get_date_range(
-                'custom', None, start_date, end_date
-            )
+
+        if filter_period == 'day':
+            start_date_obj, end_date_obj = DateFilterService.get_date_range('day', date_filter, None, None)
             queryset = queryset.filter(sale_date__date__range=[start_date_obj, end_date_obj])
+        elif filter_period == 'week':
+            start_date_obj, end_date_obj = DateFilterService.get_date_range('week', None, None, None)
+            queryset = queryset.filter(sale_date__date__range=[start_date_obj, end_date_obj])
+        elif filter_period == 'month':
+            start_date_obj, end_date_obj = DateFilterService.get_date_range('month', None, None, None)
+            queryset = queryset.filter(sale_date__date__range=[start_date_obj, end_date_obj])
+        elif filter_period == 'custom':
+            if start_date or end_date:
+                start_date_obj, end_date_obj = DateFilterService.get_date_range('custom', None, start_date, end_date)
+                queryset = queryset.filter(sale_date__date__range=[start_date_obj, end_date_obj])
+        else:
+            # If no explicit period, derive from provided dates
+            if date_filter:
+                start_date_obj, end_date_obj = DateFilterService.get_date_range('day', date_filter, None, None)
+                queryset = queryset.filter(sale_date__date__range=[start_date_obj, end_date_obj])
+            elif start_date or end_date:
+                start_date_obj, end_date_obj = DateFilterService.get_date_range('custom', None, start_date, end_date)
+                queryset = queryset.filter(sale_date__date__range=[start_date_obj, end_date_obj])
+            else:
+                # Default to today
+                start_date_obj, end_date_obj = DateFilterService.get_date_range(None, None, None, None)
+                queryset = queryset.filter(sale_date__date__range=[start_date_obj, end_date_obj])
 
         # Search filter
         search = self.request.GET.get('search')
@@ -126,29 +176,75 @@ class SaleListView(LoginRequiredMixin, ListView):
             else:
                 context['sale_form'] = SaleForm(current_user=self.request.user)
         
-        # Add filter values for form persistence
-        context['current_filters'] = {
-            'agent': self.request.GET.get('agent'),
-            'currency': self.request.GET.get('currency'),
-            'start_date': self.request.GET.get('start_date'),
-            'end_date': self.request.GET.get('end_date'),
-            'search': self.request.GET.get('search'),
-        }
+        # Add canonical filter values for form persistence
+        context['current_filter_period'] = self.request.GET.get('filter_period')
+        context['current_date_filter'] = self.request.GET.get('date_filter')
+        context['current_start_date'] = self.request.GET.get('start_date')
+        context['current_end_date'] = self.request.GET.get('end_date')
         
         # Add individual filter values for template
         context['current_agent_filter'] = self.request.GET.get('agent')
         context['current_salesperson_filter'] = self.request.GET.get('salesperson')
         context['current_supplier_filter'] = self.request.GET.get('supplier')
-        context['current_start_date'] = self.request.GET.get('start_date')
-        context['current_end_date'] = self.request.GET.get('end_date')
-        context['current_date_filter'] = self.request.GET.get('date_filter')
         
         # Build query params for pagination
-        query_params = []
-        for key, value in context['current_filters'].items():
-            if value:
-                query_params.append(f"{key}={value}")
-        context['query_params'] = '&'.join(query_params)
+        qd = self.request.GET.copy()
+        if 'page' in qd:
+            qd.pop('page')
+        context['query_params'] = qd.urlencode()
+
+        # Totals for current filtered queryset (split by currency)
+        filtered_qs = self.get_queryset()
+        agg = filtered_qs.aggregate(
+            total_quantity=Sum('quantity'),
+            total_sum_uzs=Sum('total_sale_amount', filter=Q(sale_currency='UZS')),
+            total_sum_usd=Sum('total_sale_amount', filter=Q(sale_currency='USD')),
+            total_profit_uzs=Sum('profit', filter=Q(sale_currency='UZS')),
+            total_profit_usd=Sum('profit', filter=Q(sale_currency='USD')),
+        )
+
+        # Add supplier commissions for acquisitions purchased by the selected salesperson (or all)
+        from apps.contacts.models import Commission
+
+        # Determine date window
+        filter_period = self.request.GET.get('filter_period')
+        date_filter = self.request.GET.get('date_filter')
+        start_date = self.request.GET.get('start_date')
+        end_date = self.request.GET.get('end_date')
+        if filter_period == 'day':
+            start_date_obj, end_date_obj = DateFilterService.get_date_range('day', date_filter, None, None)
+        elif filter_period == 'week':
+            start_date_obj, end_date_obj = DateFilterService.get_date_range('week', None, None, None)
+        elif filter_period == 'month':
+            start_date_obj, end_date_obj = DateFilterService.get_date_range('month', None, None, None)
+        elif filter_period == 'custom':
+            start_date_obj, end_date_obj = DateFilterService.get_date_range('custom', None, start_date, end_date)
+        else:
+            if date_filter:
+                start_date_obj, end_date_obj = DateFilterService.get_date_range('day', date_filter, None, None)
+            elif start_date or end_date:
+                start_date_obj, end_date_obj = DateFilterService.get_date_range('custom', None, start_date, end_date)
+            else:
+                start_date_obj, end_date_obj = DateFilterService.get_date_range(None, None, None, None)
+
+        commission_qs = Commission.objects.filter(commission_date__date__range=[start_date_obj, end_date_obj])
+        supplier_id = self.request.GET.get('supplier')
+        if supplier_id:
+            commission_qs = commission_qs.filter(supplier_id=supplier_id)
+        salesperson_id = self.request.GET.get('salesperson')
+        if salesperson_id:
+            commission_qs = commission_qs.filter(acquisition__salesperson_id=salesperson_id)
+
+        commissions_uzs = commission_qs.filter(currency='UZS').aggregate(s=Sum('amount'))['s'] or 0
+        commissions_usd = commission_qs.filter(currency='USD').aggregate(s=Sum('amount'))['s'] or 0
+
+        context['totals'] = {
+            'total_quantity': agg.get('total_quantity') or 0,
+            'total_sum_uzs': agg.get('total_sum_uzs') or 0,
+            'total_sum_usd': agg.get('total_sum_usd') or 0,
+            'total_profit_uzs': (agg.get('total_profit_uzs') or 0) + commissions_uzs,
+            'total_profit_usd': (agg.get('total_profit_usd') or 0) + commissions_usd,
+        }
         
         return context
 

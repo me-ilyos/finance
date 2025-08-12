@@ -55,9 +55,11 @@
             <button class="btn btn-success btn-sm me-2" data-bs-toggle="modal" data-bs-target="#paymentModal">
                 <i class="fas fa-plus me-1"></i>To'lov qilish
             </button>
+            {% if user.is_superuser %}
             <button class="btn btn-info btn-sm me-2" data-bs-toggle="modal" data-bs-target="#commissionModal">
                 <i class="fas fa-percent me-1"></i>Komissiya qo'shish
             </button>
+            {% endif %}
             {% if can_deactivate and supplier.can_be_deactivated %}
             <button class="btn btn-warning btn-sm me-2" onclick="deactivateSupplier('{{ supplier.pk }}')">
                 <i class="fas fa-ban me-1"></i>Faolsizlashtirish

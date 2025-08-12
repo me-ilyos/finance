@@ -85,10 +85,24 @@
                 <td class="price-col standout-col align-middle">
                     <div class="container-fluid gx-0"><div class="row gx-0">
                         <div class="col text-end small border-end">
-                            {% if sale.sale_currency == "UZS" %}<span class="profit-value">{{ sale.profit|format_currency:"UZS" }}</span>{% else %}-{% endif %}
+                            {% if sale.sale_currency == "UZS" %}
+                                <span class="profit-value">{{ sale.total_profit_display|default:sale.profit|format_currency:"UZS" }}</span>
+                                {% if sale.commission_for_row and sale.commission_for_row|floatformat != "0" %}
+                                    <span class="badge bg-success-subtle text-success border ms-2" title="Komissiya miqdori">
+                                        + {{ sale.commission_for_row|format_currency:'UZS' }}
+                                    </span>
+                                {% endif %}
+                            {% else %}-{% endif %}
                         </div>
                         <div class="col text-end small">
-                            {% if sale.sale_currency == "USD" %}<span class="profit-value">{{ sale.profit|format_currency:"USD" }}</span>{% else %}-{% endif %}
+                            {% if sale.sale_currency == "USD" %}
+                                <span class="profit-value">{{ sale.total_profit_display|default:sale.profit|format_currency:"USD" }}</span>
+                                {% if sale.commission_for_row and sale.commission_for_row|floatformat != "0" %}
+                                    <span class="badge bg-success-subtle text-success border ms-2" title="Commission amount">
+                                        + {{ sale.commission_for_row|format_currency:'USD' }}
+                                    </span>
+                                {% endif %}
+                            {% else %}-{% endif %}
                         </div>
                     </div></div>
                 </td>

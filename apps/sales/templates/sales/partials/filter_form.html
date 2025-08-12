@@ -1,6 +1,7 @@
 <!-- Sales Filter Form -->
-<form method="get" action="" class="mb-4 p-3 border rounded bg-light">
+<form method="get" action="" class="mb-4 p-3 border rounded bg-light" id="salesFilterForm">
     <div class="row g-2 align-items-end">
+        <input type="hidden" name="filter_period" id="filter_period_hidden" value="{{ current_filter_period|default_if_none:'' }}">
         <!-- Specific Day Filter -->
         <div class="col-md-2">
             <label for="date_filter_input" class="form-label mb-1"><small>Kun bo'yicha:</small></label>
@@ -8,15 +9,15 @@
                    value="{{ current_date_filter|default_if_none:'' }}">
         </div>
         <div class="col-md-auto">
-            <button type="submit" name="filter_period" value="day" class="btn btn-sm btn-outline-secondary">Kun</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-filter-period="day">Kun</button>
         </div>
 
         <!-- Week/Month Filters -->
         <div class="col-md-auto">
             <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
             <div class="btn-group btn-group-sm" role="group">
-                <button type="submit" name="filter_period" value="week" class="btn btn-sm btn-outline-secondary">Hafta</button>
-                <button type="submit" name="filter_period" value="month" class="btn btn-sm btn-outline-secondary">Oy</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-filter-period="week">Hafta</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-filter-period="month">Oy</button>
             </div>
         </div>
 
@@ -33,7 +34,7 @@
         </div>
         <div class="col-md-auto">
             <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
-            <button type="submit" name="filter_period" value="custom" class="btn btn-sm btn-outline-secondary">Oraliq</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-filter-period="custom">Oraliq</button>
         </div>
         
         {% if user.is_superuser %}
@@ -97,3 +98,49 @@
         </div>
     </div>
 </form> 
+<script>
+// Clean canonical filter submissions: set period then submit; strip empty params
+(function() {
+  const form = document.getElementById('salesFilterForm');
+  if (!form) return;
+
+  form.querySelectorAll('[data-filter-period]').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.getElementById('filter_period_hidden').value = this.getAttribute('data-filter-period');
+      cleanAndSubmit();
+    });
+  });
+
+  form.addEventListener('submit', function() {
+    // Derive period if not explicitly chosen
+    const periodInput = document.getElementById('filter_period_hidden');
+    let period = (periodInput.value || '').trim();
+    if (!period) {
+      const dayVal = (document.getElementById('date_filter_input')?.value || '').trim();
+      const startVal = (document.getElementById('start_date_input')?.value || '').trim();
+      const endVal = (document.getElementById('end_date_input')?.value || '').trim();
+      if (dayVal) period = 'day';
+      else if (startVal || endVal) period = 'custom';
+      if (period) periodInput.value = period;
+    }
+    disableEmptyInputs();
+  });
+
+  function disableEmptyInputs() {
+    form.querySelectorAll('input[name], select[name]').forEach(el => {
+      const val = (el.value || '').toString().trim();
+      if (val === '') el.disabled = true;
+    });
+  }
+
+  function cleanAndSubmit() {
+    const disabled = [];
+    form.querySelectorAll('input[name], select[name]').forEach(el => {
+      const val = (el.value || '').toString().trim();
+      if (val === '') { el.disabled = true; disabled.push(el); }
+    });
+    form.submit();
+    setTimeout(() => disabled.forEach(el => el.disabled = false), 0);
+  }
+})();
+</script>

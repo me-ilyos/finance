@@ -1,7 +1,7 @@
 from django.utils import timezone
 from datetime import timedelta
 from apps.sales.models import Sale
-from apps.accounting.models import Expenditure, Transfer
+from apps.accounting.models import Expenditure, Transfer, Deposit
 from apps.contacts.models import AgentPayment, SupplierPayment
 
 
@@ -139,6 +139,20 @@ class DashboardService:
                 'conversion_rate': transfer.conversion_rate,
                 'original_amount': transfer.amount,
                 'original_currency': transfer.currency
+            })
+        
+        transactions.sort(key=lambda t: t['date'], reverse=True)
+        
+        # Include deposits to this account
+        deposits = Deposit.objects.filter(to_account=account)
+        for dep in deposits:
+            transactions.append({
+                'date': dep.deposit_date,
+                'type': "Kirim (Deposit)",
+                'description': dep.description or 'Deposit',
+                'amount': dep.amount,
+                'currency': dep.currency,
+                'balance_effect': 'income'
             })
         
         transactions.sort(key=lambda t: t['date'], reverse=True)
@@ -288,6 +302,19 @@ class DashboardService:
                 'original_currency': transfer.currency
             })
         
+        # Include recent deposits
+        recent_deposits = Deposit.objects.filter(deposit_date__gte=date_limit).select_related('to_account')
+        for dep in recent_deposits:
+            transactions.append({
+                'date': dep.deposit_date,
+                'type': "Kirim (Deposit)",
+                'description': dep.description or 'Deposit',
+                'amount': dep.amount,
+                'currency': dep.currency,
+                'balance_effect': 'income',
+                'account': dep.to_account.name
+            })
+
         transactions.sort(key=lambda t: t['date'], reverse=True)
         return transactions
 

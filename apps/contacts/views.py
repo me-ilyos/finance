@@ -279,6 +279,115 @@ class SupplierDetailView(LoginRequiredMixin, DetailView):
             commissions = commissions.filter(acquisition__ticket__ticket_type='UMRA')
             ticket_returns = ticket_returns.filter(original_sale__related_acquisition__ticket__ticket_type='UMRA')
         
+        # Calculate pre-period (prior) balance if a start date is provided
+        prior_balance_uzs = 0
+        prior_balance_usd = 0
+        if start_date_obj:
+            # Start from initial balances for currency/all filters; for UMRA we don't include initial
+            if filter_type in ('uzs', 'usd', 'all'):
+                prior_balance_uzs = supplier.initial_balance_uzs or 0
+                prior_balance_usd = supplier.initial_balance_usd or 0
+            else:
+                prior_balance_uzs = 0
+                prior_balance_usd = 0
+
+            # Build pre-period querysets (before start_date)
+            pre_acquisitions = supplier.acquisitions.select_related('ticket').filter(
+                acquisition_date__lt=start_date_obj
+            )
+            pre_payments = supplier.payments.select_related('paid_from_account').filter(
+                payment_date__lt=start_date_obj
+            )
+            pre_commissions = supplier.commissions.select_related('acquisition__ticket').filter(
+                commission_date__lt=start_date_obj
+            )
+            from apps.sales.models import TicketReturn  # local import to avoid circular issues
+            pre_returns = TicketReturn.objects.filter(
+                original_sale__related_acquisition__supplier=supplier,
+                return_date__date__lt=start_date_obj,
+            ).select_related('original_sale__related_acquisition__ticket')
+
+            if filter_type == 'uzs':
+                # Only UZS side
+                pre_uzs_acq = pre_acquisitions.filter(currency='UZS').aggregate(total=Sum('total_amount'))['total'] or 0
+                pre_uzs_pay = pre_payments.filter(currency='UZS').aggregate(total=Sum('amount'))['total'] or 0
+                pre_uzs_comm = pre_commissions.filter(currency='UZS').aggregate(total=Sum('amount'))['total'] or 0
+                pre_uzs_returned = 0
+                pre_uzs_fines = 0
+                for r in pre_returns:
+                    if r.original_sale.related_acquisition.currency == 'UZS':
+                        pre_uzs_returned += r.returned_acquisition_amount
+                    if r.supplier_fine_currency == 'UZS':
+                        pre_uzs_fines += r.total_supplier_fine_amount
+                prior_balance_uzs += pre_uzs_acq - pre_uzs_comm - pre_uzs_pay - pre_uzs_returned + pre_uzs_fines
+                prior_balance_usd = 0
+
+            elif filter_type == 'usd':
+                # Only USD side
+                pre_usd_acq = pre_acquisitions.filter(currency='USD').aggregate(total=Sum('total_amount'))['total'] or 0
+                pre_usd_pay = pre_payments.filter(currency='USD').aggregate(total=Sum('amount'))['total'] or 0
+                pre_usd_comm = pre_commissions.filter(currency='USD').aggregate(total=Sum('amount'))['total'] or 0
+                pre_usd_returned = 0
+                pre_usd_fines = 0
+                for r in pre_returns:
+                    if r.original_sale.related_acquisition.currency == 'USD':
+                        pre_usd_returned += r.returned_acquisition_amount
+                    if r.supplier_fine_currency == 'USD':
+                        pre_usd_fines += r.total_supplier_fine_amount
+                prior_balance_usd += pre_usd_acq - pre_usd_comm - pre_usd_pay - pre_usd_returned + pre_usd_fines
+                prior_balance_uzs = 0
+
+            elif filter_type == 'umra':
+                # Restrict to UMRA tickets; payments are not considered for UMRA filter
+                pre_acq_umra = pre_acquisitions.filter(ticket__ticket_type='UMRA')
+                pre_comm_umra = pre_commissions.filter(acquisition__ticket__ticket_type='UMRA')
+                pre_returns_umra = pre_returns.filter(original_sale__related_acquisition__ticket__ticket_type='UMRA')
+
+                pre_uzs_acq = pre_acq_umra.filter(currency='UZS').aggregate(total=Sum('total_amount'))['total'] or 0
+                pre_usd_acq = pre_acq_umra.filter(currency='USD').aggregate(total=Sum('total_amount'))['total'] or 0
+                pre_uzs_comm = pre_comm_umra.filter(currency='UZS').aggregate(total=Sum('amount'))['total'] or 0
+                pre_usd_comm = pre_comm_umra.filter(currency='USD').aggregate(total=Sum('amount'))['total'] or 0
+
+                pre_uzs_returned = 0
+                pre_usd_returned = 0
+                pre_uzs_fines = 0
+                pre_usd_fines = 0
+                for r in pre_returns_umra:
+                    if r.original_sale.related_acquisition.currency == 'UZS':
+                        pre_uzs_returned += r.returned_acquisition_amount
+                    else:
+                        pre_usd_returned += r.returned_acquisition_amount
+                    if r.supplier_fine_currency == 'UZS':
+                        pre_uzs_fines += r.total_supplier_fine_amount
+                    else:
+                        pre_usd_fines += r.total_supplier_fine_amount
+                # payments are excluded for UMRA
+                prior_balance_uzs += pre_uzs_acq - pre_uzs_comm - 0 - pre_uzs_returned + pre_uzs_fines
+                prior_balance_usd += pre_usd_acq - pre_usd_comm - 0 - pre_usd_returned + pre_usd_fines
+
+            else:  # all
+                pre_uzs_acq = pre_acquisitions.filter(currency='UZS').aggregate(total=Sum('total_amount'))['total'] or 0
+                pre_usd_acq = pre_acquisitions.filter(currency='USD').aggregate(total=Sum('total_amount'))['total'] or 0
+                pre_uzs_pay = pre_payments.filter(currency='UZS').aggregate(total=Sum('amount'))['total'] or 0
+                pre_usd_pay = pre_payments.filter(currency='USD').aggregate(total=Sum('amount'))['total'] or 0
+                pre_uzs_comm = pre_commissions.filter(currency='UZS').aggregate(total=Sum('amount'))['total'] or 0
+                pre_usd_comm = pre_commissions.filter(currency='USD').aggregate(total=Sum('amount'))['total'] or 0
+                pre_uzs_returned = 0
+                pre_usd_returned = 0
+                pre_uzs_fines = 0
+                pre_usd_fines = 0
+                for r in pre_returns:
+                    if r.original_sale.related_acquisition.currency == 'UZS':
+                        pre_uzs_returned += r.returned_acquisition_amount
+                    else:
+                        pre_usd_returned += r.returned_acquisition_amount
+                    if r.supplier_fine_currency == 'UZS':
+                        pre_uzs_fines += r.total_supplier_fine_amount
+                    else:
+                        pre_usd_fines += r.total_supplier_fine_amount
+                prior_balance_uzs += pre_uzs_acq - pre_uzs_comm - pre_uzs_pay - pre_uzs_returned + pre_uzs_fines
+                prior_balance_usd += pre_usd_acq - pre_usd_comm - pre_usd_pay - pre_usd_returned + pre_usd_fines
+
         # Create transactions list including commissions and returns
         transactions = []
         for acq in acquisitions:
@@ -294,13 +403,12 @@ class SupplierDetailView(LoginRequiredMixin, DetailView):
         transactions.sort(key=lambda x: x['date'])
         
         # Calculate running balances
-        # For date filtering, we want to show the balance changes within the selected period only
+        # When a start date is provided, include pre-period balance as the starting point
         if start_date_obj:
-            # For date period filtering, start with zero and show only changes within the period
-            starting_balance_uzs = 0
-            starting_balance_usd = 0
-            current_balance_uzs = 0
-            current_balance_usd = 0
+            starting_balance_uzs = prior_balance_uzs
+            starting_balance_usd = prior_balance_usd
+            current_balance_uzs = prior_balance_uzs
+            current_balance_usd = prior_balance_usd
         else:
             starting_balance_uzs = supplier.initial_balance_uzs or 0
             starting_balance_usd = supplier.initial_balance_usd or 0
@@ -398,7 +506,7 @@ class SupplierDetailView(LoginRequiredMixin, DetailView):
             
             # Calculate filtered balance for UZS only
             if start_date_obj:
-                filtered_balance_uzs = uzs_acquisitions - uzs_commissions - uzs_payments - uzs_returned_amount + uzs_supplier_fines
+                filtered_balance_uzs = prior_balance_uzs + (uzs_acquisitions - uzs_commissions - uzs_payments - uzs_returned_amount + uzs_supplier_fines)
             else:
                 filtered_balance_uzs = uzs_acquisitions - uzs_commissions - uzs_payments - uzs_returned_amount + uzs_supplier_fines + (supplier.initial_balance_uzs or 0)
             filtered_balance_usd = 0
@@ -442,7 +550,7 @@ class SupplierDetailView(LoginRequiredMixin, DetailView):
             # Calculate filtered balance for USD only
             filtered_balance_uzs = 0
             if start_date_obj:
-                filtered_balance_usd = usd_acquisitions - usd_commissions - usd_payments - usd_returned_amount + usd_supplier_fines
+                filtered_balance_usd = prior_balance_usd + (usd_acquisitions - usd_commissions - usd_payments - usd_returned_amount + usd_supplier_fines)
             else:
                 filtered_balance_usd = usd_acquisitions - usd_commissions - usd_payments - usd_returned_amount + usd_supplier_fines + (supplier.initial_balance_usd or 0)
             
@@ -487,8 +595,8 @@ class SupplierDetailView(LoginRequiredMixin, DetailView):
             
             # Calculate filtered balance for UMRA only
             if start_date_obj:
-                filtered_balance_uzs = uzs_acquisitions - uzs_commissions - uzs_payments - uzs_returned_amount + uzs_supplier_fines
-                filtered_balance_usd = usd_acquisitions - usd_commissions - usd_payments - usd_returned_amount + usd_supplier_fines
+                filtered_balance_uzs = prior_balance_uzs + (uzs_acquisitions - uzs_commissions - uzs_payments - uzs_returned_amount + uzs_supplier_fines)
+                filtered_balance_usd = prior_balance_usd + (usd_acquisitions - usd_commissions - usd_payments - usd_returned_amount + usd_supplier_fines)
             else:
                 filtered_balance_uzs = uzs_acquisitions - uzs_commissions - uzs_payments - uzs_returned_amount + uzs_supplier_fines
                 filtered_balance_usd = usd_acquisitions - usd_commissions - usd_payments - usd_returned_amount + usd_supplier_fines
@@ -536,8 +644,8 @@ class SupplierDetailView(LoginRequiredMixin, DetailView):
             
             # Calculate total balance including commissions and returns for 'all' filter
             if start_date_obj:
-                filtered_balance_uzs = uzs_acquisitions - uzs_commissions - uzs_payments - uzs_returned_amount + uzs_supplier_fines
-                filtered_balance_usd = usd_acquisitions - usd_commissions - usd_payments - usd_returned_amount + usd_supplier_fines
+                filtered_balance_uzs = prior_balance_uzs + (uzs_acquisitions - uzs_commissions - uzs_payments - uzs_returned_amount + uzs_supplier_fines)
+                filtered_balance_usd = prior_balance_usd + (usd_acquisitions - usd_commissions - usd_payments - usd_returned_amount + usd_supplier_fines)
             else:
                 filtered_balance_uzs = uzs_acquisitions - uzs_commissions - uzs_payments - uzs_returned_amount + uzs_supplier_fines + (supplier.initial_balance_uzs or 0)
                 filtered_balance_usd = usd_acquisitions - usd_commissions - usd_payments - usd_returned_amount + usd_supplier_fines + (supplier.initial_balance_usd or 0)
@@ -577,6 +685,10 @@ class SupplierDetailView(LoginRequiredMixin, DetailView):
 def create_commission(request, supplier_pk):
     """Create commission for supplier"""
     supplier = get_object_or_404(Supplier, pk=supplier_pk)
+    # Only admins can add commissions
+    if not request.user.is_superuser:
+        messages.error(request, "Faqat administratorlar komissiya qo'sha oladi.")
+        return redirect('contacts:supplier-detail', pk=supplier_pk)
     
     if request.method == 'POST':
         form = CommissionForm(request.POST, supplier=supplier)
@@ -711,6 +823,99 @@ class AgentDetailView(DetailView):
             payments = payments.none()  # No payments are specific to ticket type
             ticket_returns = ticket_returns.filter(original_sale__related_acquisition__ticket__ticket_type='UMRA')
         
+        # Calculate pre-period (prior) balance if a start date is provided
+        prior_balance_uzs = 0
+        prior_balance_usd = 0
+        if start_date_obj:
+            # Start from initial balances for currency/all filters; exclude initial for UMRA
+            if filter_type in ('uzs', 'usd', 'all'):
+                prior_balance_uzs = agent.initial_balance_uzs or 0
+                prior_balance_usd = agent.initial_balance_usd or 0
+            else:
+                prior_balance_uzs = 0
+                prior_balance_usd = 0
+
+            # Build pre-period querysets (before start_date)
+            pre_sales = agent.agent_sales.select_related('related_acquisition__ticket').filter(
+                sale_date__lt=start_date_obj
+            )
+            pre_payments = agent.payments.select_related('paid_to_account').filter(
+                payment_date__lt=start_date_obj
+            )
+            pre_returns = TicketReturn.objects.filter(
+                original_sale__agent=agent,
+                return_date__date__lt=start_date_obj,
+            ).select_related('original_sale__related_acquisition__ticket')
+
+            if filter_type == 'uzs':
+                pre_uzs_sales = pre_sales.filter(sale_currency='UZS').aggregate(total=Sum('total_sale_amount'))['total'] or 0
+                pre_uzs_payments = pre_payments.filter(currency='UZS').aggregate(total=Sum('amount'))['total'] or 0
+                pre_uzs_returned = 0
+                pre_uzs_fines = 0
+                for r in pre_returns:
+                    if r.original_sale.related_acquisition.currency == 'UZS':
+                        pre_uzs_returned += r.returned_acquisition_amount
+                    if r.fine_currency == 'UZS':
+                        pre_uzs_fines += r.total_fine_amount
+                prior_balance_uzs += pre_uzs_sales - pre_uzs_payments - pre_uzs_returned + pre_uzs_fines
+                prior_balance_usd = 0
+
+            elif filter_type == 'usd':
+                pre_usd_sales = pre_sales.filter(sale_currency='USD').aggregate(total=Sum('total_sale_amount'))['total'] or 0
+                pre_usd_payments = pre_payments.filter(currency='USD').aggregate(total=Sum('amount'))['total'] or 0
+                pre_usd_returned = 0
+                pre_usd_fines = 0
+                for r in pre_returns:
+                    if r.original_sale.related_acquisition.currency == 'USD':
+                        pre_usd_returned += r.returned_acquisition_amount
+                    if r.fine_currency == 'USD':
+                        pre_usd_fines += r.total_fine_amount
+                prior_balance_usd += pre_usd_sales - pre_usd_payments - pre_usd_returned + pre_usd_fines
+                prior_balance_uzs = 0
+
+            elif filter_type == 'umra':
+                pre_sales_umra = pre_sales.filter(related_acquisition__ticket__ticket_type='UMRA')
+                pre_returns_umra = pre_returns.filter(original_sale__related_acquisition__ticket__ticket_type='UMRA')
+                pre_uzs_sales = pre_sales_umra.filter(sale_currency='UZS').aggregate(total=Sum('total_sale_amount'))['total'] or 0
+                pre_usd_sales = pre_sales_umra.filter(sale_currency='USD').aggregate(total=Sum('total_sale_amount'))['total'] or 0
+                pre_uzs_returned = 0
+                pre_usd_returned = 0
+                pre_uzs_fines = 0
+                pre_usd_fines = 0
+                for r in pre_returns_umra:
+                    if r.original_sale.related_acquisition.currency == 'UZS':
+                        pre_uzs_returned += r.returned_acquisition_amount
+                    else:
+                        pre_usd_returned += r.returned_acquisition_amount
+                    if r.fine_currency == 'UZS':
+                        pre_uzs_fines += r.total_fine_amount
+                    else:
+                        pre_usd_fines += r.total_fine_amount
+                # payments are excluded for UMRA
+                prior_balance_uzs += pre_uzs_sales - 0 - pre_uzs_returned + pre_uzs_fines
+                prior_balance_usd += pre_usd_sales - 0 - pre_usd_returned + pre_usd_fines
+
+            else:  # all
+                pre_uzs_sales = pre_sales.filter(sale_currency='UZS').aggregate(total=Sum('total_sale_amount'))['total'] or 0
+                pre_usd_sales = pre_sales.filter(sale_currency='USD').aggregate(total=Sum('total_sale_amount'))['total'] or 0
+                pre_uzs_payments = pre_payments.filter(currency='UZS').aggregate(total=Sum('amount'))['total'] or 0
+                pre_usd_payments = pre_payments.filter(currency='USD').aggregate(total=Sum('amount'))['total'] or 0
+                pre_uzs_returned = 0
+                pre_usd_returned = 0
+                pre_uzs_fines = 0
+                pre_usd_fines = 0
+                for r in pre_returns:
+                    if r.original_sale.related_acquisition.currency == 'UZS':
+                        pre_uzs_returned += r.returned_acquisition_amount
+                    else:
+                        pre_usd_returned += r.returned_acquisition_amount
+                    if r.fine_currency == 'UZS':
+                        pre_uzs_fines += r.total_fine_amount
+                    else:
+                        pre_usd_fines += r.total_fine_amount
+                prior_balance_uzs += pre_uzs_sales - pre_uzs_payments - pre_uzs_returned + pre_uzs_fines
+                prior_balance_usd += pre_usd_sales - pre_usd_payments - pre_usd_returned + pre_usd_fines
+
         # Create transactions list
         transactions = []
         for sale in sales:
@@ -724,13 +929,12 @@ class AgentDetailView(DetailView):
         transactions.sort(key=lambda x: x['date'])
         
         # Calculate running balances
-        # For date filtering, we want to show the balance changes within the selected period only
+        # When a start date is provided, include pre-period balance as the starting point
         if start_date_obj:
-            # For date period filtering, start with zero and show only changes within the period
-            starting_balance_uzs = 0
-            starting_balance_usd = 0
-            current_balance_uzs = 0
-            current_balance_usd = 0
+            starting_balance_uzs = prior_balance_uzs
+            starting_balance_usd = prior_balance_usd
+            current_balance_uzs = prior_balance_uzs
+            current_balance_usd = prior_balance_usd
         else:
             starting_balance_uzs = agent.initial_balance_uzs or 0
             starting_balance_usd = agent.initial_balance_usd or 0
@@ -819,7 +1023,7 @@ class AgentDetailView(DetailView):
             
             # Calculate filtered balance for UZS only
             if start_date_obj:
-                filtered_balance_uzs = uzs_sales - uzs_payments - uzs_returned_amount + uzs_agent_fines
+                filtered_balance_uzs = prior_balance_uzs + (uzs_sales - uzs_payments - uzs_returned_amount + uzs_agent_fines)
             else:
                 filtered_balance_uzs = uzs_sales - uzs_payments - uzs_returned_amount + uzs_agent_fines + (agent.initial_balance_uzs or 0)
             filtered_balance_usd = 0
@@ -861,7 +1065,7 @@ class AgentDetailView(DetailView):
             # Calculate filtered balance for USD only
             filtered_balance_uzs = 0
             if start_date_obj:
-                filtered_balance_usd = usd_sales - usd_payments - usd_returned_amount + usd_agent_fines
+                filtered_balance_usd = prior_balance_usd + (usd_sales - usd_payments - usd_returned_amount + usd_agent_fines)
             else:
                 filtered_balance_usd = usd_sales - usd_payments - usd_returned_amount + usd_agent_fines + (agent.initial_balance_usd or 0)
             
@@ -886,8 +1090,8 @@ class AgentDetailView(DetailView):
             
             # Calculate filtered balance for UMRA only
             if start_date_obj:
-                filtered_balance_uzs = uzs_sales - uzs_payments
-                filtered_balance_usd = usd_sales - usd_payments
+                filtered_balance_uzs = prior_balance_uzs + (uzs_sales - uzs_payments)
+                filtered_balance_usd = prior_balance_usd + (usd_sales - usd_payments)
             else:
                 filtered_balance_uzs = uzs_sales - uzs_payments
                 filtered_balance_usd = usd_sales - usd_payments
@@ -895,6 +1099,7 @@ class AgentDetailView(DetailView):
         else:  # filter_type == 'all'
             filtered_sales = agent.agent_sales
             filtered_payments = agent.payments
+            filtered_returns = ticket_returns
             
             # Apply date filtering to totals
             if start_date_obj:
@@ -903,6 +1108,7 @@ class AgentDetailView(DetailView):
             if end_date_obj:
                 filtered_sales = filtered_sales.filter(sale_date__lte=end_date_obj)
                 filtered_payments = filtered_payments.filter(payment_date__lte=end_date_obj)
+                filtered_returns = filtered_returns.filter(return_date__date__lte=end_date_obj)
             
             uzs_sales = filtered_sales.filter(sale_currency='UZS').aggregate(
                 total=Sum('total_sale_amount')
@@ -912,11 +1118,25 @@ class AgentDetailView(DetailView):
             )['total'] or 0
             uzs_payments = filtered_payments.filter(currency='UZS').aggregate(total=Sum('amount'))['total'] or 0
             usd_payments = filtered_payments.filter(currency='USD').aggregate(total=Sum('amount'))['total'] or 0
+            # Calculate return amounts and agent fines for 'all'
+            uzs_returned_amount = 0
+            usd_returned_amount = 0
+            uzs_agent_fines = 0
+            usd_agent_fines = 0
+            for return_instance in filtered_returns:
+                if return_instance.original_sale.related_acquisition.currency == 'UZS':
+                    uzs_returned_amount += return_instance.returned_acquisition_amount
+                else:
+                    usd_returned_amount += return_instance.returned_acquisition_amount
+                if return_instance.fine_currency == 'UZS':
+                    uzs_agent_fines += return_instance.total_fine_amount
+                else:
+                    usd_agent_fines += return_instance.total_fine_amount
             
-            # Use actual agent balance for 'all' filter
+            # Use pre-period + period delta for start-date filter; else actual agent balance
             if start_date_obj:
-                filtered_balance_uzs = uzs_sales - uzs_payments
-                filtered_balance_usd = usd_sales - usd_payments
+                filtered_balance_uzs = prior_balance_uzs + (uzs_sales - uzs_payments - uzs_returned_amount + uzs_agent_fines)
+                filtered_balance_usd = prior_balance_usd + (usd_sales - usd_payments - usd_returned_amount + usd_agent_fines)
             else:
                 filtered_balance_uzs = agent.balance_uzs
                 filtered_balance_usd = agent.balance_usd

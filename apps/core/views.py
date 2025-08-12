@@ -20,7 +20,7 @@ from .services import DateFilterService
 from .dashboard_service import DashboardService
 from .utils import ExcelExportService
 from apps.accounting.models import FinancialAccount, Transfer
-from apps.accounting.forms import TransferForm
+from apps.accounting.forms import TransferForm, DepositForm
 
 
 class LoginView(View):
@@ -523,3 +523,38 @@ def get_transfer_form(request):
         })
     
     return JsonResponse({'accounts': account_options})
+
+
+@require_http_methods(["POST"])
+@login_required
+def deposit_money(request):
+    if not request.user.is_superuser:
+        return JsonResponse({'success': False, 'error': 'Bu funktsiyaga faqat administratorlar kirish huquqiga ega.'}, status=403)
+
+    try:
+        form = DepositForm(request.POST)
+        if form.is_valid():
+            try:
+                deposit = form.save()
+                return JsonResponse({
+                    'success': True,
+                    'message': "Kirim muvaffaqiyatli qo'shildi.",
+                    'deposit_id': deposit.id
+                })
+            except Exception as save_error:
+                return JsonResponse({
+                    'success': False,
+                    'error': f"Kirim saqlashda xatolik: {str(save_error)}"
+                }, status=500)
+        else:
+            errors = []
+            for field, field_errors in form.errors.items():
+                for error in field_errors:
+                    if field == '__all__':
+                        errors.append(str(error))
+                    else:
+                        field_label = form.fields.get(field, {}).label or field
+                        errors.append(f"{field_label}: {error}")
+            return JsonResponse({'success': False, 'errors': errors}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Kutilmagan xatolik: {str(e)}'}, status=500)

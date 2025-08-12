@@ -1,6 +1,6 @@
 from django import forms
 from django.core.exceptions import ValidationError
-from .models import Expenditure, FinancialAccount, Transfer
+from .models import Expenditure, FinancialAccount, Transfer, Deposit
 from django.utils import timezone
 from apps.core.constants import CurrencyChoices, AccountTypeChoices
 
@@ -197,3 +197,27 @@ class TransferForm(forms.ModelForm):
         if commit:
             instance.save()
         return instance
+
+
+class DepositForm(forms.ModelForm):
+    class Meta:
+        model = Deposit
+        fields = ['deposit_date', 'to_account', 'amount', 'currency', 'description', 'notes']
+        widgets = {
+            'deposit_date': forms.DateTimeInput(attrs={'type': 'hidden'}),
+            'to_account': forms.Select(attrs={'class': 'form-select'}),
+            'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
+            'currency': forms.Select(attrs={'class': 'form-select'}),
+            'description': forms.HiddenInput(),
+            'notes': forms.HiddenInput(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['to_account'].queryset = FinancialAccount.objects.filter(is_active=True)
+        if not self.instance.pk:
+            self.fields['deposit_date'].initial = timezone.now()
+        self.fields['description'].initial = 'Deposit'
+        self.fields['notes'].initial = ''
+        self.fields['description'].required = False
+        self.fields['notes'].required = False

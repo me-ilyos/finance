@@ -7,12 +7,20 @@
             <i class="fas fa-building-columns"></i>
             Moliyaviy Hisoblar
         </h3>
-        {% if user.is_superuser %}
-        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#transferModal">
-            <i class="fas fa-exchange-alt me-2"></i>
-            Pul O'tkazish
-        </button>
-        {% endif %}
+        <div class="d-flex gap-2">
+            {% if user.is_superuser and selected_account %}
+            <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#depositModal">
+                <i class="fas fa-arrow-down me-2"></i>
+                Kirim Qo'shish
+            </button>
+            {% endif %}
+            {% if user.is_superuser %}
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#transferModal">
+                <i class="fas fa-exchange-alt me-2"></i>
+                Pul O'tkazish
+            </button>
+            {% endif %}
+        </div>
     </div>
     
     {% if accounts %}
@@ -160,3 +168,53 @@
     </div>
 </div>
 {% endif %} 
+
+<!-- Deposit Modal -->
+{% if user.is_superuser and selected_account %}
+<div class="modal fade" id="depositModal" tabindex="-1" aria-labelledby="depositModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="depositModalLabel">
+                    <i class="fas fa-arrow-down me-2"></i>
+                    Kirim Qo'shish
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="depositForm" method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Hisob</label>
+                        <input type="text" class="form-control" value="{{ selected_account.name }} ({{ selected_account.currency }})" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="deposit_amount" class="form-label">Summa</label>
+                        <input type="number" class="form-control" id="deposit_amount" name="amount" step="0.01" min="0.01" required>
+                    </div>
+                    <div class="mb-3 d-none">
+                        <label for="deposit_currency" class="form-label">Valyuta</label>
+                        <select class="form-select" id="deposit_currency" name="currency">
+                            <option value="{{ selected_account.currency }}" selected>{{ selected_account.currency }}</option>
+                        </select>
+                    </div>
+                    <input type="hidden" id="deposit_to_account" name="to_account" value="{{ selected_account.id }}">
+                    <input type="hidden" id="deposit_date" name="deposit_date">
+                    <input type="hidden" id="deposit_description" name="description" value="Deposit">
+                    <input type="hidden" id="deposit_notes" name="notes" value="">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>
+                    Bekor qilish
+                </button>
+                <button type="submit" form="depositForm" class="btn btn-success">
+                    <i class="fas fa-check me-1"></i>
+                    <span id="deposit-btn-text">Kiritish</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    </div>
+{% endif %}

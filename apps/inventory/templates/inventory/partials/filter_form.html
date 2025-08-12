@@ -1,5 +1,6 @@
-<form method="get" action="" class="mb-4 p-3 border rounded bg-light">
+<form method="get" action="" class="mb-4 p-3 border rounded bg-light" id="acquisitionFilterForm">
     <div class="row g-2 align-items-end">
+        <input type="hidden" name="filter_period" id="filter_period_hidden" value="{{ current_filter_period }}">
         <!-- Specific Day Filter -->
         <div class="col-md-2">
             <label for="date_filter_input" class="form-label mb-1"><small>Kun bo'yicha:</small></label>
@@ -7,15 +8,15 @@
                    value="{{ current_date_filter|default_if_none:'' }}">
         </div>
         <div class="col-md-auto">
-            <button type="submit" name="filter_period" value="day" class="btn btn-sm btn-outline-secondary">Kun</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-filter-period="day">Kun</button>
         </div>
 
         <!-- Week/Month Filters -->
         <div class="col-md-auto">
              <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
             <div class="btn-group btn-group-sm" role="group">
-                <button type="submit" name="filter_period" value="week" class="btn btn-sm btn-outline-secondary">Hafta</button>
-                <button type="submit" name="filter_period" value="month" class="btn btn-sm btn-outline-secondary">Oy</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-filter-period="week">Hafta</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-filter-period="month">Oy</button>
             </div>
         </div>
 
@@ -32,7 +33,7 @@
         </div>
         <div class="col-md-auto">
              <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
-            <button type="submit" name="filter_period" value="custom" class="btn btn-sm btn-outline-secondary">Oraliq</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-filter-period="custom">Oraliq</button>
         </div>
         
         {% if user.is_superuser %}
@@ -62,7 +63,7 @@
         </div>
         
         <div class="col-md-auto">
-            <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
+             <label class="form-label mb-1">&nbsp;</label> <!-- Spacer for alignment -->
             <button type="submit" class="btn btn-sm btn-outline-primary">Filter</button>
         </div>
         {% endif %}
@@ -84,3 +85,47 @@
         </div>
     </div>
 </form> 
+<script>
+// Keep URL clean: set period then submit; remove empty inputs before submit
+(function() {
+  const form = document.getElementById('acquisitionFilterForm');
+  if (!form) return;
+
+  // Auto-submit when clicking period buttons
+  form.querySelectorAll('[data-filter-period]').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const period = this.getAttribute('data-filter-period');
+      document.getElementById('filter_period_hidden').value = period;
+      cleanAndSubmit();
+    });
+  });
+
+  // On manual Filter submit, still clean empty fields
+  form.addEventListener('submit', function(e) {
+    // Disable empty inputs so they don't appear in querystring
+    const inputs = form.querySelectorAll('input[name], select[name]');
+    inputs.forEach(el => {
+      const val = (el.value || '').toString().trim();
+      if (val === '') {
+        el.disabled = true;
+      }
+    });
+  });
+
+  function cleanAndSubmit() {
+    // Temporarily disable empty fields before submit
+    const inputs = form.querySelectorAll('input[name], select[name]');
+    const disabled = [];
+    inputs.forEach(el => {
+      const val = (el.value || '').toString().trim();
+      if (val === '') {
+        el.disabled = true;
+        disabled.push(el);
+      }
+    });
+    form.submit();
+    // Re-enable after submit in case of navigation back
+    setTimeout(() => disabled.forEach(el => el.disabled = false), 0);
+  }
+})();
+</script>

@@ -57,11 +57,28 @@ class AcquisitionListView(ListView):
         
         # Apply date filtering
         try:
+            # Prefer explicit inputs; fallback to preserved values from admin filter submit
+            qd = self.request.GET
+            # Canonical params only; front-end keeps URL clean
+            filter_period = qd.get('filter_period')
+            if filter_period == 'day':
+                date_filter = qd.get('date_filter')
+                start_date = None
+                end_date = None
+            elif filter_period == 'custom':
+                date_filter = None
+                start_date = qd.get('start_date')
+                end_date = qd.get('end_date')
+            else:
+                date_filter = None
+                start_date = None
+                end_date = None
+
             start_date_obj, end_date_obj = DateFilterService.get_date_range(
-                self.request.GET.get('filter_period'),
-                self.request.GET.get('date_filter'),
-                self.request.GET.get('start_date'),
-                self.request.GET.get('end_date')
+                filter_period,
+                date_filter,
+                start_date,
+                end_date
             )
             queryset = queryset.filter(acquisition_date__date__range=[start_date_obj, end_date_obj])
         except ValueError:
@@ -97,10 +114,12 @@ class AcquisitionListView(ListView):
             query_params.pop('page')
         context['query_params'] = query_params.urlencode()
         
-        # Add current filter values for the form
-        context['current_date_filter'] = self.request.GET.get('date_filter')
-        context['current_start_date'] = self.request.GET.get('start_date')
-        context['current_end_date'] = self.request.GET.get('end_date')
+        # Add current filter values for the form (use last values to reflect the user's latest intent)
+        qd = self.request.GET
+        context['current_filter_period'] = qd.get('filter_period')
+        context['current_date_filter'] = qd.get('date_filter')
+        context['current_start_date'] = qd.get('start_date')
+        context['current_end_date'] = qd.get('end_date')
         
         return context
 
