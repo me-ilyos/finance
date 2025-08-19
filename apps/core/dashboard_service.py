@@ -148,11 +148,12 @@ class DashboardService:
         for dep in deposits:
             transactions.append({
                 'date': dep.deposit_date,
-                'type': "Kirim (Deposit)",
+                'type': "Kirim/Chiqim (Deposit)",
                 'description': dep.description or 'Deposit',
-                'amount': dep.amount,
+                'amount': abs(dep.amount),
                 'currency': dep.currency,
-                'balance_effect': 'income'
+                'balance_effect': 'income' if dep.amount > 0 else 'expense',
+                'notes': dep.notes or ''
             })
         
         transactions.sort(key=lambda t: t['date'], reverse=True)
@@ -307,12 +308,13 @@ class DashboardService:
         for dep in recent_deposits:
             transactions.append({
                 'date': dep.deposit_date,
-                'type': "Kirim (Deposit)",
+                'type': "Kirim/Chiqim (Deposit)",
                 'description': dep.description or 'Deposit',
-                'amount': dep.amount,
+                'amount': abs(dep.amount),
                 'currency': dep.currency,
-                'balance_effect': 'income',
-                'account': dep.to_account.name
+                'balance_effect': 'income' if dep.amount > 0 else 'expense',
+                'account': dep.to_account.name,
+                'notes': dep.notes or ''
             })
 
         transactions.sort(key=lambda t: t['date'], reverse=True)

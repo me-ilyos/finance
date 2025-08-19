@@ -190,7 +190,16 @@
                     </div>
                     <div class="mb-3">
                         <label for="deposit_amount" class="form-label">Summa</label>
-                        <input type="number" class="form-control" id="deposit_amount" name="amount" step="0.01" min="0.01" required>
+                        <input type="number" class="form-control" id="deposit_amount" name="amount" step="0.01" required>
+                        <div class="form-text">Musbat summa kirim, manfiy summa chiqim (yechib olish) sifatida saqlanadi.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="deposit_description" class="form-label">Izoh</label>
+                        <input type="text" class="form-control" id="deposit_description" name="description" placeholder="Izoh (ixtiyoriy)" value="Deposit">
+                    </div>
+                    <div class="mb-3">
+                        <label for="deposit_notes" class="form-label">Batafsil Izoh</label>
+                        <textarea class="form-control" id="deposit_notes" name="notes" rows="2" placeholder="Qo'shimcha ma'lumot (ixtiyoriy)"></textarea>
                     </div>
                     <div class="mb-3 d-none">
                         <label for="deposit_currency" class="form-label">Valyuta</label>
@@ -200,8 +209,6 @@
                     </div>
                     <input type="hidden" id="deposit_to_account" name="to_account" value="{{ selected_account.id }}">
                     <input type="hidden" id="deposit_date" name="deposit_date">
-                    <input type="hidden" id="deposit_description" name="description" value="Deposit">
-                    <input type="hidden" id="deposit_notes" name="notes" value="">
                 </form>
             </div>
             <div class="modal-footer">

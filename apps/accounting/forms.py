@@ -126,8 +126,8 @@ class TransferForm(forms.ModelForm):
             'to_account': forms.Select(attrs={'class': 'form-select'}),
             'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
             'conversion_rate': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.0001', 'min': '0.0001'}),
-            'description': forms.HiddenInput(),
-            'notes': forms.HiddenInput(),
+            'description': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Izoh (ixtiyoriy)'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Batafsil izoh (ixtiyoriy)'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -141,11 +141,11 @@ class TransferForm(forms.ModelForm):
         if not self.instance.pk:
             self.fields['transfer_date'].initial = timezone.now()
         
-        # Set default values for hidden fields
+        # Set default values
         self.fields['description'].initial = 'Transfer'
         self.fields['notes'].initial = ''
         
-        # Make conversion rate and hidden fields not required
+        # Make conversion rate and optional fields not required
         self.fields['conversion_rate'].required = False
         self.fields['description'].required = False
         self.fields['notes'].required = False
@@ -206,10 +206,10 @@ class DepositForm(forms.ModelForm):
         widgets = {
             'deposit_date': forms.DateTimeInput(attrs={'type': 'hidden'}),
             'to_account': forms.Select(attrs={'class': 'form-select'}),
-            'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
+            'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'currency': forms.Select(attrs={'class': 'form-select'}),
-            'description': forms.HiddenInput(),
-            'notes': forms.HiddenInput(),
+            'description': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Izoh (ixtiyoriy)'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Batafsil izoh (ixtiyoriy)'}),
         }
 
     def __init__(self, *args, **kwargs):

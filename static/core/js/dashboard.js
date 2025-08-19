@@ -449,6 +449,8 @@ function initializeDepositModal() {
     const depositForm = document.getElementById('depositForm');
     const depositAmountInput = document.getElementById('deposit_amount');
     const depositDateInput = document.getElementById('deposit_date');
+    const depositDescriptionInput = document.getElementById('deposit_description');
+    const depositNotesInput = document.getElementById('deposit_notes');
     const depositBtnText = document.getElementById('deposit-btn-text');
 
     if (!depositModal || !depositForm) {
@@ -464,14 +466,20 @@ function initializeDepositModal() {
             depositAmountInput.value = '';
             depositAmountInput.focus();
         }
+        if (depositDescriptionInput) {
+            depositDescriptionInput.value = 'Deposit';
+        }
+        if (depositNotesInput) {
+            depositNotesInput.value = '';
+        }
     });
 
     depositForm.addEventListener('submit', function(e) {
         e.preventDefault();
 
         const amount = parseFloat(depositAmountInput.value);
-        if (!amount || amount <= 0) {
-            showAlert('Iltimos, to\'g\'ri summani kiriting.', 'danger');
+        if (!amount || amount === 0) {
+            showAlert('Iltimos, nol bo\'lmagan summani kiriting.', 'danger');
             return;
         }
 

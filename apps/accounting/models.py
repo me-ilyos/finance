@@ -157,9 +157,10 @@ class Deposit(models.Model):
 
     def clean(self):
         super().clean()
-        if self.amount is None or self.amount <= 0:
+        # Allow negative amounts to represent withdrawals via deposit entry
+        if self.amount is None or self.amount == 0:
             raise ValidationError({
-                'amount': "Deposit amount must be positive"
+                'amount': "Deposit amount cannot be zero"
             })
         if self.to_account and self.currency and self.to_account.currency != self.currency:
             raise ValidationError({
@@ -183,6 +184,7 @@ class Deposit(models.Model):
             super().save(*args, **kwargs)
 
             if is_new:
+                # Positive amount -> add, Negative amount -> subtract
                 self.to_account.current_balance += self.amount
                 self.to_account.save(update_fields=['current_balance', 'updated_at'])
             else:

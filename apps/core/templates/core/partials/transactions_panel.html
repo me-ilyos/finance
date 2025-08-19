@@ -19,7 +19,7 @@
         {% for transaction in transactions %}
         <div class="transaction-item {% if transaction.is_transfer %}transfer-transaction{% endif %}">
             <div class="transaction-details">
-                <h5>{{ transaction.description|truncatewords:5 }}</h5>
+                <h5>{{ transaction.description|truncatewords:8 }}</h5>
                 <div class="transaction-meta">
                     <span class="transaction-type {% if transaction.is_transfer %}transfer-type{% endif %}">
                         {{ transaction.type }}
@@ -30,6 +30,12 @@
                     </span>
                 </div>
                 
+                {% if transaction.notes %}
+                    <div class="mt-1">
+                        <small class="text-muted"><i class="fas fa-comment-dots me-1"></i>{{ transaction.notes }}</small>
+                    </div>
+                {% endif %}
+
                 {% if transaction.is_transfer and transaction.conversion_rate %}
                     <div class="conversion-info mt-2">
                         <small class="text-muted">
