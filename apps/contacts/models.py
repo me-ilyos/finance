@@ -228,3 +228,41 @@ class AgentPayment(BasePayment):
     class Meta(BasePayment.Meta):
         verbose_name = "Agent To'lovi"
         verbose_name_plural = "Agent To'lovlari"
+
+
+class SupplierBalanceAdjustment(models.Model):
+    supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name='adjustments')
+    adjustment_date = models.DateTimeField(default=timezone.now)
+    amount = models.DecimalField(max_digits=20, decimal_places=2, help_text="Signed amount. Positive increases our debt to supplier.")
+    currency = models.CharField(max_length=3, choices=CurrencyChoices.choices)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-adjustment_date', '-created_at']
+        verbose_name = "Ta'minotchi Balans Tuzatish"
+        verbose_name_plural = "Ta'minotchi Balans Tuzatishlar"
+
+    def __str__(self):
+        sign = '+' if self.amount >= 0 else ''
+        return f"{self.supplier.name} {sign}{self.amount:,.2f} {self.currency} ({self.adjustment_date.strftime('%d-%m-%Y')})"
+
+
+class AgentBalanceAdjustment(models.Model):
+    agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='adjustments')
+    adjustment_date = models.DateTimeField(default=timezone.now)
+    amount = models.DecimalField(max_digits=20, decimal_places=2, help_text="Signed amount. Positive increases agent's debt to us.")
+    currency = models.CharField(max_length=3, choices=CurrencyChoices.choices)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-adjustment_date', '-created_at']
+        verbose_name = "Agent Balans Tuzatish"
+        verbose_name_plural = "Agent Balans Tuzatishlar"
+
+    def __str__(self):
+        sign = '+' if self.amount >= 0 else ''
+        return f"{self.agent.name} {sign}{self.amount:,.2f} {self.currency} ({self.adjustment_date.strftime('%d-%m-%Y')})"

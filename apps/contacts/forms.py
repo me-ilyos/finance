@@ -1,5 +1,5 @@
 from django import forms
-from .models import Agent, Supplier, AgentPayment, SupplierPayment, Commission
+from .models import Agent, Supplier, AgentPayment, SupplierPayment, Commission, AgentBalanceAdjustment, SupplierBalanceAdjustment
 from apps.accounting.models import FinancialAccount
 from django.utils import timezone
 
@@ -289,3 +289,49 @@ class SupplierPaymentForm(forms.ModelForm):
         self.fields['paid_from_account'].queryset = FinancialAccount.objects.filter(
             is_active=True
         ).order_by('currency', 'name')
+
+
+class AgentAdjustmentForm(forms.ModelForm):
+    class Meta:
+        model = AgentBalanceAdjustment
+        fields = ['amount', 'currency', 'notes']
+        labels = {
+            'amount': "Miqdor",
+            'currency': "Valyuta",
+            'notes': "Izoh",
+        }
+        widgets = {
+            'amount': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'step': '0.01', 'placeholder': '0.00'}),
+            'currency': forms.Select(attrs={'class': 'form-select form-select-sm'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control form-control-sm', 'rows': 3, 'placeholder': 'Izoh (ixtiyoriy)'}),
+        }
+
+    def clean_amount(self):
+        # Allow positive or negative; forbid zero
+        value = self.cleaned_data.get('amount')
+        if value is None or value == 0:
+            raise forms.ValidationError("Miqdor 0 bo'lmasligi kerak.")
+        return value
+
+
+class SupplierAdjustmentForm(forms.ModelForm):
+    class Meta:
+        model = SupplierBalanceAdjustment
+        fields = ['amount', 'currency', 'notes']
+        labels = {
+            'amount': "Miqdor",
+            'currency': "Valyuta",
+            'notes': "Izoh",
+        }
+        widgets = {
+            'amount': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'step': '0.01', 'placeholder': '0.00'}),
+            'currency': forms.Select(attrs={'class': 'form-select form-select-sm'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control form-control-sm', 'rows': 3, 'placeholder': 'Izoh (ixtiyoriy)'}),
+        }
+
+    def clean_amount(self):
+        # Allow positive or negative; forbid zero
+        value = self.cleaned_data.get('amount')
+        if value is None or value == 0:
+            raise forms.ValidationError("Miqdor 0 bo'lmasligi kerak.")
+        return value

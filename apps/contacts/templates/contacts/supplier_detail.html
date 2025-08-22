@@ -59,6 +59,9 @@
             <button class="btn btn-info btn-sm me-2" data-bs-toggle="modal" data-bs-target="#commissionModal">
                 <i class="fas fa-percent me-1"></i>Komissiya qo'shish
             </button>
+            <button class="btn btn-warning btn-sm me-2" data-bs-toggle="modal" data-bs-target="#adjustmentModal">
+                <i class="fas fa-balance-scale me-1"></i>Balansni tuzatish
+            </button>
             {% endif %}
             {% if can_deactivate and supplier.can_be_deactivated %}
             <button class="btn btn-warning btn-sm me-2" onclick="deactivateSupplier('{{ supplier.pk }}')">
@@ -165,6 +168,10 @@
                                                 <br>
                                                 Jarima: {{ transaction.return.total_supplier_fine_amount|floatformat:0|intcomma }} {{ transaction.return.supplier_fine_currency }}
                                             </small>
+                                        {% elif transaction.type == 'adjustment' %}
+                                            <strong>Balans tuzatish</strong>
+                                            <br>
+                                            <small class="text-muted">{{ transaction.adjustment.notes|default:'-' }}</small>
                                         {% endif %}
                                     </td>
                                     <td class="text-end">
@@ -179,6 +186,14 @@
                                                 {{ transaction.return.total_supplier_fine_amount|floatformat:0|intcomma }} UZS
                                             {% else %}
                                                 ${{ transaction.return.total_supplier_fine_amount|floatformat:2|intcomma }} USD
+                                            {% endif %}
+                                        {% elif transaction.type == 'adjustment' %}
+                                            {% if transaction.adjustment.currency == 'UZS' and transaction.adjustment.amount > 0 %}
+                                                {{ transaction.adjustment.amount|floatformat:0|intcomma }} UZS
+                                            {% elif transaction.adjustment.currency == 'USD' and transaction.adjustment.amount > 0 %}
+                                                ${{ transaction.adjustment.amount|floatformat:2|intcomma }} USD
+                                            {% else %}
+                                                -
                                             {% endif %}
                                         {% else %}
                                             -
@@ -196,6 +211,14 @@
                                                 {{ transaction.return.returned_acquisition_amount|floatformat:0|intcomma }} UZS
                                             {% else %}
                                                 ${{ transaction.return.returned_acquisition_amount|floatformat:2|intcomma }} USD
+                                            {% endif %}
+                                        {% elif transaction.type == 'adjustment' %}
+                                            {% if transaction.adjustment.currency == 'UZS' and transaction.adjustment.amount < 0 %}
+                                                {{ transaction.adjustment.amount|floatformat:0|intcomma|cut:'-' }} UZS
+                                            {% elif transaction.adjustment.currency == 'USD' and transaction.adjustment.amount < 0 %}
+                                                ${{ transaction.adjustment.amount|floatformat:2|intcomma|cut:'-' }} USD
+                                            {% else %}
+                                                -
                                             {% endif %}
                                         {% else %}
                                             -
@@ -517,6 +540,41 @@
     </div>
 </div>
 
+<!-- Adjustment Modal -->
+<div class="modal fade" id="adjustmentModal" tabindex="-1" aria-labelledby="adjustmentModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'contacts:supplier-add-adjustment' supplier.pk %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="adjustmentModalLabel">Balansni Tuzatish - {{ supplier.name }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {% for field in adjustment_form %}
+                        <div class="mb-3">
+                            <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.help_text %}
+                                <small class="form-text text-muted">{{ field.help_text }}</small>
+                            {% endif %}
+                            {% for error in field.errors %}
+                                <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                    <div class="alert alert-info mb-0">
+                        Musbat miqdor sizning qarzingizni oshiradi, manfiy miqdor kamaytiradi.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Bekor Qilish</button>
+                    <button type="submit" class="btn btn-warning">Tuzatish Qo'shish</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 <!-- Payment Modal -->
 <div class="modal fade" id="paymentModal" tabindex="-1" aria-labelledby="paymentModalLabel" aria-hidden="true">
     <div class="modal-dialog">

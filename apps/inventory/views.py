@@ -16,7 +16,7 @@ class AcquisitionListView(ListView):
     model = Acquisition
     template_name = 'inventory/acquisition_list.html'
     context_object_name = 'acquisitions'
-    paginate_by = 20
+    paginate_by = 12
 
     def get_queryset(self):
         return self._get_filtered_queryset()

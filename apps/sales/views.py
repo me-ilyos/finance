@@ -25,7 +25,7 @@ class SaleListView(LoginRequiredMixin, ListView):
     model = Sale
     template_name = 'sales/sale_list.html'
     context_object_name = 'sales'
-    paginate_by = 20
+    paginate_by = 12
 
     def get_queryset(self):
         queryset = Sale.objects.select_related(

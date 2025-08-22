@@ -65,6 +65,9 @@
             <button class="btn btn-success btn-sm me-2" data-bs-toggle="modal" data-bs-target="#paymentModal">
                 <i class="fas fa-plus me-1"></i>To'lov qo'shish
             </button>
+            <button class="btn btn-warning btn-sm me-2" data-bs-toggle="modal" data-bs-target="#adjustmentModal">
+                <i class="fas fa-balance-scale me-1"></i>Balansni tuzatish
+            </button>
             <a href="{% url 'contacts:agent-list' %}" class="btn btn-secondary btn-sm">
                 <i class="fas fa-arrow-left me-1"></i>Ortga
             </a>
@@ -165,6 +168,10 @@
                                                 <br>
                                                 Jarima: {{ transaction.return.total_fine_amount|floatformat:0|intcomma }} {{ transaction.return.fine_currency }}
                                             </small>
+                                        {% elif transaction.type == 'adjustment' %}
+                                            <strong>Balans tuzatish</strong>
+                                            <br>
+                                            <small class="text-muted">{{ transaction.adjustment.notes|default:'-' }}</small>
                                         {% endif %}
                                     </td>
                                     <td class="text-end">
@@ -179,6 +186,14 @@
                                                 {{ transaction.return.total_fine_amount|floatformat:0|intcomma }} UZS
                                             {% else %}
                                                 ${{ transaction.return.total_fine_amount|floatformat:2|intcomma }} USD
+                                            {% endif %}
+                                        {% elif transaction.type == 'adjustment' %}
+                                            {% if transaction.adjustment.currency == 'UZS' %}
+                                                {{ transaction.adjustment.amount|floatformat:0|intcomma }} UZS
+                                            {% elif transaction.adjustment.currency == 'USD' and transaction.adjustment.amount > 0 %}
+                                                ${{ transaction.adjustment.amount|floatformat:2|intcomma }} USD
+                                            {% else %}
+                                                -
                                             {% endif %}
                                         {% else %}
                                             -
@@ -196,6 +211,14 @@
                                                 {{ transaction.return.returned_acquisition_amount|floatformat:0|intcomma }} UZS
                                             {% else %}
                                                 ${{ transaction.return.returned_acquisition_amount|floatformat:2|intcomma }} USD
+                                            {% endif %}
+                                        {% elif transaction.type == 'adjustment' %}
+                                            {% if transaction.adjustment.currency == 'USD' and transaction.adjustment.amount < 0 %}
+                                                ${{ transaction.adjustment.amount|floatformat:2|intcomma|cut:'-' }} USD
+                                            {% elif transaction.adjustment.currency == 'UZS' and transaction.adjustment.amount < 0 %}
+                                                {{ transaction.adjustment.amount|floatformat:0|intcomma|cut:'-' }} UZS
+                                            {% else %}
+                                                -
                                             {% endif %}
                                         {% else %}
                                             -
@@ -480,6 +503,42 @@
     </div>
 </div>
 
+<!-- Adjustment Modal -->
+<div class="modal fade" id="adjustmentModal" tabindex="-1" aria-labelledby="adjustmentModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'contacts:agent-add-adjustment' agent.pk %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="adjustmentModalLabel">Balansni Tuzatish - {{ agent.name }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {% for field in adjustment_form %}
+                        <div class="mb-3">
+                            <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.help_text %}
+                                <small class="form-text text-muted">{{ field.help_text }}</small>
+                            {% endif %}
+                            {% for error in field.errors %}
+                                <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                    <div class="alert alert-info mb-0">
+                        Musbat miqdor agent qarzini oshiradi, manfiy miqdor kamaytiradi.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Bekor Qilish</button>
+                    <button type="submit" class="btn btn-warning">Tuzatish Qo'shish</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+</div>
 <!-- Payment Modal -->
 <div class="modal fade" id="paymentModal" tabindex="-1" aria-labelledby="paymentModalLabel" aria-hidden="true">
     <div class="modal-dialog">
