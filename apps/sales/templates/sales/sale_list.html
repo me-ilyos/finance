@@ -1,5 +1,7 @@
 {% extends 'base.html' %}
 {% load sales_filters %}
+{% load inventory_filters %}
+{% load core_filters %}
 {% load static %}
 
 {% block title %}Sotuvlar Ro'yxati{% endblock %}
@@ -13,7 +15,32 @@
 {% block content %}
 <div class="container-fluid">
     
-
+    <!-- Acquisitions Section (Collapsible) -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 bg-info bg-opacity-10">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-info">
+                    <i class="fas fa-shopping-cart me-2"></i>Mening Xaridlarim (Inventar)
+                </h6>
+                <button class="btn btn-sm btn-outline-info" type="button" data-bs-toggle="collapse" 
+                        data-bs-target="#acquisitionsCollapse" aria-expanded="false" aria-controls="acquisitionsCollapse">
+                    <i class="fas fa-chevron-down"></i> Ko'rsatish/Yashirish
+                </button>
+            </div>
+        </div>
+        <div class="collapse" id="acquisitionsCollapse">
+            <div class="card-body">
+                {% if acquisitions %}
+                    {% include 'inventory/partials/acquisition_table.html' %}
+                    <div class="text-muted small mt-2">
+                        <i class="fas fa-info-circle"></i> So'nggi 20 ta xarid ko'rsatilmoqda
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">Hozircha xaridlar yo'q.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
 
     <div class="card shadow mb-4">
         <div class="card-header py-3">
@@ -84,11 +111,17 @@
 
 {% include 'sales/partials/sale_modal.html' %}
 
+{# Acquisition modal reused from inventory, with action pointing to sales endpoint #}
+{% with acquisition_form_action=acquisition_form_action %}
+{% include 'inventory/partials/acquisition_modal.html' %}
+{% endwith %}
 
+{# Edit acquisition modal for admin users #}
+{% include 'inventory/partials/edit_acquisition_modal.html' %}
 
 {% endblock %}
 
 {% block extra_js %}
 <script src="{% static 'sales/js/sale_form.js' %}?v=2.0"></script>
-
+<script src="{% static 'inventory/js/acquisition_form.js' %}"></script>
 {% endblock %} 

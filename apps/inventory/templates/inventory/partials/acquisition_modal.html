@@ -2,7 +2,7 @@
 <div class="modal fade" id="addAcquisitionModal" tabindex="-1" aria-labelledby="addAcquisitionModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <form method="post" action="{% url 'inventory:acquisition-list' %}" id="acquisitionModalForm">
+            <form method="post" action="{{ acquisition_form_action|default:request.path }}" id="acquisitionModalForm">
                 {% csrf_token %}
                 <div class="modal-header">
                     <h5 class="modal-title" id="addAcquisitionModalLabel">Yangi Xarid Qo'shish</h5>

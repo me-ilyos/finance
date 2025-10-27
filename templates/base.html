@@ -25,15 +25,13 @@
                 <strong>Aviachiptalar</strong><br><small>Pul Boshqaruvi</small>
             </div>
             <div class="list-group list-group-flush">
-                <a href="{% url 'inventory:acquisition-list' %}" class="list-group-item list-group-item-action">
-                    <i class="fas fa-shopping-cart"></i> Chipta Xaridlari
+                <a href="{% url 'sales:sale-list' %}" class="list-group-item list-group-item-action">
+                    <i class="fas fa-shopping-cart"></i> Xarid va Sotuv
                 </a>
                 <a href="{% url 'contacts:supplier-list' %}" class="list-group-item list-group-item-action">
                     <i class="fas fa-truck-loading"></i> Ta'minotchilar
                 </a>
-                <a href="{% url 'sales:sale-list' %}" class="list-group-item list-group-item-action">
-                    <i class="fas fa-receipt"></i> Chipta Sotuvlari
-                </a>
+                
                 <a href="{% url 'sales:return_list' %}" class="list-group-item list-group-item-action">
                     <i class="fas fa-undo"></i> Chipta Qaytarishlari
                 </a>

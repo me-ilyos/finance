@@ -16,6 +16,8 @@ from .models import Sale, TicketReturn
 from .forms import SaleForm, TicketReturnForm
 from .services import SaleService, TicketReturnService
 from apps.inventory.models import Acquisition
+from apps.inventory.forms import AcquisitionForm
+from apps.inventory.services import AcquisitionService
 from apps.accounting.models import FinancialAccount
 from apps.contacts.models import Agent, Supplier
 from apps.core.services import DateFilterService
@@ -175,6 +177,30 @@ class SaleListView(LoginRequiredMixin, ListView):
                 context['sale_form'].errors = form_errors
             else:
                 context['sale_form'] = SaleForm(current_user=self.request.user)
+
+        # Add acquisition form and target action for modal on sales page
+        context['acquisition_form'] = AcquisitionForm(current_user=self.request.user)
+        context['acquisition_form_action'] = reverse_lazy('sales:create-acquisition')
+        
+        # Add acquisitions list for salesperson to view their inventory
+        acquisitions_qs = Acquisition.objects.filter(is_active=True).select_related(
+            'supplier', 'ticket', 'paid_from_account', 'salesperson', 'salesperson__user'
+        ).order_by('-acquisition_date', '-created_at')
+        
+        # Filter by salesperson (non-admin sees only their own)
+        if not self.request.user.is_superuser:
+            try:
+                current_salesperson = self.request.user.salesperson_profile
+                acquisitions_qs = acquisitions_qs.filter(salesperson=current_salesperson)
+            except Salesperson.DoesNotExist:
+                acquisitions_qs = acquisitions_qs.none()
+        else:
+            # Admin can see all, or filter by salesperson from the sales filter
+            salesperson_id = self.request.GET.get('salesperson')
+            if salesperson_id:
+                acquisitions_qs = acquisitions_qs.filter(salesperson_id=salesperson_id)
+        
+        context['acquisitions'] = acquisitions_qs[:20]  # Limit to recent 20 for performance
         
         # Add canonical filter values for form persistence
         context['current_filter_period'] = self.request.GET.get('filter_period')
@@ -429,5 +455,27 @@ class TicketReturnDetailView(LoginRequiredMixin, DetailView):
         #     queryset = queryset.filter(original_sale__salesperson__user=self.request.user)
         
         return queryset
+
+@login_required
+def create_acquisition_from_sales(request):
+    """Create acquisition from sales page and redirect back to sales list."""
+    if request.method != 'POST':
+        return redirect('sales:sale-list')
+
+    form = AcquisitionForm(request.POST, current_user=request.user)
+    if form.is_valid():
+        try:
+            AcquisitionService.create_acquisition(form)
+            messages.success(request, "Xarid muvaffaqiyatli qo'shildi.")
+            return redirect('sales:sale-list')
+        except ValidationError as e:
+            messages.error(request, str(e))
+        except Exception:
+            messages.error(request, "Xaridni qo'shishda xatolik yuz berdi.")
+    else:
+        messages.error(request, "Forma xatoliklari mavjud. Iltimos, tekshirib qayta urinib ko'ring.")
+
+    return redirect('sales:sale-list')
+
 
 
